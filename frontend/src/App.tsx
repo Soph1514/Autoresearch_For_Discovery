@@ -49,11 +49,44 @@ function Inspector({
           <span>Initial seed</span>
         )}
       </div>
-      {idea.operation === "merge" && <p>No additional mutation.</p>}
+      {idea.operation === "merge" && (
+        <p>
+          Backend crossover; additional mutation is not separately reported.
+        </p>
+      )}
       {idea.mutation && (
         <p>
           <strong>Mutation:</strong> {idea.mutation}
         </p>
+      )}
+      {idea.island && <p>Search island: {idea.island}</p>}
+      {idea.inspirations?.length ? (
+        <>
+          <h3>Inspirations (not parents)</h3>
+          <div className="parent-links">
+            {idea.inspirations.map((id) => (
+              <button key={id} onClick={() => onSelect(id)}>
+                {id}
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
+      {idea.predictedEffect && (
+        <p>
+          <strong>Prediction:</strong> {idea.predictedEffect}
+        </p>
+      )}
+      {idea.falsificationCondition && (
+        <p>
+          <strong>Falsification:</strong> {idea.falsificationCondition}
+        </p>
+      )}
+      {idea.sourceCode && (
+        <details>
+          <summary>Candidate source</summary>
+          <pre>{idea.sourceCode}</pre>
+        </details>
       )}
       <h3>Experiment attempts</h3>
       {snapshot.experiments
@@ -70,13 +103,13 @@ function Inspector({
                 {e.valid === null
                   ? "Pending"
                   : e.valid
-                    ? "Analytically checked"
+                    ? "Passed evaluator"
                     : "Failed"}
               </strong>
             </div>
             {Object.entries(e.metrics).map(([name, value]) => (
               <div className="metric" key={name}>
-                <span>{name === "poa" ? "PoA witness" : name + " cost"}</span>
+                <span>{name === "poa" ? "PoA witness" : name}</span>
                 <strong>{value.toFixed(4)}</strong>
               </div>
             ))}
@@ -162,9 +195,16 @@ export default function App() {
   const status = snapshot?.run.status;
   const active =
     status && ["running", "pausing", "paused", "stopping"].includes(status);
-  const best = snapshot?.experiments
-    .filter((e) => e.valid && e.metrics.poa != null)
-    .reduce((v, e) => Math.max(v, e.metrics.poa), 0);
+  const metric = snapshot?.run.metricName ?? "poa";
+  const values =
+    snapshot?.experiments
+      .filter((e) => e.valid && e.metrics[metric] != null)
+      .map((e) => e.metrics[metric]) ?? [];
+  const best = values.length
+    ? snapshot?.run.direction === "minimize"
+      ? Math.min(...values)
+      : Math.max(...values)
+    : null;
   const elapsed = snapshot
     ? Math.max(
         0,
@@ -180,7 +220,7 @@ export default function App() {
       <header>
         <span className="wordmark">Research lab</span>
         <span className="demo-label">
-          DEMO · SCRIPTED SEARCH, ANALYTIC VALUES
+          PYTHON ENGINE · DEMO GENERATOR & EVALUATOR
         </span>
         <button onClick={() => setComposer(true)}>＋ Add problem</button>
         {active ? (
@@ -247,8 +287,8 @@ export default function App() {
               <strong>{snapshot?.ideas.length ?? 0}</strong>
             </div>
             <div>
-              <span>Best PoA witness</span>
-              <strong>{best ? best.toFixed(4) : "—"}</strong>
+              <span>Best {metric === "poa" ? "PoA witness" : metric}</span>
+              <strong>{best != null ? best.toFixed(4) : "—"}</strong>
             </div>
             <div>
               <span>Elapsed</span>
@@ -282,7 +322,7 @@ export default function App() {
             <p>
               Start the routing demo to explore hypotheses, two-parent merges,
               <br />
-              mutations, failed attempts, and elite selection.
+              mutations, failed attempts, and real island elite selection.
             </p>
             <button
               className="primary"
@@ -298,12 +338,23 @@ export default function App() {
             </p>
           </section>
         )}
+        {snapshot?.run.contract && (
+          <details className="contract">
+            <summary>Problem contract · Python backend</summary>
+            {Object.entries(snapshot.run.contract).map(([key, value]) => (
+              <div className="metric" key={key}>
+                <span>{key}</span>
+                <strong>{value}</strong>
+              </div>
+            ))}
+          </details>
+        )}
         <footer>
           <span>
             All candidates preserved. Backend owns validity and archive
             decisions.
           </span>
-          <span>Local mock · resets on refresh</span>
+          <span>Python backend · in-memory run history</span>
         </footer>
       </main>
       {composer && <Composer onClose={() => setComposer(false)} />}

@@ -25,6 +25,8 @@ CONTRACT = ProblemContract(
     optimisation_goal=GOAL,
     resource_limits=ResourceLimits(1.0, 128, 100),
     evaluator_version="test-v1",
+    instance_id="integer-test",
+    instance={"x": 0},
 )
 
 

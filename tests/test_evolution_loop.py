@@ -28,6 +28,8 @@ CONTRACT = ProblemContract(
     optimisation_goal=OptimisationGoal(MetricGoal("score", "maximize"), "mean"),
     resource_limits=ResourceLimits(1.0, 128, 100),
     evaluator_version="test-v1",
+    instance_id="integer-test",
+    instance={"x": 0},
 )
 
 

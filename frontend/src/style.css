@@ -625,3 +625,28 @@ dialog::backdrop {
     transition: none;
   }
 }
+
+.parent-links {
+  flex-wrap: wrap;
+}
+.inspector pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  background: #f1f3ec;
+  padding: 10px;
+}
+.contract {
+  padding: 14px 18px;
+  font-size: 12px;
+}
+.contract .metric {
+  max-width: 600px;
+}
+.node-meta {
+  font-size: 8px;
+  gap: 5px;
+}
+.node-meta span {
+  flex-shrink: 0;
+}

@@ -26,6 +26,7 @@ type IdeaNode = Node<{
   elite: boolean;
   inactive: boolean;
   score?: number;
+  metric: string;
   parents: string[];
   select: () => void;
 }>;
@@ -45,7 +46,7 @@ function IdeaBox({ data, selected, id }: NodeProps<IdeaNode>) {
     >
       <Handle type="target" position={Position.Top} />
       <div className="node-meta">
-        IDEA {id}
+        IDEA {id.replace("candidate-", "")}
         <span>
           {data.elite
             ? "★ ELITE"
@@ -58,17 +59,17 @@ function IdeaBox({ data, selected, id }: NodeProps<IdeaNode>) {
       <div className="node-operation">
         {operationLabel(data.operation)}
         {data.parents.length > 0 &&
-          ` · ${data.parents.map((p) => "#" + p).join(" + ")}`}
+          ` · ${data.parents.map((p) => "#" + p.replace("candidate-", "")).join(" + ")}`}
       </div>
-        <div className="node-score">
-          {data.score != null
-            ? `PoA ${data.score.toFixed(4)}`
-            : data.status === "failed"
-              ? "Invalid · evidence retained"
-              : data.status === "cancelled"
-                ? "Cancelled"
-                : "Awaiting evaluation"}
-        </div>
+      <div className="node-score">
+        {data.score != null
+          ? `${data.metric} ${data.score.toFixed(4)}`
+          : data.status === "failed"
+            ? "Invalid · evidence retained"
+            : data.status === "cancelled"
+              ? "Cancelled"
+              : "Awaiting evaluation"}
+      </div>
       <Handle type="source" position={Position.Bottom} />
     </button>
   );
@@ -105,7 +106,7 @@ function Graph({
     (i) => visibleIds.includes(i.id) || i.id === selected,
   );
   const canvas = useRef<HTMLDivElement>(null);
-  const pointerStart = useRef<{x:number;y:number}|null>(null);
+  const pointerStart = useRef<{ x: number; y: number } | null>(null);
   const flow = useReactFlow();
   const initialized = useRef(false);
   const [viewportReady, setViewportReady] = useState(false);
@@ -129,7 +130,9 @@ function Graph({
       })
       .map((i) => i.id),
   );
-  const structuralKey = visibleIdeas.map(i => i.id + ":" + i.parents.join(",")).join("|");
+  const structuralKey = visibleIdeas
+    .map((i) => i.id + ":" + i.parents.join(","))
+    .join("|");
   const positions = useMemo(() => {
     const g = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
     g.setGraph({
@@ -181,7 +184,13 @@ function Graph({
         status: experiment?.status ?? "proposed",
         elite,
         inactive: inactiveIds.has(i.id),
-        score: experiment?.valid ? experiment.metrics.poa : undefined,
+        score: experiment?.valid
+          ? experiment.metrics[snapshot.run.metricName ?? "poa"]
+          : undefined,
+        metric:
+          snapshot.run.metricName === "poa" || !snapshot.run.metricName
+            ? "PoA"
+            : snapshot.run.metricName,
       },
     };
   });
@@ -203,9 +212,10 @@ function Graph({
   for (const idea of visibleIdeas) {
     generations.set(
       idea.id,
-      idea.parents.length
-        ? 1 + Math.max(...idea.parents.map((p) => generations.get(p) ?? 0))
-        : 0,
+      idea.generation ??
+        (idea.parents.length
+          ? 1 + Math.max(...idea.parents.map((p) => generations.get(p) ?? 0))
+          : 0),
     );
   }
   const waveNodes: Node[] = Array.from(new Set(generations.values())).map(
@@ -261,9 +271,12 @@ function Graph({
       viewport.y =
         canvas.current.clientHeight / 2 - ((top + bottom) / 2) * viewport.zoom;
     }
-    void flow.setViewport(viewport, {
-      duration: !initialized.current || reducedMotion ? 0 : gradual ? 1100 : 450,
-    }).then(() => setViewportReady(true));
+    void flow
+      .setViewport(viewport, {
+        duration:
+          !initialized.current || reducedMotion ? 0 : gradual ? 1100 : 450,
+      })
+      .then(() => setViewportReady(true));
     initialized.current = true;
   }
   useEffect(() => {
@@ -293,16 +306,28 @@ function Graph({
         </label>
         <button onClick={() => frameGraph(false)}>Fit graph</button>
       </div>
-      <div className="graph-canvas" ref={canvas}
+      <div
+        className="graph-canvas"
+        ref={canvas}
         style={{ visibility: viewportReady ? "visible" : "hidden" }}
         onWheelCapture={() => setFollow(false)}
-        onPointerDownCapture={event => { pointerStart.current = {x:event.clientX,y:event.clientY}; }}
-        onPointerMoveCapture={event => {
-          const start = pointerStart.current;
-          if (start && Math.hypot(event.clientX-start.x,event.clientY-start.y)>5) setFollow(false);
+        onPointerDownCapture={(event) => {
+          pointerStart.current = { x: event.clientX, y: event.clientY };
         }}
-        onPointerUpCapture={() => { pointerStart.current = null; }}
-        onPointerCancelCapture={() => { pointerStart.current = null; }}
+        onPointerMoveCapture={(event) => {
+          const start = pointerStart.current;
+          if (
+            start &&
+            Math.hypot(event.clientX - start.x, event.clientY - start.y) > 5
+          )
+            setFollow(false);
+        }}
+        onPointerUpCapture={() => {
+          pointerStart.current = null;
+        }}
+        onPointerCancelCapture={() => {
+          pointerStart.current = null;
+        }}
       >
         <ReactFlow
           nodes={[...waveNodes, ...nodes]}
@@ -318,7 +343,12 @@ function Graph({
           proOptions={{ hideAttribution: false }}
         >
           <Background color="#d9dfd2" gap={23} />
-          <Controls showInteractive={false} onZoomIn={() => setFollow(false)} onZoomOut={() => setFollow(false)} onFitView={() => setFollow(false)} />
+          <Controls
+            showInteractive={false}
+            onZoomIn={() => setFollow(false)}
+            onZoomOut={() => setFollow(false)}
+            onFitView={() => setFollow(false)}
+          />
         </ReactFlow>
       </div>
       <div className="graph-caption">

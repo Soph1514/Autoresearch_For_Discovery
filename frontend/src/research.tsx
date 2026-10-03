@@ -46,13 +46,17 @@ function useResearchState(client: ResearchClient) {
   });
   const disconnect = useRef<() => void>(() => {});
   const epoch = useRef(0);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    const saved = sessionStorage.getItem("research-run");
+    if (saved)
+      void connect(saved).catch(() => {
+        sessionStorage.removeItem("research-run");
+      });
+    return () => {
       epoch.current++;
       disconnect.current();
-    },
-    [],
-  );
+    };
+  }, []);
   async function connect(id: string) {
     const token = ++epoch.current;
     disconnect.current();
@@ -61,26 +65,33 @@ function useResearchState(client: ResearchClient) {
     dispatch({ type: "snapshot", snapshot });
     let sequence = snapshot.sequence;
     let recovering = false;
-    const unsubscribe = client.subscribe(id, sequence, (event) => {
-      if (
-        token !== epoch.current ||
-        recovering ||
-        event.runId !== id ||
-        event.sequence <= sequence
-      )
-        return;
-      if (event.sequence !== sequence + 1) {
-        recovering = true;
-        queueMicrotask(() => {
-          void connect(id).catch((e) =>
-            dispatch({ type: "error", error: String(e) }),
-          );
-        });
-        return;
-      }
-      sequence = event.sequence;
-      dispatch({ type: "event", event });
-    });
+    const unsubscribe = client.subscribe(
+      id,
+      sequence,
+      (event) => {
+        if (
+          token !== epoch.current ||
+          recovering ||
+          event.runId !== id ||
+          event.sequence <= sequence
+        )
+          return;
+        if (event.sequence !== sequence + 1) {
+          recovering = true;
+          queueMicrotask(() => {
+            void connect(id).catch((e) =>
+              dispatch({ type: "error", error: String(e) }),
+            );
+          });
+          return;
+        }
+        sequence = event.sequence;
+        dispatch({ type: "event", event });
+      },
+      (error) => {
+        if (token === epoch.current) dispatch({ type: "error", error });
+      },
+    );
     disconnect.current = unsubscribe;
   }
   async function command(action: "start" | "pause" | "resume" | "stop") {
@@ -95,6 +106,7 @@ function useResearchState(client: ResearchClient) {
           resultFiles: [],
           mode: "demo",
         });
+        sessionStorage.setItem("research-run", run.id);
         await connect(run.id);
       } else if (state.snapshot) {
         const id = state.snapshot.run.id;

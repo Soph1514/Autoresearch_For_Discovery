@@ -14,3 +14,6 @@ dev = [
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 
+
+[project.optional-dependencies]
+ui = ["fastapi>=0.115", "uvicorn>=0.30"]

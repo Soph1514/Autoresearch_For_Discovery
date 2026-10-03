@@ -19,15 +19,31 @@ export interface Run {
   status: Status;
   startedAt: string;
   endedAt?: string;
+  metricName?: string;
+  direction?: "maximize" | "minimize";
+  backend?: "python-demo";
+  contract?: Record<string, string | number>;
 }
 export interface Idea {
   id: string;
   title: string;
   description: string;
   parents: string[];
-  operation: "seed" | "exploration" | "mutation" | "merge" | "merge_mutation";
+  operation:
+    | "seed"
+    | "exploration"
+    | "mutation"
+    | "merge"
+    | "merge_mutation"
+    | "repair";
   mutation?: string;
   inactive: boolean;
+  inspirations?: string[];
+  island?: string | null;
+  generation?: number;
+  predictedEffect?: string;
+  falsificationCondition?: string;
+  sourceCode?: string;
   parameters?: Record<string, number>;
 }
 export interface Experiment {
@@ -82,6 +98,7 @@ export interface ResearchClient {
     id: string,
     after: number,
     listener: (e: ResearchEvent) => void,
+    onConnection?: (error: string | null) => void,
   ): () => void;
   pauseRun(id: string): Promise<void>;
   resumeRun(id: string): Promise<void>;
