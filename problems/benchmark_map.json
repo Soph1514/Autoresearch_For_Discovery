@@ -1,3 +1,6 @@
 {
-  "knapsack": null
+  "constant_fitting": "Convex Optimization 6.2-(a)",
+  "knapsack": null,
+  "linf_steepest_descent": "Convex Optimization 9.8",
+  "ridge_least_squares": "Convex Optimization 6.7-(a)"
 }

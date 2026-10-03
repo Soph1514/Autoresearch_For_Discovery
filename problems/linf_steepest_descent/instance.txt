@@ -1,0 +1,2 @@
+Let g = (3, -2, 0, 5). Construct a vector d that minimizes g^T d subject to
+||d||_infinity <= 1. Return d and the minimum objective value.

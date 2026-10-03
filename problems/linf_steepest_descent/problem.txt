@@ -1,0 +1,12 @@
+Let \(g\in\mathbf{R}^n\). Prove that
+\[
+\min\{g^Td\mid \|d\|_\infty\le1\}=-\|g\|_1.
+\]
+Moreover, prove that a minimizer is given componentwise by
+\[
+d_i=-\operatorname{sign}(g_i),
+\]
+where \(\operatorname{sign}(0)=0\). Equivalently, for a differentiable function \(f\), the normalized steepest-descent direction at \(x\) with respect to the \(\ell_\infty\)-norm is
+\[
+d=-\operatorname{sign}(\nabla f(x)).
+\]

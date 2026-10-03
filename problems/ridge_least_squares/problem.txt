@@ -1,0 +1,12 @@
+Let \(A\in\mathbf{R}^{m\times n}\), let \(b\in\mathbf{R}^m\), and let \(\delta>0\). Suppose
+\[
+A=\sum_{i=1}^r \sigma_i u_i v_i^T
+\]
+is a singular value decomposition of \(A\), where \(\sigma_i>0\), the vectors \(u_i\) are orthonormal left singular vectors, and the vectors \(v_i\) are orthonormal right singular vectors. Prove that the function
+\[
+F(x)=\|Ax-b\|_2^2+\delta\|x\|_2^2
+\]
+has the unique minimizer
+\[
+x^*=\sum_{i=1}^r \frac{\sigma_i}{\sigma_i^2+\delta}\,(u_i^Tb)\,v_i.
+\]
