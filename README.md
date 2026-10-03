@@ -21,9 +21,6 @@ lean/
     ThePigeonHoles/             Lean definitions and specification support
 problems/                      Benchmark problem packages
 configs/                       Run settings, model choices and budget settings
-tests/
-    unit/                      Component tests
-    integration/               Pipeline and tool integration tests
 docs/                          Design, reproducibility and presentation materials
 runs/                          Generated run artifacts (ignored by Git)
 pyproject.toml                 Existing Python project metadata and dependencies
