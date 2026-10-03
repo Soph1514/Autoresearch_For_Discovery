@@ -73,12 +73,12 @@ Validation: Python suite plus bridge tests (`.venv/bin/python -m pytest -q`), fr
 
 The composer now calls `POST /api/formalizations`. Natural-language input uses
 Qwen3-4B-Instruct-2507, then pinned Lean 4.19/Mathlib checking in a Modal worker,
-with one repair attempt on checker failure. Existing Lean input bypasses generation.
+with continued repair on checker failure until Lean passes or the user stops. Existing Lean input is checked first and repaired if needed.
 Successful checks are scored by the frozen fine-tuned fidelity classifier. A review
 result is displayed explicitly; it is not treated as accepted. The generator uses
 the pretrained instruction model, because the frozen fine-tuned checkpoint is a
-sequence classifier and cannot generate Lean. Greedy generation is configured;
-only the Lean check is the deterministic validation step.
+sequence classifier and cannot generate Lean. Initial generation is greedy; repair candidates use seeded sampling to escape repeated failures.
+Only the Lean check is the deterministic validation step.
 
 Deploy both services in the workspace that owns the classifier:
 
@@ -130,3 +130,24 @@ backgrounds, square controls, and restrained orange selection accents. The main
 
 Validation: 63 Python tests, three frontend tests, production build, live hosted
 PNG and scanned-PDF OCR, and a browser check of the running engine demo.
+
+
+## Repair until checked
+
+Both composer interfaces stream attempts from `POST /api/formalizations?stream=true`.
+Failed checks feed the original problem, current code, and diagnostics into Qwen
+again until a check passes. Existing Lean is checked first, then repaired while
+instructing the model to preserve its original statement. There is no global
+attempt or 15-minute cutoff. Individual model/checker calls retain timeouts.
+The Stop control aborts the stream; the backend cancels the active Modal call and
+releases the single-run lock. Disconnecting also stops the task. Every attempt
+streams source and diagnostics before another repair. Service errors stop with
+an error, and a passed check proceeds to fidelity scoring; fidelity review is
+not treated as a compilation failure.
+
+Repair prompts include explicit Lean 4 syntax guidance. Every third repair asks
+for a fresh minimal proof instead of reusing failed intermediate steps. This is
+a search policy, not a guarantee that an arbitrary statement can be proved.
+
+Repair sampling uses temperature 0.7 and top-p 0.9 with an attempt-specific seed.
+The pretrained fidelity benchmark judge remains greedy and unchanged.

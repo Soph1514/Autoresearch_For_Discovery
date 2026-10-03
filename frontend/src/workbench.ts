@@ -1,3 +1,4 @@
+import { formalize } from './formalizationClient';
 import { readAttachment } from './attachments';
 const element = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const dialog = element('dialog');
@@ -6,6 +7,8 @@ const mode = element<HTMLSelectElement>('mode');
 const problem = element<HTMLTextAreaElement>('problem-text');
 const source = element<HTMLTextAreaElement>('lean-input');
 let busy = false;
+let controller: AbortController | null = null;
+element('stop-formalization').onclick = () => controller?.abort();
 element('upload').onclick = () => { dialog.hidden = false; problem.focus(); };
 element('cancel').onclick = () => { dialog.hidden = true; };
 mode.onchange = () => {
@@ -58,25 +61,34 @@ form.onsubmit = async (event) => {
   event.preventDefault();
   if (busy || !problem.value.trim()) return;
   busy = true; dialog.hidden = true;
+  controller = new AbortController();
+  element('stop-formalization').hidden = false;
   element<HTMLButtonElement>('upload').disabled = true;
   element('problem-title').textContent = problem.value.split('\n')[0].slice(0, 120);
-  element('problem-sub').textContent = mode.value === 'formal' ? 'Existing Lean formulation' : 'Qwen3-4B-Instruct · generation + one repair attempt';
+  element('problem-sub').textContent = mode.value === 'formal' ? 'Existing Lean formulation' : 'Qwen3-4B-Instruct · generation + repair until Lean passes';
   element('validation-status').textContent = 'Processing…';
   element('run-state').textContent = 'Running';
   element('best').textContent = '—'; element('count').textContent = '0';
   element('lean-output').textContent = mode.value === 'formal' ? source.value : 'Generating Lean…';
   detail('Preparing your formulation.', 'Hosted models may take a few minutes to start. Lean checking and fidelity scoring follow generation.');
   log('Submitted ' + (mode.value === 'formal' ? 'existing Lean' : 'natural-language problem'));
+  element('elapsed').textContent = '00:00';
   const started = Date.now();
   const clock = window.setInterval(() => {
     const seconds = Math.floor((Date.now() - started) / 1000);
     element('elapsed').textContent = `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
   }, 1000);
   try {
-    const response = await fetch('/api/formalizations', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode: mode.value, problem: problem.value, lean: source.value }) });
-    const result = await response.json();
-    if (!response.ok) throw Error(typeof result.detail === 'string' ? result.detail : 'Input could not be processed.');
+    const result = await formalize({mode: mode.value, problem: problem.value, lean: source.value}, controller.signal, (event) => {
+      if (event.lean !== undefined) element('lean-output').textContent = event.lean;
+      if (event.attempt) element('count').textContent = String(event.attempt);
+      if (event.stage) {
+        const message = `Attempt ${event.attempt}: ${event.stage}`;
+        element('validation-status').textContent = message;
+        log(message);
+      }
+      if (event.diagnostics) { log(event.diagnostics); detail('Repairing Lean.', event.diagnostics); }
+    });
     element('lean-output').textContent = result.lean;
     element('count').textContent = String(result.attempts);
     element('best').textContent = result.fidelity?.p_faithful == null ? '—' : `${(result.fidelity.p_faithful * 100).toFixed(1)}%`;
@@ -87,11 +99,12 @@ form.onsubmit = async (event) => {
     if (result.diagnostics) log(result.diagnostics);
     log(status);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Service unavailable';
-    element('run-state').textContent = 'Failed';
-    element('validation-status').textContent = 'Service error';
-    detail('Could not complete this request.', message); log(message);
+    const stopped = controller?.signal.aborted;
+    const message = stopped ? 'Stopped. Latest Lean source and checker diagnostics are preserved.' : error instanceof Error ? error.message : 'Service unavailable';
+    element('run-state').textContent = stopped ? 'Stopped' : 'Failed';
+    element('validation-status').textContent = stopped ? 'Stopped' : 'Service error';
+    detail(stopped ? 'Stopped.' : 'Could not complete this request.', message); log(message);
   } finally {
-    clearInterval(clock); busy = false; element<HTMLButtonElement>('upload').disabled = false;
+    clearInterval(clock); busy = false; controller = null; element('stop-formalization').hidden = true; element<HTMLButtonElement>('upload').disabled = false;
   }
 };

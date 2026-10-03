@@ -3,6 +3,7 @@
 Run: PYTHONPATH=src .venv/bin/python -m uvicorn the_pigeon_holes.ui.api:app --host 127.0.0.1 --port 8000
 """
 import asyncio
+import anyio
 import copy
 import json
 from contextlib import asynccontextmanager
@@ -105,18 +106,53 @@ async def events(run_id: str, request: Request, after: int = 0):
 formalization_lock = asyncio.Lock()
 
 @app.post('/api/formalizations')
-async def formalize_problem(body: FormalizationInput):
+async def formalize_problem(body: FormalizationInput, request: Request, stream: bool = False):
     if formalization_lock.locked():
-        raise HTTPException(409, 'A formalization is already running. Try again when it completes.')
-    async with formalization_lock:
-        try:
-            return await asyncio.wait_for(prepare(body), timeout=900)
-        except TimeoutError:
-            raise HTTPException(504, 'Formalization timed out. Please retry with a smaller problem.')
-        except Exception:
-            import logging
-            logging.getLogger(__name__).exception('Hosted formalization failed')
-            raise HTTPException(503, 'Hosted Lean/Qwen service unavailable. Check backend Modal authentication and deployments.')
+        raise HTTPException(409, 'A formalization is already running. Stop it before starting another.')
+    await formalization_lock.acquire()
+    if stream:
+        async def events():
+            queue = asyncio.Queue()
+            task = asyncio.create_task(prepare(body, progress=queue.put))
+            try:
+                while not task.done() or not queue.empty():
+                    try:
+                        event = await asyncio.wait_for(queue.get(), timeout=1)
+                        yield json.dumps({'type': 'progress', **event}) + '\n'
+                    except TimeoutError:
+                        yield json.dumps({'type': 'heartbeat'}) + '\n'
+                yield json.dumps({'type': 'result', 'result': await task}) + '\n'
+            except Exception:
+                import logging
+                logging.getLogger(__name__).exception('Hosted formalization failed')
+                yield json.dumps({'type': 'error', 'message': 'Hosted Lean/Qwen service unavailable. The latest source and diagnostics are preserved.'}) + '\n'
+            finally:
+                task.cancel()
+                with anyio.CancelScope(shield=True):
+                    try:
+                        await asyncio.gather(task, return_exceptions=True)
+                    finally:
+                        formalization_lock.release()
+        return StreamingResponse(events(), media_type='application/x-ndjson',
+                                 headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+    task = asyncio.create_task(prepare(body))
+    try:
+        while not task.done():
+            if await request.is_disconnected():
+                task.cancel()
+                raise HTTPException(499, 'Request cancelled.')
+            await asyncio.wait({task}, timeout=0.5)
+        return await task
+    except HTTPException:
+        raise
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception('Hosted formalization failed')
+        raise HTTPException(503, 'Hosted Lean/Qwen service unavailable. Check backend Modal authentication and deployments.')
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        formalization_lock.release()
 
 
 @app.get('/api/demo')

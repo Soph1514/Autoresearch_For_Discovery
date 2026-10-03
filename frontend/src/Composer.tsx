@@ -1,3 +1,4 @@
+import { formalize, type Progress } from './formalizationClient';
 import { attachmentAccept, readAttachment } from "./attachments";
 import { useEffect, useRef, useState } from "react";
 
@@ -7,6 +8,8 @@ type Result = {
   fidelity: null | { p_faithful: number | null; fidelity_decision: string; reason_code: string };
 };
 export function Composer({ onClose }: { onClose: () => void }) {
+  const controller = useRef<AbortController | null>(null);
+  const [progress, setProgress] = useState<Progress | null>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   const [mode, setMode] = useState<"natural" | "formal">("natural");
   const [problem, setProblem] = useState("");
@@ -16,19 +19,15 @@ export function Composer({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<Result | null>(null);
-  useEffect(() => { dialog.current?.showModal(); }, []);
+  useEffect(() => { dialog.current?.showModal(); return () => controller.current?.abort(); }, []);
   async function submit() {
-    setBusy(true); setError(""); setResult(null);
+    setBusy(true); setError(""); setResult(null); setProgress(null);
     try {
-      const response = await fetch("/api/formalizations", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode, problem, lean }),
-      });
-      const body = await response.json();
-      if (!response.ok) throw Error(typeof body.detail === "string" ? body.detail : "Please check your problem and Lean input.");
+      controller.current = new AbortController();
+      const body = await formalize({ mode, problem, lean }, controller.current.signal, (event) => setProgress((previous) => ({ ...previous, ...event })));
       setResult(body);
-    } catch (e) { setError(e instanceof Error ? e.message : "Formalization failed."); }
-    finally { setBusy(false); }
+    } catch (e) { setError(controller.current?.signal.aborted ? "Stopped. Latest source is shown below." : e instanceof Error ? e.message : "Formalization failed."); }
+    finally { setBusy(false); controller.current = null; }
   }
   return <dialog ref={dialog} onCancel={(e) => { if (busy) e.preventDefault(); else onClose(); }}>
     <form onSubmit={(e) => { e.preventDefault(); void submit(); }}>
@@ -88,6 +87,10 @@ export function Composer({ onClose }: { onClose: () => void }) {
       <p className="muted">Qwen generates a formulation; Lean checks it, then our fine-tuned Qwen model scores its alignment with your problem.</p>
       {busy && !attachmentStatus.startsWith("Reading") && <p role="status">Generating and checking Lean… Hosted models may take a few minutes to start.</p>}
       {error && <p role="alert" className="notice">{error}</p>}
+      {controller.current && <button type="button" onClick={() => controller.current?.abort()}>Stop</button>}
+      {!result && progress && <section><p role="status">Attempt {progress.attempt}: {progress.stage}</p>
+        {progress.lean && <textarea aria-label="Latest Lean source" readOnly rows={8} value={progress.lean} />}
+        {progress.diagnostics && <pre>{progress.diagnostics}</pre>}</section>}
       {result && <section aria-label="Formalization result">
         <h3>{result.status === "checked" ? "Lean checked · fidelity accepted" : result.lean_checked ? "Lean checked · alignment needs review" : "Lean validation failed"}</h3>
         <p>{result.generator} · {result.attempts} check attempt(s)</p>

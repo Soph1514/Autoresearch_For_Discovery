@@ -25,15 +25,31 @@ class Generator:
     @modal.method()
     def generate(self, problem: str, feedback: str = '') -> str:
         import torch
+        import re
+        repair = re.search(r'Repair attempt (\d+)', feedback)
+        if repair and int(repair.group(1)) % 3 == 0:
+            diagnostics = feedback.split('Checker diagnostics:', 1)[-1]
+            feedback = ('The previous proof approach failed repeatedly. Construct a fresh minimal proof from the original problem; '
+                        'do not reuse the previous intermediate steps. Preserve all assumptions and the conclusion. '
+                        'For linear natural-number arithmetic, choose existential witnesses then try omega.\n'
+                        + diagnostics)
         messages = [
-            {'role': 'system', 'content': 'Translate the problem into a complete Lean 4.19 file using Mathlib. Return only Lean code. Preserve the objective and all constraints. Do not use sorry, admit, custom axioms, or executable IO. For optimization problems define the problem and feasibility predicate; do not invent a theorem claiming an unproved solution.'},
+            {'role': 'system', 'content': 'Translate the problem into a complete Lean 4.19 file using Mathlib. Return only Lean code. Use Lean 4 tactic syntax: := by followed by indented tactics on separate lines. Never use Lean 3 begin/end, existsi, or comma-separated tactics. Unpack existentials with rcases h with ⟨w, hw⟩; provide witnesses with refine ⟨w, ?_⟩. Prefer import Mathlib rather than guessing module paths. Available tactics include omega, ring, simp, and exact. Prefer omega for linear Nat/Int arithmetic after unpacking hypotheses and choosing witnesses. Keep proofs minimal; avoid intermediate have statements unless necessary and always specify their types. Preserve the objective and all constraints. Do not use sorry, admit, custom axioms, or executable IO. For optimization problems define the problem and feasibility predicate; do not invent a theorem claiming an unproved solution.'},
             {'role': 'user', 'content': problem + ('\nPrevious checker feedback:\n' + feedback if feedback else '')}]
+        # A small syntax example prevents the model reverting to Lean 3 proofs.
+        messages.insert(1, {'role': 'user', 'content': 'Lean 4 syntax example: prove commutativity of addition on natural numbers.'})
+        messages.insert(2, {'role': 'assistant', 'content': 'import Mathlib\n\ntheorem addition_commutes (a b : ℕ) : a + b = b + a := by\n  omega'})
         text = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         batch = self.tokenizer(text, return_tensors='pt').to(self.model.device)
         if batch.input_ids.shape[1] > 10000:
             raise ValueError('Problem exceeds generation context limit')
+        options = {'do_sample': bool(feedback), 'repetition_penalty': 1.1}
+        if feedback:
+            # Vary repair proposals instead of greedily repeating the same failed proof.
+            torch.manual_seed(42 + (int(repair.group(1)) if repair else 0))
+            options.update(temperature=0.7, top_p=0.9)
         with torch.inference_mode():
-            output = self.model.generate(**batch, max_new_tokens=3000, do_sample=False,
+            output = self.model.generate(**batch, max_new_tokens=3000, **options,
                                          pad_token_id=self.tokenizer.eos_token_id)
         source = self.tokenizer.decode(output[0, batch.input_ids.shape[1]:], skip_special_tokens=True).strip()
         if source.startswith('```'):
