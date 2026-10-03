@@ -19,6 +19,13 @@ Preserve the original pipeline. Focus the novel contribution on diversified, eli
 
 ## Evolution principles
 
+For the detailed and authoritative evolution-loop design, including executable
+candidate generation, dynamic islands, elite and novelty archives, and stopping
+rules, see [evolution.md](evolution.md). That document supersedes this file only
+for evolution-specific behavior. In particular, evolutionary generation emits
+the hypothesis and complete `solve(...)` implementation atomically; it is not a
+separate idea-to-code translation stage.
+
 - Ideas are hypotheses; elite status requires measured experimental evidence.
 - Preserve strong candidates across behavioral niches rather than only one global winner.
 - Diversity should reflect mechanisms or observed performance, not merely different wording.
