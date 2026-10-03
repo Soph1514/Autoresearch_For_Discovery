@@ -11,29 +11,40 @@ from the_pigeon_holes import formalise
 generated, instance = formalise("knapsack")
 ```
 
-Set `LEA_ROOT` to the Lea checkout if it is not at `../lea-prover`. Set
-`LEA_MODEL` to override Lea's default Gemini model. The function writes
+The first run downloads the pinned Lea checkout under `runs/lea-prover`. Set
+`LEA_ROOT` to use an existing checkout instead. Set `LEA_MODEL` to override
+Lea's default Gemini model. The function writes
 `problems/knapsack/Generated.lean` and returns its path together with the original
 natural-language instance. The next pipeline step receives those two values.
 
-Benchmark references come from the pinned
-[CAM-Bench](https://github.com/optpku/CAM-Bench) dataset:
+The formalizer benchmark uses natural-language statements and trusted Lean 4
+references from [ProofNetVerif](https://huggingface.co/datasets/PAug/ProofNetVerif).
+Generate predictions with Lea once (the default is ten unique validation items):
 
-```python
-from the_pigeon_holes import pull_cam_bench
-
-benchmark = pull_cam_bench("problem_directory_name")
-general_problem = benchmark.informal_statement
-reference_lean = benchmark.formal_statement
+```sh
+uv run python -m the_pigeon_holes.formalization.generate_benchmark
 ```
 
-Problem directory names are mapped to CAM-Bench entries in
-`problems/benchmark_map.json`. The dataset is cached under `runs/`; reference
-Lean is not copied into problem directories.
+Generation saves each result immediately and resumes without repeating API calls.
+Use `--limit 0` to generate every unique item:
+
+```sh
+uv run python -m the_pigeon_holes.formalization.generate_benchmark --limit 0
+```
+
+Then run BEq+ locally as often as needed without making API calls:
+
+```sh
+uv run python -m the_pigeon_holes.formalization.benchmark
+```
+
+The default Lea model uses `ANTHROPIC_API_KEY` from the repository's ignored
+`.env` file. Use `LEA_MODEL` to select another Lea-supported provider.
 
 ```text
 src/the_pigeon_holes/
     formalization/lea.py       Lea CLI integration
+    formalization/beq_plus.py  Bidirectional semantic-equivalence checker
     formalization/validate.py  Compilation and cheating check
     specification/            Problem loading
     models/                   Shared records
@@ -90,10 +101,9 @@ git -C ../lea-prover checkout 2709009dca410c1fc4d8de55f4e272f715b18334
 uv sync --project ../lea-prover
 ```
 
-No reference for this knapsack instance exists in the projects listed by the
-[Lean community project index](https://leanprover-community.github.io/lean_projects.html),
-so the validator compiles `Generated.lean` and rejects
-`sorry`, `admit`, and custom `axiom` declarations.
+The application validator compiles `Generated.lean` and rejects `sorry`, `admit`,
+and custom `axiom` declarations when no reference exists. ProofNetVerif is a
+separate statement-formalization benchmark and permits an omitted theorem proof.
 
 Run tests, including real Lean checks after setup:
 

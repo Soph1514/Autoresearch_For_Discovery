@@ -1,6 +1,7 @@
 """Check generated Lean, and compare it with a reference when one exists."""
 
 import argparse
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -34,31 +35,22 @@ def validate(problem: Path, lean_root: Path, lake: str = "lake") -> tuple[bool, 
         return False, "Generated.lean contains sorry, admit, or a custom axiom."
 
     reference = problem / "Reference.lean"
+    environment = os.environ.copy()
+    environment["LEAN_PATH"] = str(problem)
     if not reference.is_file():
-        build = subprocess.run(
-            [lake, "build", "Generated"], cwd=lean_root.resolve(),
-            capture_output=True, text=True, check=False,
-        )
-        if build.returncode != 0:
-            return False, build.stdout + build.stderr
         result = subprocess.run(
             [lake, "env", "lean", str(generated)], cwd=lean_root.resolve(),
-            capture_output=True, text=True, check=False,
+            capture_output=True, text=True, check=False, env=environment,
         )
         return result.returncode == 0, result.stdout + result.stderr
 
     validation = problem / "Validation.lean"
     if not validation.is_file():
         return False, f"Missing {validation}"
-    build = subprocess.run(
-        [lake, "build", "Validation"], cwd=lean_root.resolve(),
-        capture_output=True, text=True, check=False,
-    )
-    if build.returncode != 0:
-        return False, build.stdout + build.stderr
     result = subprocess.run(
         [lake, "env", "lean", str(validation)],
         cwd=lean_root.resolve(), capture_output=True, text=True, check=False,
+        env=environment,
     )
     output = result.stdout + result.stderr
     if result.returncode != 0:

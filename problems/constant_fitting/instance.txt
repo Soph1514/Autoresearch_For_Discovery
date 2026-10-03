@@ -1,8 +1,0 @@
-Given the data vector b = (1, 2, 8, 9), construct a scalar minimizer for each
-of these objectives:
-
-1. sum_i |x - b_i|
-2. sqrt(sum_i (x - b_i)^2)
-3. max_i |x - b_i|
-
-Return one minimizing scalar for each objective.

@@ -1,6 +1,0 @@
-Let \(n \in \mathbf{N}\) with \(n \ge 1\), let \(b=(b_1,\dots,b_n) \in \mathbf{R}^n\), and let \(\mathbf{1} \in \mathbf{R}^n\) denote the vector whose entries are all \(1\). For a scalar variable \(x \in \mathbf{R}\), consider the optimization problem \(\min_{x \in \mathbf{R}} \|x\mathbf{1}-b\|\).
-
-Prove that:
-(1) for the \(\ell_2\)-norm, the unique minimizer is \(x = \frac{1}{n}\sum_{i=1}^n b_i\);
-(2) for the \(\ell_1\)-norm, the set of minimizers is exactly the set of medians of \(b_1,\dots,b_n\), i.e., the set of all \(x \in \mathbf{R}\) such that at least half of the numbers \(b_i\) are \(\le x\) and at least half are \(\ge x\);
-(3) for the \(\ell_\infty\)-norm, the unique minimizer is \(x = \frac{\min_i b_i + \max_i b_i}{2}\).

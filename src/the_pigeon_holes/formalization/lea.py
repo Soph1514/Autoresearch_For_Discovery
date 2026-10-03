@@ -9,7 +9,9 @@ from pathlib import Path
 
 
 def formalize(*, lea_root: Path, task: str, statement: str, lean_project: Path,
-              output: Path, model: str, max_turns: int, timeout: int, lake: str = "lake") -> Path:
+              output: Path, model: str, max_turns: int, timeout: int | None, lake: str = "lake",
+              output_name: str = "Generated.lean", inputs: dict[str, str] | None = None,
+              allow_sorry: bool = False) -> Path:
     lea_root, output = lea_root.resolve(), output.resolve()
     if not (lea_root / "lea/cli.py").is_file():
         raise ValueError("--lea-root must point to a lea-prover source checkout")
@@ -29,18 +31,25 @@ def formalize(*, lea_root: Path, task: str, statement: str, lean_project: Path,
     (workspace / "lake-manifest.json").write_text(json.dumps(manifest, indent=2))
     (workspace / "lakefile.toml").write_text(
         'name = "lea_formalization"\n\n[[require]]\nname = "mathlib"\n'
-        f'git = {json.dumps(mathlib["url"])}\nrev = {json.dumps(mathlib["rev"])}\n'
+        f'git = {json.dumps(mathlib["url"])}\nrev = {json.dumps(mathlib["rev"])}\n\n'
+        '[[lean_lib]]\nname = "Generated"\n\n'
+        '[[lean_lib]]\nname = "Reference"\n\n'
+        '[[lean_lib]]\nname = "Validation"\n'
     )
     (workspace / ".lake").mkdir()
     (workspace / ".lake/packages").symlink_to(packages, target_is_directory=True)
+    for name, source in (inputs or {}).items():
+        (workspace / name).write_text(source)
+    proof_rule = ("The single theorem may end in `:= by sorry`; its statement is the output being evaluated.\n"
+                  if allow_sorry else "Do not use sorry, admit or custom axioms.\n")
     instructions = (
         f"This run's Lean workspace is {workspace}. Use it instead of the default "
         "Lea workspace. Write only inside this directory. Do not alter toolchains, "
         "Lake configuration, dependencies, or reference/evaluation files. "
-        "Use absolute paths for tools. Do not use sorry, admit or custom axioms.\n"
+        "Use absolute paths for tools. " + proof_rule
     )
     (workspace / "lea.md").write_text(instructions)
-    generated = workspace / "Generated.lean"
+    generated = workspace / output_name
     request = instructions + "\n" + task + "\n\nGeneral problem statement:\n" + statement
     (output / "lea_task.txt").write_text(request)
     # JSON is valid YAML; avoid an additional YAML dependency in this adapter.
@@ -69,9 +78,16 @@ def formalize(*, lea_root: Path, task: str, statement: str, lean_project: Path,
         except subprocess.TimeoutExpired:
             os.killpg(process.pid, signal.SIGKILL)
             process.wait()
-            raise RuntimeError("Lea timed out; see lea.log") from None
+            raise RuntimeError(f"Lea timed out after {timeout} seconds; see lea.log") from None
     if process.returncode != 0:
         raise RuntimeError(f"Lea exited with status {process.returncode}; see lea.log")
     if not generated.is_file():
-        raise RuntimeError("Lea did not produce Generated.lean; see lea.log")
+        raise RuntimeError(f"Lea did not produce {output_name}; see lea.log")
+    checked = subprocess.run(
+        [lake_path, "env", "lean", str(generated)],
+        cwd=workspace, capture_output=True, text=True, check=False, env=environment,
+    )
+    if checked.returncode != 0:
+        (output / "lean_check.log").write_text(checked.stdout + checked.stderr)
+        raise RuntimeError(f"Lea produced invalid {output_name}; see lean_check.log")
     return generated
