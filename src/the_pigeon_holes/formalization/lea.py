@@ -31,7 +31,8 @@ def formalize(*, lea_root: Path, task: str, statement: str, lean_project: Path,
     (workspace / "lake-manifest.json").write_text(json.dumps(manifest, indent=2))
     (workspace / "lakefile.toml").write_text(
         'name = "lea_formalization"\n\n[[require]]\nname = "mathlib"\n'
-        f'git = {json.dumps(mathlib["url"])}\nrev = {json.dumps(mathlib["rev"])}\n\n'
+        f'git = {json.dumps(mathlib["url"])}\n'
+        f'rev = {json.dumps(mathlib.get("inputRev", mathlib["rev"]))}\n\n'
         '[[lean_lib]]\nname = "Generated"\n\n'
         '[[lean_lib]]\nname = "Reference"\n\n'
         '[[lean_lib]]\nname = "Validation"\n'

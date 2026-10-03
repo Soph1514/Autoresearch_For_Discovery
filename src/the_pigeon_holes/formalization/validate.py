@@ -10,10 +10,10 @@ ALLOWED_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
 THEOREM = "generated_iff_reference"
 
 
-def check_axioms(output: str) -> bool:
-    if f"'{THEOREM}' does not depend on any axioms" in output:
+def check_axioms(output: str, theorem: str = THEOREM) -> bool:
+    if f"'{theorem}' does not depend on any axioms" in output:
         return True
-    match = re.search(rf"'{THEOREM}' depends on axioms: \[([^\]]*)\]", output)
+    match = re.search(rf"'{re.escape(theorem)}' depends on axioms: \[([^\]]*)\]", output)
     if not match:
         return False
     used = {name.strip() for name in match.group(1).split(",") if name.strip()}
