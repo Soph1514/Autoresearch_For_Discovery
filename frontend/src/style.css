@@ -49,7 +49,7 @@ header {
   display: flex;
   gap: 14px;
   align-items: center;
-  padding: 22px 30px;
+  padding: 18px 30px;
   border-bottom: 1px solid #e1e5da;
 }
 .wordmark {
@@ -68,7 +68,7 @@ main {
   padding: 0 24px;
 }
 .intro {
-  padding: 28px 8px;
+  padding: 20px 8px;
   display: flex;
   justify-content: space-between;
   gap: 26px;
@@ -84,7 +84,7 @@ main {
 }
 h1 {
   font:
-    32px/1.15 Georgia,
+    28px/1.15 Georgia,
     serif;
   margin: 10px 0;
 }
@@ -124,7 +124,7 @@ a {
 }
 .stats strong {
   font:
-    26px Georgia,
+    23px Georgia,
     serif;
   display: block;
   margin-top: 7px;
@@ -132,7 +132,7 @@ a {
 }
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-columns: minmax(0, 1fr) 285px;
   border: 1px solid #dfe4d8;
   border-radius: 12px;
   overflow: hidden;
@@ -171,7 +171,7 @@ a {
   color: #849080;
 }
 .graph-canvas {
-  height: 570px;
+  height: 465px;
 }
 .graph-caption {
   padding: 10px 16px;
@@ -181,8 +181,8 @@ a {
     serif;
 }
 .idea-box {
-  width: 224px;
-  min-height: 138px;
+  width: 202px;
+  height: 112px;
   text-align: left;
   border: 1px solid #d6dfce;
   background: #fffef8;
@@ -203,8 +203,8 @@ a {
   outline-offset: 4px;
 }
 .idea-box.compact {
-  width: 178px;
-  min-height: 112px;
+  width: 164px;
+  height: 86px;
 }
 .node-meta {
   display: flex;
@@ -318,7 +318,7 @@ a {
   font-size: 11px;
 }
 .log-lines {
-  height: 170px;
+  height: 140px;
   overflow: auto;
   padding: 12px 18px;
 }
@@ -542,5 +542,97 @@ dialog::backdrop {
   * {
     scroll-behavior: auto !important;
     transition: none !important;
+  }
+}
+
+/* Calm reveal beats: status changes fade without removing research history. */
+.idea-box {
+  animation: idea-arrive 850ms ease-out both;
+  transition:
+    opacity 1000ms ease,
+    background-color 900ms ease,
+    border-color 900ms ease,
+    box-shadow 300ms ease;
+  padding: 10px 12px;
+}
+.idea-box.inactive {
+  opacity: 0.58;
+}
+.idea-box.inactive:hover,
+.idea-box.inactive:focus-visible,
+.idea-box.selected {
+  opacity: 1;
+}
+.idea-box:not(.inactive):has(.node-meta span):hover {
+  background-color: #f2f5ed;
+}
+.idea-box.elite:hover {
+  background-color: #e7f2e6;
+}
+.node-meta {
+  margin-bottom: 6px;
+  font-size: 9px;
+}
+.node-operation {
+  margin-top: 6px;
+}
+.node-score {
+  margin-top: 5px;
+}
+.idea-box.compact .node-operation {
+  font-size: 8px;
+}
+.wave-label {
+  font:
+    10px ui-monospace,
+    monospace;
+  letter-spacing: 1.3px;
+  color: #98a18e;
+  white-space: nowrap;
+}
+.react-flow__node-wave {
+  pointer-events: none;
+}
+.react-flow__edge {
+  animation: edge-arrive 900ms ease-out;
+  transition: opacity 1000ms ease;
+}
+.receded-edge {
+  opacity: 0.3;
+}
+.inspector {
+  padding: 22px;
+}
+.inspector h2 {
+  font-size: 25px;
+}
+.inspector h3 {
+  margin-top: 19px;
+}
+.metric {
+  padding: 7px 0;
+}
+@keyframes idea-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(9px) scale(0.975);
+  }
+  to {
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes edge-arrive {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .idea-box,
+  .react-flow__edge {
+    animation: none;
+    transition: none;
   }
 }

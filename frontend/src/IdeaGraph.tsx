@@ -11,6 +11,7 @@ import {
   type NodeProps,
   type Node,
   type Edge,
+  getViewportForBounds,
 } from "@xyflow/react";
 import dagre from "@dagrejs/dagre";
 import type { Snapshot } from "./contracts";
@@ -75,7 +76,10 @@ function IdeaBox({ data, selected, id }: NodeProps<IdeaNode>) {
     </button>
   );
 }
-const nodeTypes = { idea: IdeaBox };
+function WaveLabel({ data }: NodeProps<Node<{ label: string }>>) {
+  return <div className="wave-label">{data.label}</div>;
+}
+const nodeTypes = { idea: IdeaBox, wave: WaveLabel };
 function Graph({
   snapshot,
   selected,
@@ -85,8 +89,26 @@ function Graph({
   selected: string | null;
   onSelect: (id: string) => void;
 }) {
-  const [compact, setCompact] = useState(false),
-    [follow, setFollow] = useState(false);
+  const [compact, setCompact] = useState(true),
+    [follow, setFollow] = useState(true);
+  // Coalesce arriving candidates into readable reveal beats, without delaying logs.
+  const [visibleIds, setVisibleIds] = useState<string[]>([]);
+  const pendingIdeas = useRef(snapshot.ideas);
+  pendingIdeas.current = snapshot.ideas;
+  useEffect(() => {
+    setVisibleIds(pendingIdeas.current.map((i) => i.id));
+    const timer = setInterval(() => {
+      const ids = pendingIdeas.current.map((i) => i.id);
+      setVisibleIds((previous) =>
+        previous.join() === ids.join() ? previous : ids,
+      );
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [snapshot.run.id]);
+  const visibleIdeas = snapshot.ideas.filter(
+    (i) => visibleIds.includes(i.id) || i.id === selected,
+  );
+  const canvas = useRef<HTMLDivElement>(null);
   const flow = useReactFlow();
   const initialized = useRef(false);
   const previousRun = useRef(snapshot.run.id);
@@ -109,7 +131,7 @@ function Graph({
       })
       .map((i) => i.id),
   );
-  const structuralKey = snapshot.ideas
+  const structuralKey = visibleIdeas
     .map(
       (i) =>
         i.id +
@@ -123,33 +145,33 @@ function Graph({
     const g = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
     g.setGraph({
       rankdir: "TB",
-      nodesep: 36,
-      ranksep: 70,
+      nodesep: 42,
+      ranksep: 55,
       marginx: 24,
-      marginy: 24,
+      marginy: 48,
     });
-    snapshot.ideas.forEach((i) =>
+    visibleIdeas.forEach((i) =>
       g.setNode(i.id, {
-        width: compact && inactiveIds.has(i.id) ? 178 : 224,
-        height: compact && inactiveIds.has(i.id) ? 112 : 138,
+        width: compact && inactiveIds.has(i.id) ? 164 : 202,
+        height: compact && inactiveIds.has(i.id) ? 86 : 112,
       }),
     );
-    snapshot.ideas.forEach((i) => i.parents.forEach((p) => g.setEdge(p, i.id)));
+    visibleIdeas.forEach((i) => i.parents.forEach((p) => g.setEdge(p, i.id)));
     dagre.layout(g);
     return Object.fromEntries(
-      snapshot.ideas.map((i) => {
+      visibleIdeas.map((i) => {
         const p = g.node(i.id);
         return [
           i.id,
           {
-            x: p.x - (compact && inactiveIds.has(i.id) ? 89 : 112),
-            y: p.y - (compact && inactiveIds.has(i.id) ? 56 : 69),
+            x: p.x - (compact && inactiveIds.has(i.id) ? 82 : 101),
+            y: p.y - (compact && inactiveIds.has(i.id) ? 43 : 56),
           },
         ];
       }),
     );
   }, [structuralKey, compact]);
-  const nodes: IdeaNode[] = snapshot.ideas.map((i) => {
+  const nodes: IdeaNode[] = visibleIdeas.map((i) => {
     const experiment = snapshot.experiments
       .filter((e) => e.ideaId === i.id)
       .at(-1);
@@ -157,8 +179,8 @@ function Graph({
     return {
       id: i.id,
       type: "idea",
-      width: compact && inactiveIds.has(i.id) ? 178 : 224,
-      height: compact && inactiveIds.has(i.id) ? 112 : 138,
+      width: compact && inactiveIds.has(i.id) ? 164 : 202,
+      height: compact && inactiveIds.has(i.id) ? 86 : 112,
       position: positions[i.id],
       selected: i.id === selected,
       ariaLabel: `Idea ${i.id}: ${i.title}, ${operationLabel(i.operation)}`,
@@ -175,37 +197,97 @@ function Graph({
       },
     };
   });
-  const edges: Edge[] = snapshot.ideas.flatMap((i) =>
+  const edges: Edge[] = visibleIdeas.flatMap((i) =>
     i.parents.map((p, index) => ({
       id: p + "-" + i.id,
       source: p,
       target: i.id,
-      type: "smoothstep",
+      type: "default",
+      className: inactiveIds.has(i.id) ? "receded-edge" : "",
       style: {
         stroke: index ? "#87a89b" : "#c2cbbb",
-        strokeWidth: 1.5,
+        strokeWidth: 1.25,
         strokeDasharray: index ? "5 5" : undefined,
       },
     })),
   );
+  const generations = new Map<string, number>();
+  for (const idea of visibleIdeas) {
+    generations.set(
+      idea.id,
+      idea.parents.length
+        ? 1 + Math.max(...idea.parents.map((p) => generations.get(p) ?? 0))
+        : 0,
+    );
+  }
+  const waveNodes: Node[] = Array.from(new Set(generations.values())).map(
+    (generation) => {
+      const members = nodes.filter((n) => generations.get(n.id) === generation);
+      return {
+        id: `wave-${generation}`,
+        type: "wave",
+        position: {
+          x: Math.min(...members.map((n) => n.position.x)),
+          y: Math.min(...members.map((n) => n.position.y)) - 32,
+        },
+        width: 230,
+        height: 20,
+        selectable: false,
+        draggable: false,
+        focusable: false,
+        data: {
+          label:
+            [
+              `01 / STARTING POINT`,
+              `02 / EXPLORE DIRECTIONS`,
+              `03 / REFINE & COMBINE`,
+            ][generation] ?? `${generation + 1} / NEXT GENERATION`,
+        },
+      };
+    },
+  );
+  const reducedMotion = window.matchMedia(
+    "(prefers-reduced-motion: reduce)",
+  ).matches;
+  function frameGraph(gradual: boolean) {
+    if (!nodes.length || !canvas.current) return;
+    const left = Math.min(...nodes.map((n) => n.position.x)) - 25;
+    const top = Math.min(...nodes.map((n) => n.position.y)) - 50;
+    const right =
+      Math.max(...nodes.map((n) => n.position.x + (n.width ?? 202))) + 25;
+    const bottom =
+      Math.max(...nodes.map((n) => n.position.y + (n.height ?? 112))) + 25;
+    const viewport = getViewportForBounds(
+      { x: left, y: top, width: right - left, height: bottom - top },
+      canvas.current.clientWidth,
+      canvas.current.clientHeight,
+      0.2,
+      0.88,
+      0.12,
+    );
+    // Automatic framing only pulls back; it never zooms into a receding branch.
+    if (gradual && initialized.current) {
+      viewport.zoom = Math.min(viewport.zoom, flow.getZoom());
+      viewport.x =
+        canvas.current.clientWidth / 2 - ((left + right) / 2) * viewport.zoom;
+      viewport.y =
+        canvas.current.clientHeight / 2 - ((top + bottom) / 2) * viewport.zoom;
+    }
+    void flow.setViewport(viewport, {
+      duration: reducedMotion ? 0 : gradual ? 1100 : 450,
+    });
+    initialized.current = true;
+  }
   useEffect(() => {
     if (previousRun.current !== snapshot.run.id) {
       initialized.current = false;
       previousRun.current = snapshot.run.id;
+      setFollow(true);
     }
-    if (!initialized.current && nodes.length) {
-      initialized.current = true;
-      requestAnimationFrame(
-        () => void flow.fitView({ padding: 0.3, maxZoom: 1 }),
-      );
-    } else if (follow && nodes.length) {
-      const last = nodes.at(-1)!;
-      void flow.setCenter(last.position.x + 112, last.position.y + 60, {
-        zoom: flow.getZoom(),
-        duration: 350,
-      });
-    }
-  }, [structuralKey, snapshot.run.id, follow, flow]);
+    if (!follow && initialized.current) return;
+    const timer = setTimeout(() => frameGraph(true), 120);
+    return () => clearTimeout(timer);
+  }, [structuralKey, snapshot.run.id, follow]);
   return (
     <section className="graph-panel">
       <div className="graph-toolbar">
@@ -227,19 +309,13 @@ function Graph({
             checked={follow}
             onChange={(e) => setFollow(e.target.checked)}
           />{" "}
-          Follow latest
+          Auto overview
         </label>
-        <button
-          onClick={() =>
-            void flow.fitView({ padding: 0.2, duration: 300, maxZoom: 1 })
-          }
-        >
-          Fit graph
-        </button>
+        <button onClick={() => frameGraph(false)}>Fit graph</button>
       </div>
-      <div className="graph-canvas">
+      <div className="graph-canvas" ref={canvas}>
         <ReactFlow
-          nodes={nodes}
+          nodes={[...waveNodes, ...nodes]}
           edges={edges}
           nodeTypes={nodeTypes}
           onNodeClick={(_, n) => onSelect(n.id)}
@@ -259,7 +335,7 @@ function Graph({
         </ReactFlow>
       </div>
       <div className="graph-caption">
-        Both parents stay connected. Mutation labels describe the extra change.
+        Ideas arrive in waves. Faded branches remain available to inspect.
       </div>
     </section>
   );
