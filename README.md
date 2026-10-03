@@ -16,7 +16,7 @@ Set `LEA_ROOT` to the Lea checkout if it is not at `../lea-prover`. Set
 `problems/knapsack/Generated.lean` and returns that path.
 
 ```text
-src/the_pigeon_holes_autoresearch/
+src/the_pigeon_holes/
     formalization/lea.py       Lea CLI integration
     formalization/validate.py  Equivalence and axiom check
     specification/            Problem loading
@@ -63,7 +63,7 @@ from the same Lean directory.
 Validate the generated specification:
 
 ```sh
-PYTHONPATH=src uv run python -m the_pigeon_holes_autoresearch.formalization.validate \
+uv run python -m the_pigeon_holes.formalization.validate \
   problems/knapsack
 ```
 
@@ -76,10 +76,10 @@ git -C ../lea-prover checkout 2709009dca410c1fc4d8de55f4e272f715b18334
 uv sync --project ../lea-prover
 ```
 
-For every problem, `Validation.lean` must prove a theorem named
+When `Reference.lean` exists, `Validation.lean` must prove a theorem named
 `generated_iff_reference` and finish with `#print axioms generated_iff_reference`.
-The validator accepts the result only when Lean checks the proof and it uses no
-axioms beyond Lean's standard `propext`, `Classical.choice`, and `Quot.sound`.
+When no reference exists, the validator only compiles `Generated.lean` and rejects
+`sorry`, `admit`, and custom `axiom` declarations.
 
 Run tests, including real Lean checks after setup:
 

@@ -5,9 +5,9 @@ import shutil
 from pathlib import Path
 from uuid import uuid4
 
-from .formalization.lea import formalize
+from .lea import formalize
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 
 
 def formalise(problem_name: str) -> Path:

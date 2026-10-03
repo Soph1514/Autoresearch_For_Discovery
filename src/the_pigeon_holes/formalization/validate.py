@@ -1,4 +1,4 @@
-"""Compile a problem's equivalence proof and reject untrusted axioms."""
+"""Check generated Lean, and compare it with a reference when one exists."""
 
 import argparse
 import re
@@ -19,8 +19,35 @@ def check_axioms(output: str) -> bool:
     return used <= ALLOWED_AXIOMS
 
 
+def contains_cheating(source: str) -> bool:
+    source = re.sub(r"/-.*?-/", "", source, flags=re.DOTALL)
+    source = re.sub(r"--.*", "", source)
+    return bool(re.search(r"\b(sorry|admit)\b|^\s*axiom\b", source, re.MULTILINE))
+
+
 def validate(problem: Path, lean_root: Path, lake: str = "lake") -> tuple[bool, str]:
-    validation = problem.resolve() / "Validation.lean"
+    problem = problem.resolve()
+    generated = problem / "Generated.lean"
+    if not generated.is_file():
+        return False, f"Missing {generated}"
+    if contains_cheating(generated.read_text()):
+        return False, "Generated.lean contains sorry, admit, or a custom axiom."
+
+    reference = problem / "Reference.lean"
+    if not reference.is_file():
+        build = subprocess.run(
+            [lake, "build", "Generated"], cwd=lean_root.resolve(),
+            capture_output=True, text=True, check=False,
+        )
+        if build.returncode != 0:
+            return False, build.stdout + build.stderr
+        result = subprocess.run(
+            [lake, "env", "lean", str(generated)], cwd=lean_root.resolve(),
+            capture_output=True, text=True, check=False,
+        )
+        return result.returncode == 0, result.stdout + result.stderr
+
+    validation = problem / "Validation.lean"
     if not validation.is_file():
         return False, f"Missing {validation}"
     build = subprocess.run(
