@@ -265,7 +265,7 @@ wheels = [
 ]
 
 [[package]]
-name = "the-pigeon-holes"
+name = "the_pigeon_holes"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
