@@ -1,0 +1,7 @@
+[project]
+name = "the_pigeon_holes"
+version = "0.1.0"
+dependencies = [
+    "langchain-openai>=1.6.7",
+    "langgraph>=1.2.12",
+]
