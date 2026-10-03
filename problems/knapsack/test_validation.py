@@ -8,7 +8,7 @@ VALIDATOR = ROOT / "src/the_pigeon_holes/formalization/validate.py"
 
 
 class KnapsackValidationTest(unittest.TestCase):
-    def test_generated_matches_reference_without_cheating(self):
+    def test_generated_specification_is_valid(self):
         problem = Path(__file__).resolve().parent
         result = subprocess.run(
             [sys.executable, str(VALIDATOR), str(problem)],

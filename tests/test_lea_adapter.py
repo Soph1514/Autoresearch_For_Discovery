@@ -25,7 +25,7 @@ class LeaAdapterTests(unittest.TestCase):
         output.mkdir()
 
         def communicate(task, timeout):
-            self.assertIn("Problem statement:\noptimize a selection", task)
+            self.assertIn("General problem statement:\noptimize a selection", task)
             if response:
                 (output / "lea_workspace/Generated.lean").write_text(
                     "namespace Generated\ndef feasible : Prop := True\nend Generated\n"

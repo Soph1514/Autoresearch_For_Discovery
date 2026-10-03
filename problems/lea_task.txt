@@ -1,10 +1,12 @@
-Formalize the supplied natural-language problem using your Lean checking and
+Formalize the supplied general natural-language problem using your Lean checking and
 repair tools. Work in the supplied workspace with its pinned Lean toolchain.
 
 Follow the supplied problem interface exactly. Create Generated.lean, check it
 with lean_check, and repair errors within your turn budget. Formalize the problem
-specification, not an algorithm and not a claim that every instance has a
-solution. Do not silently strengthen assumptions or omit constraints. If a
+specification, not a particular instance, not an algorithm, and not a claim that
+every instance has a solution. Quantify over the instance data and candidate
+solution. Do not invent or encode concrete input values. Do not silently
+strengthen assumptions or omit constraints. If a
 material ambiguity cannot be resolved, report that clarification is needed.
 
 The trusted reference is intentionally not supplied. Do not try to read the
@@ -12,7 +14,7 @@ repository's problem or reference files or reproduce a hidden reference by name.
 
 For an optimization problem, write the checked specification as
 `Generated.feasible`, `Generated.objective`, and `Generated.optimal` in
-Generated.lean. Infer the instance and candidate types from the problem
+Generated.lean. Infer the general instance and candidate types from the problem
 statement. Do not use `sorry`, `admit`, custom axioms, or unsafe declarations.
 A separate Validation.lean file will prove that the generated specification is
 equivalent to the trusted reference.

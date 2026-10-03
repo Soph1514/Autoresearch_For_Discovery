@@ -41,7 +41,7 @@ def formalize(*, lea_root: Path, task: str, statement: str, lean_project: Path,
     )
     (workspace / "lea.md").write_text(instructions)
     generated = workspace / "Generated.lean"
-    request = instructions + "\n" + task + "\n\nProblem statement:\n" + statement
+    request = instructions + "\n" + task + "\n\nGeneral problem statement:\n" + statement
     (output / "lea_task.txt").write_text(request)
     # JSON is valid YAML; avoid an additional YAML dependency in this adapter.
     config = output / "lea_config.json"

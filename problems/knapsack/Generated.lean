@@ -1,15 +1,18 @@
-import Problem
+import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 
 namespace Generated
 
-def feasible (chosen : Finset (Fin 5)) : Prop :=
-  (chosen.sum fun i => (Knapsack.items i).weight) ≤ 10
+def feasible {n : Nat} (weight : Fin n → Nat) (capacity : Nat)
+    (chosen : Finset (Fin n)) : Prop :=
+  (chosen.sum weight) ≤ capacity
 
-def objective (chosen : Finset (Fin 5)) : Nat :=
-  chosen.sum fun i => (Knapsack.items i).value
+def objective {n : Nat} (value : Fin n → Nat) (chosen : Finset (Fin n)) : Nat :=
+  chosen.sum value
 
-def optimal (chosen : Finset (Fin 5)) : Prop :=
-  feasible chosen ∧
-    ∀ candidate, feasible candidate → objective candidate ≤ objective chosen
+def optimal {n : Nat} (weight value : Fin n → Nat) (capacity : Nat)
+    (chosen : Finset (Fin n)) : Prop :=
+  feasible weight capacity chosen ∧
+    ∀ candidate, feasible weight capacity candidate →
+      objective value candidate ≤ objective value chosen
 
 end Generated
