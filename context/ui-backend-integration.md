@@ -1,6 +1,6 @@
 # Idea-tree UI and backend integration
 
-Status: the frontend and in-browser mock client are implemented in `frontend/`. The HTTP/SSE API remains a proposed contract; no real backend adapter is connected. Align payloads and endpoint names with the pipeline team before integration. The agreed pipeline in `context/agents.md` remains the source of truth.
+Status: the UI is connected to the real Python evolution engine through a local FastAPI/SSE bridge, with explicit demo generator/evaluator ports. See `docs/ui-integration-status.md` for current behavior and remaining gaps. The sections below retain the original proposed contract; arbitrary problem upload and production adapters are not connected.
 
 ## Ownership and stack
 
