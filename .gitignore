@@ -13,3 +13,4 @@ dist/
 lean/.lake/
 runs/*
 !runs/.gitkeep
+uv.lock
