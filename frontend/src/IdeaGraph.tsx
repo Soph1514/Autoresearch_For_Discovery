@@ -1,18 +1,273 @@
-import {useEffect,useMemo,useRef,useState} from 'react';
-import {ReactFlow,ReactFlowProvider,Background,Controls,Handle,Position,useReactFlow,type NodeProps,type Node,type Edge} from '@xyflow/react';
-import dagre from '@dagrejs/dagre';
-import type {Snapshot} from './contracts';
-export const operationLabel=(op:string)=>op==='merge_mutation'?'Merge + mutation':op.charAt(0).toUpperCase()+op.slice(1);
-type IdeaNode=Node<{title:string;operation:string;status:string;elite:boolean;inactive:boolean;score?:number;compact:boolean;parents:string[]}>;
-function IdeaBox({data,selected,id}:NodeProps<IdeaNode>){return <div className={`idea-box ${data.elite?'elite':''} ${data.inactive?'inactive':''} ${selected?'selected':''} ${data.compact?'compact':''}`}><Handle type="target" position={Position.Top}/><div className="node-meta">IDEA {id}<span>{data.elite?'★ ELITE':data.status==='running'?'● RUNNING':data.status.toUpperCase()}</span></div><strong>{data.title}</strong><div className="node-operation">{operationLabel(data.operation)}{data.parents.length>0&&` · ${data.parents.map(p=>'#'+p).join(' + ')}`}</div>{!data.compact&&<div className="node-score">{data.score!=null?`PoA ${data.score.toFixed(4)}`:data.status==='failed'?'Invalid · evidence retained':data.status==='cancelled'?'Cancelled':'Awaiting evaluation'}</div>}<Handle type="source" position={Position.Bottom}/></div>}
-const nodeTypes={idea:IdeaBox};
-function Graph({snapshot,selected,onSelect}:{snapshot:Snapshot;selected:string|null;onSelect:(id:string)=>void}){
- const [compact,setCompact]=useState(false),[follow,setFollow]=useState(false);const flow=useReactFlow();const initialized=useRef(false);const previousRun=useRef(snapshot.run.id);
- const structuralKey=snapshot.ideas.map(i=>i.id+':'+i.parents.join(',')+':'+i.inactive).join('|');
- const positions=useMemo(()=>{const g=new dagre.graphlib.Graph().setDefaultEdgeLabel(()=>({}));g.setGraph({rankdir:'TB',nodesep:36,ranksep:70,marginx:24,marginy:24});snapshot.ideas.forEach(i=>g.setNode(i.id,{width:224,height:compact&&i.inactive?90:118}));snapshot.ideas.forEach(i=>i.parents.forEach(p=>g.setEdge(p,i.id)));dagre.layout(g);return Object.fromEntries(snapshot.ideas.map(i=>{const p=g.node(i.id);return [i.id,{x:p.x-112,y:p.y-(compact&&i.inactive?45:59)}]}))},[structuralKey,compact]);
- const nodes:IdeaNode[]=snapshot.ideas.map(i=>{const experiment=snapshot.experiments.filter(e=>e.ideaId===i.id).at(-1);const elite=snapshot.elites.some(e=>e.ideaId===i.id&&e.current);const former=snapshot.elites.some(e=>e.ideaId===i.id&&!e.current);return {id:i.id,type:'idea',position:positions[i.id],selected:i.id===selected,ariaLabel:`Idea ${i.id}: ${i.title}, ${operationLabel(i.operation)}`,data:{title:i.title,operation:i.operation,parents:i.parents,status:experiment?.status??'proposed',elite,inactive:!elite&&(i.inactive||former),score:experiment?.valid?experiment.metrics.poa:undefined,compact:compact&&i.inactive}}});
- const edges:Edge[]=snapshot.ideas.flatMap(i=>i.parents.map((p,index)=>({id:p+'-'+i.id,source:p,target:i.id,type:'smoothstep',style:{stroke:index?'#87a89b':'#c2cbbb',strokeWidth:1.5,strokeDasharray:index?'5 5':undefined}})));
- useEffect(()=>{if(previousRun.current!==snapshot.run.id){initialized.current=false;previousRun.current=snapshot.run.id}if(!initialized.current&&nodes.length){initialized.current=true;requestAnimationFrame(()=>void flow.fitView({padding:.3,maxZoom:1}))}else if(follow&&nodes.length){const last=nodes.at(-1)!;void flow.setCenter(last.position.x+112,last.position.y+60,{zoom:flow.getZoom(),duration:350})}},[structuralKey,snapshot.run.id,follow,flow]);
- return <section className="graph-panel"><div className="graph-toolbar"><strong>Idea lineage</strong><span className="legend">★ Elite <span>● Exploring</span> <span>○ Inactive</span></span><label><input type="checkbox" checked={compact} onChange={e=>setCompact(e.target.checked)}/> Compact inactive</label><label><input type="checkbox" checked={follow} onChange={e=>setFollow(e.target.checked)}/> Follow latest</label><button onClick={()=>void flow.fitView({padding:.2,duration:300,maxZoom:1})}>Fit graph</button></div><div className="graph-canvas"><ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodeClick={(_,n)=>onSelect(n.id)} onNodeDragStart={()=>setFollow(false)} onMoveStart={e=>{if(e)setFollow(false)}} nodesDraggable={false} nodesConnectable={false} elementsSelectable minZoom={.2} maxZoom={1.5} proOptions={{hideAttribution:false}}><Background color="#d9dfd2" gap={23}/><Controls showInteractive={false}/></ReactFlow></div><div className="graph-caption">Both parents stay connected. Mutation labels describe the extra change.</div></section>
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ReactFlow,
+  ReactFlowProvider,
+  Background,
+  Controls,
+  Handle,
+  Position,
+  useReactFlow,
+  useUpdateNodeInternals,
+  type NodeProps,
+  type Node,
+  type Edge,
+} from "@xyflow/react";
+import dagre from "@dagrejs/dagre";
+import type { Snapshot } from "./contracts";
+export const operationLabel = (op: string) =>
+  op === "merge_mutation"
+    ? "Merge + mutation"
+    : op.charAt(0).toUpperCase() + op.slice(1);
+type IdeaNode = Node<{
+  title: string;
+  operation: string;
+  status: string;
+  elite: boolean;
+  inactive: boolean;
+  score?: number;
+  compact: boolean;
+  parents: string[];
+  select: () => void;
+}>;
+function IdeaBox({ data, selected, id }: NodeProps<IdeaNode>) {
+  const updateInternals = useUpdateNodeInternals();
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => updateInternals(id));
+    return () => cancelAnimationFrame(frame);
+  }, [id, data.compact, updateInternals]);
+  return (
+    <button
+      type="button"
+      onClick={data.select}
+      aria-label={`Inspect idea ${id}: ${data.title}`}
+      aria-pressed={selected}
+      className={`idea-box ${data.elite ? "elite" : ""} ${data.inactive ? "inactive" : ""} ${selected ? "selected" : ""} ${data.compact ? "compact" : ""}`}
+    >
+      <Handle type="target" position={Position.Top} />
+      <div className="node-meta">
+        IDEA {id}
+        <span>
+          {data.elite
+            ? "★ ELITE"
+            : data.status === "running"
+              ? "● RUNNING"
+              : data.status.toUpperCase()}
+        </span>
+      </div>
+      <strong>{data.title}</strong>
+      <div className="node-operation">
+        {operationLabel(data.operation)}
+        {data.parents.length > 0 &&
+          ` · ${data.parents.map((p) => "#" + p).join(" + ")}`}
+      </div>
+      {!data.compact && (
+        <div className="node-score">
+          {data.score != null
+            ? `PoA ${data.score.toFixed(4)}`
+            : data.status === "failed"
+              ? "Invalid · evidence retained"
+              : data.status === "cancelled"
+                ? "Cancelled"
+                : "Awaiting evaluation"}
+        </div>
+      )}
+      <Handle type="source" position={Position.Bottom} />
+    </button>
+  );
 }
-export function IdeaGraph(props:Parameters<typeof Graph>[0]){return <ReactFlowProvider><Graph {...props}/></ReactFlowProvider>}
+const nodeTypes = { idea: IdeaBox };
+function Graph({
+  snapshot,
+  selected,
+  onSelect,
+}: {
+  snapshot: Snapshot;
+  selected: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const [compact, setCompact] = useState(false),
+    [follow, setFollow] = useState(false);
+  const flow = useReactFlow();
+  const initialized = useRef(false);
+  const previousRun = useRef(snapshot.run.id);
+  const inactiveIds = new Set(
+    snapshot.ideas
+      .filter((i) => {
+        const done = snapshot.experiments.some(
+          (e) => e.ideaId === i.id && e.status !== "running",
+        );
+        const running = snapshot.experiments.some(
+          (e) => e.ideaId === i.id && e.status === "running",
+        );
+        const elite = snapshot.elites.some(
+          (e) => e.ideaId === i.id && e.current,
+        );
+        const former = snapshot.elites.some(
+          (e) => e.ideaId === i.id && !e.current,
+        );
+        return done && !running && !elite && (i.inactive || former);
+      })
+      .map((i) => i.id),
+  );
+  const structuralKey = snapshot.ideas
+    .map(
+      (i) =>
+        i.id +
+        ":" +
+        i.parents.join(",") +
+        ":" +
+        (compact && inactiveIds.has(i.id)),
+    )
+    .join("|");
+  const positions = useMemo(() => {
+    const g = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
+    g.setGraph({
+      rankdir: "TB",
+      nodesep: 36,
+      ranksep: 70,
+      marginx: 24,
+      marginy: 24,
+    });
+    snapshot.ideas.forEach((i) =>
+      g.setNode(i.id, {
+        width: compact && inactiveIds.has(i.id) ? 178 : 224,
+        height: compact && inactiveIds.has(i.id) ? 112 : 138,
+      }),
+    );
+    snapshot.ideas.forEach((i) => i.parents.forEach((p) => g.setEdge(p, i.id)));
+    dagre.layout(g);
+    return Object.fromEntries(
+      snapshot.ideas.map((i) => {
+        const p = g.node(i.id);
+        return [
+          i.id,
+          {
+            x: p.x - (compact && inactiveIds.has(i.id) ? 89 : 112),
+            y: p.y - (compact && inactiveIds.has(i.id) ? 56 : 69),
+          },
+        ];
+      }),
+    );
+  }, [structuralKey, compact]);
+  const nodes: IdeaNode[] = snapshot.ideas.map((i) => {
+    const experiment = snapshot.experiments
+      .filter((e) => e.ideaId === i.id)
+      .at(-1);
+    const elite = snapshot.elites.some((e) => e.ideaId === i.id && e.current);
+    return {
+      id: i.id,
+      type: "idea",
+      width: compact && inactiveIds.has(i.id) ? 178 : 224,
+      height: compact && inactiveIds.has(i.id) ? 112 : 138,
+      position: positions[i.id],
+      selected: i.id === selected,
+      ariaLabel: `Idea ${i.id}: ${i.title}, ${operationLabel(i.operation)}`,
+      data: {
+        select: () => onSelect(i.id),
+        title: i.title,
+        operation: i.operation,
+        parents: i.parents,
+        status: experiment?.status ?? "proposed",
+        elite,
+        inactive: inactiveIds.has(i.id),
+        score: experiment?.valid ? experiment.metrics.poa : undefined,
+        compact: compact && inactiveIds.has(i.id),
+      },
+    };
+  });
+  const edges: Edge[] = snapshot.ideas.flatMap((i) =>
+    i.parents.map((p, index) => ({
+      id: p + "-" + i.id,
+      source: p,
+      target: i.id,
+      type: "smoothstep",
+      style: {
+        stroke: index ? "#87a89b" : "#c2cbbb",
+        strokeWidth: 1.5,
+        strokeDasharray: index ? "5 5" : undefined,
+      },
+    })),
+  );
+  useEffect(() => {
+    if (previousRun.current !== snapshot.run.id) {
+      initialized.current = false;
+      previousRun.current = snapshot.run.id;
+    }
+    if (!initialized.current && nodes.length) {
+      initialized.current = true;
+      requestAnimationFrame(
+        () => void flow.fitView({ padding: 0.3, maxZoom: 1 }),
+      );
+    } else if (follow && nodes.length) {
+      const last = nodes.at(-1)!;
+      void flow.setCenter(last.position.x + 112, last.position.y + 60, {
+        zoom: flow.getZoom(),
+        duration: 350,
+      });
+    }
+  }, [structuralKey, snapshot.run.id, follow, flow]);
+  return (
+    <section className="graph-panel">
+      <div className="graph-toolbar">
+        <strong>Idea lineage</strong>
+        <span className="legend">
+          ★ Elite <span>● Exploring</span> <span>○ Inactive</span>
+        </span>
+        <label>
+          <input
+            type="checkbox"
+            checked={compact}
+            onChange={(e) => setCompact(e.target.checked)}
+          />{" "}
+          Compact inactive
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={follow}
+            onChange={(e) => setFollow(e.target.checked)}
+          />{" "}
+          Follow latest
+        </label>
+        <button
+          onClick={() =>
+            void flow.fitView({ padding: 0.2, duration: 300, maxZoom: 1 })
+          }
+        >
+          Fit graph
+        </button>
+      </div>
+      <div className="graph-canvas">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          onNodeClick={(_, n) => onSelect(n.id)}
+          onNodeDragStart={() => setFollow(false)}
+          onMoveStart={(e) => {
+            if (e) setFollow(false);
+          }}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          elementsSelectable
+          minZoom={0.2}
+          maxZoom={1.5}
+          proOptions={{ hideAttribution: false }}
+        >
+          <Background color="#d9dfd2" gap={23} />
+          <Controls showInteractive={false} />
+        </ReactFlow>
+      </div>
+      <div className="graph-caption">
+        Both parents stay connected. Mutation labels describe the extra change.
+      </div>
+    </section>
+  );
+}
+export function IdeaGraph(props: Parameters<typeof Graph>[0]) {
+  return (
+    <ReactFlowProvider>
+      <Graph {...props} />
+    </ReactFlowProvider>
+  );
+}

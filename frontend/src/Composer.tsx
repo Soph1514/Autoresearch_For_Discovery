@@ -1,6 +1,173 @@
-import {useEffect,useRef,useState} from 'react';
-interface Draft {text:string;files:File[];results:string;resultFiles:File[]}
-function Preview({file}:{file:File}){const [url,setUrl]=useState('');useEffect(()=>{if(!file.type.startsWith('image/'))return;const value=URL.createObjectURL(file);setUrl(value);return ()=>URL.revokeObjectURL(value)},[file]);return url?<img src={url} alt={file.name}/>:<span className="file-icon">DOC</span>}
-export function Composer({onClose}:{onClose:()=>void}){const dialog=useRef<HTMLDialogElement>(null);const [draft,setDraft]=useState<Draft>({text:'',files:[],results:'',resultFiles:[]});const [saved,setSaved]=useState(false);useEffect(()=>{dialog.current?.showModal()},[]);
- return <dialog ref={dialog} onCancel={onClose}><form onSubmit={e=>{e.preventDefault();if(draft.text.trim()||draft.files.length)setSaved(true)}}><div className="dialog-head"><h2>Start with your question.</h2><button type="button" onClick={onClose} aria-label="Close problem composer">×</button></div><p className="muted">Describe your problem or attach a blackboard, notes, or paper.</p><label className="field">Problem<textarea autoFocus rows={5} placeholder="What are you trying to discover? Include constraints and what you have tried." value={draft.text} onChange={e=>{setSaved(false);setDraft({...draft,text:e.target.value})}}/></label><label className="field">Images or documents<input type="file" multiple accept="image/*,.pdf,.txt,.md,.json" onChange={e=>{setSaved(false);setDraft({...draft,files:[...draft.files,...Array.from(e.target.files??[])]});e.target.value=''}}/></label><div className="attachments">{draft.files.map((f,i)=><div className="attachment" key={i}><Preview file={f}/><span>{f.name}</span><button type="button" aria-label={'Remove '+f.name} onClick={()=>setDraft({...draft,files:draft.files.filter((_,j)=>j!==i)})}>×</button></div>)}</div><label className="field">Initial results (optional)<textarea rows={2} value={draft.results} onChange={e=>setDraft({...draft,results:e.target.value})} placeholder="A baseline, partial proof, or previous measurements…"/></label><label className="field">Result files<input type="file" multiple accept=".csv,.json,.txt,.md,.pdf,image/*" onChange={e=>{setDraft({...draft,resultFiles:[...draft.resultFiles,...Array.from(e.target.files??[])]});e.target.value=''}}/></label>{draft.resultFiles.map((f,i)=><div className="attachment" key={i}><span>{f.name}</span><button type="button" aria-label={'Remove '+f.name} onClick={()=>setDraft({...draft,resultFiles:draft.resultFiles.filter((_,j)=>j!==i)})}>×</button></div>)}<p className="notice">Backend pending. This is a local input preview; files are not uploaded or interpreted. Closing this composer discards the draft.</p>{saved&&<p role="status" className="notice success">Input preview ready: {draft.text||`${draft.files.length} attachment(s)`}. Research on this problem will become available when the backend connects.</p>}<div className="dialog-actions"><button type="button" onClick={onClose}>Close</button><button className="primary" disabled={!draft.text.trim()&&!draft.files.length}>Preview input</button></div></form></dialog>
+import { useEffect, useRef, useState } from "react";
+interface Draft {
+  text: string;
+  files: File[];
+  results: string;
+  resultFiles: File[];
+}
+function Preview({ file }: { file: File }) {
+  const [url, setUrl] = useState("");
+  useEffect(() => {
+    if (!file.type.startsWith("image/")) return;
+    const value = URL.createObjectURL(file);
+    setUrl(value);
+    return () => URL.revokeObjectURL(value);
+  }, [file]);
+  return url ? (
+    <img src={url} alt={file.name} />
+  ) : (
+    <span className="file-icon">DOC</span>
+  );
+}
+export function Composer({ onClose }: { onClose: () => void }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [draft, setDraft] = useState<Draft>({
+    text: "",
+    files: [],
+    results: "",
+    resultFiles: [],
+  });
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    dialog.current?.showModal();
+  }, []);
+  return (
+    <dialog ref={dialog} onCancel={onClose}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (draft.text.trim() || draft.files.length) setSaved(true);
+        }}
+      >
+        <div className="dialog-head">
+          <h2>Start with your question.</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close problem composer"
+          >
+            ×
+          </button>
+        </div>
+        <p className="muted">
+          Describe your problem or attach a blackboard, notes, or paper.
+        </p>
+        <label className="field">
+          Problem
+          <textarea
+            autoFocus
+            rows={5}
+            placeholder="What are you trying to discover? Include constraints and what you have tried."
+            value={draft.text}
+            onChange={(e) => {
+              setSaved(false);
+              setDraft({ ...draft, text: e.target.value });
+            }}
+          />
+        </label>
+        <label className="field">
+          Images or documents
+          <input
+            type="file"
+            multiple
+            accept="image/*,.pdf,.txt,.md,.json"
+            onChange={(e) => {
+              setSaved(false);
+              setDraft({
+                ...draft,
+                files: [...draft.files, ...Array.from(e.target.files ?? [])],
+              });
+              e.target.value = "";
+            }}
+          />
+        </label>
+        <div className="attachments">
+          {draft.files.map((f, i) => (
+            <div className="attachment" key={i}>
+              <Preview file={f} />
+              <span>{f.name}</span>
+              <button
+                type="button"
+                aria-label={"Remove " + f.name}
+                onClick={() =>
+                  setDraft({
+                    ...draft,
+                    files: draft.files.filter((_, j) => j !== i),
+                  })
+                }
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+        <label className="field">
+          Initial results (optional)
+          <textarea
+            rows={2}
+            value={draft.results}
+            onChange={(e) => setDraft({ ...draft, results: e.target.value })}
+            placeholder="A baseline, partial proof, or previous measurements…"
+          />
+        </label>
+        <label className="field">
+          Result files
+          <input
+            type="file"
+            multiple
+            accept=".csv,.json,.txt,.md,.pdf,image/*"
+            onChange={(e) => {
+              setDraft({
+                ...draft,
+                resultFiles: [
+                  ...draft.resultFiles,
+                  ...Array.from(e.target.files ?? []),
+                ],
+              });
+              e.target.value = "";
+            }}
+          />
+        </label>
+        {draft.resultFiles.map((f, i) => (
+          <div className="attachment" key={i}>
+            <span>{f.name}</span>
+            <button
+              type="button"
+              aria-label={"Remove " + f.name}
+              onClick={() =>
+                setDraft({
+                  ...draft,
+                  resultFiles: draft.resultFiles.filter((_, j) => j !== i),
+                })
+              }
+            >
+              ×
+            </button>
+          </div>
+        ))}
+        <p className="notice">
+          Backend pending. This is a local input preview; files are not uploaded
+          or interpreted. Closing this composer discards the draft.
+        </p>
+        {saved && (
+          <p role="status" className="notice success">
+            Input preview ready:{" "}
+            {draft.text || `${draft.files.length} attachment(s)`}. Research on
+            this problem will become available when the backend connects.
+          </p>
+        )}
+        <div className="dialog-actions">
+          <button type="button" onClick={onClose}>
+            Close
+          </button>
+          <button
+            className="primary"
+            disabled={!draft.text.trim() && !draft.files.length}
+          >
+            Preview input
+          </button>
+        </div>
+      </form>
+    </dialog>
+  );
 }

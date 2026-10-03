@@ -1,6 +1,6 @@
 # Idea-tree UI and backend integration
 
-Status: proposed implementation contract; the frontend and API described here are not implemented yet. Align payloads and endpoint names with the pipeline team before integration. The agreed pipeline in `context/agents.md` remains the source of truth.
+Status: the frontend and in-browser mock client are implemented in `frontend/`. The HTTP/SSE API remains a proposed contract; no real backend adapter is connected. Align payloads and endpoint names with the pipeline team before integration. The agreed pipeline in `context/agents.md` remains the source of truth.
 
 ## Ownership and stack
 
@@ -83,7 +83,7 @@ The mock client emits deterministic asynchronous events for the Pigou routing ex
 
 ## Local development and integration
 
-Once the frontend exists, run `npm install` and `npm run dev` from `frontend/`. Vite normally serves the UI at `http://localhost:5173`; use the URL printed by the process.
+Run `npm install` and `npm run dev` from `frontend/`. Vite normally serves the UI at `http://localhost:5173`; use the URL printed by the process.
 
 For the mock, only the frontend terminal is needed. For real integration, run the Python backend in a second terminal using the command supplied by its owner, typically on port 8000. Configure Vite to proxy `/api` requests, including SSE, to that service:
 
