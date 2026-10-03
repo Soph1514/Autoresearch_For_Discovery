@@ -278,18 +278,6 @@ def evaluate(out, final_test=False):
     write(out / "test_metrics.json", metrics)
     write(out / "test_predictions.json", [{"id": r["id"], "group": r["group"],
           "label": int(label), "p_faithful": float(p)} for r, label, p in zip(rows, y, probs)])
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    order = np.argsort(-probs)
-    # Only realizable thresholds: include all tied predictions together.
-    ends = np.r_[np.where(np.diff(probs[order]) != 0)[0], len(y)-1]
-    plt.plot((ends+1)/len(y), np.cumsum(1-y[order])[ends]/(ends+1))
-    plt.xlabel("Acceptance coverage")
-    plt.ylabel("Error among accepted specifications")
-    plt.title("Trained classifier — single run, no confidence intervals")
-    for ext in ("png", "pdf"):
-        plt.savefig(out / f"risk_coverage.{ext}", bbox_inches="tight")
     print(json.dumps(metrics, indent=2))
 
 

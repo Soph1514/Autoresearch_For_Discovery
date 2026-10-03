@@ -13,8 +13,7 @@ SEEDS = ("manifest", "train", "dev", "calibration", "test")
 app = modal.App("lean-fidelity-research")
 image = (modal.Image.debian_slim(python_version="3.11")
          .pip_install("torch==2.7.1", "transformers==4.56.2", "peft==0.17.1",
-                      "accelerate==1.10.1", "datasets==4.1.1", "scikit-learn==1.7.2",
-                      "matplotlib==3.10.6")
+                      "accelerate==1.10.1", "datasets==4.1.1", "scikit-learn==1.7.2")
          .add_local_file(HERE / "experiment.py", "/root/experiment.py"))
 for name in SEEDS:
     source = HERE / "artifacts" / f"{name}.json"

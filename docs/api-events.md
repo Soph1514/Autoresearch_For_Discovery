@@ -89,3 +89,4 @@ Cancellation propagates through provider/evaluator awaits; completed evidence
 is retained, running evaluations are marked cancelled, and the final state is
 `stopped`. Production adapters must not swallow `CancelledError`. Paused time
 is excluded from the run clock; draining in-flight work before `paused` is not.
+
