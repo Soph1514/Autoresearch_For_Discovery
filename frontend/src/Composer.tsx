@@ -1,3 +1,4 @@
+import { attachmentAccept, readAttachment } from "./attachments";
 import { useEffect, useRef, useState } from "react";
 
 type Result = {
@@ -10,6 +11,8 @@ export function Composer({ onClose }: { onClose: () => void }) {
   const [mode, setMode] = useState<"natural" | "formal">("natural");
   const [problem, setProblem] = useState("");
   const [lean, setLean] = useState("");
+  const [attachmentTarget, setAttachmentTarget] = useState("problem");
+  const [attachmentStatus, setAttachmentStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<Result | null>(null);
@@ -37,7 +40,7 @@ export function Composer({ onClose }: { onClose: () => void }) {
           <option value="formal">I already have a Lean formulation</option>
         </select>
       </label>
-      <label className="field">Problem, objective, and constraints (required)
+      <label className="field">Problem, objective, and constraints (type or attach)
         <textarea autoFocus required disabled={busy} rows={5} maxLength={16000} value={problem}
           onChange={(e) => { setProblem(e.target.value); setResult(null); }} />
       </label>
@@ -54,8 +57,36 @@ export function Composer({ onClose }: { onClose: () => void }) {
           }} />
         </label>
       </>}
+      {mode === "formal" && <label className="field">Add attachment text to
+        <select disabled={busy} value={attachmentTarget} onChange={(e) => setAttachmentTarget(e.target.value)}>
+          <option value="problem">Problem description</option><option value="lean">Existing Lean source</option>
+        </select>
+      </label>}
+      <label className="field">Photo or attachment (optional · can fill either field)
+        <input type="file" multiple accept={attachmentAccept} disabled={busy} onChange={async (e) => {
+          const input = e.currentTarget;
+          const files = Array.from(input.files || []);
+          const toLean = mode === "formal" && attachmentTarget === "lean";
+          let text = toLean ? lean : problem;
+          setBusy(true); setError(""); setResult(null);
+          try {
+            for (const file of files) {
+              setAttachmentStatus("Reading " + file.name + "…");
+              const result = await readAttachment(file);
+              const combined = [text.trim(), result.text].filter(Boolean).join("\n\n");
+              if (combined.length > (toLean ? 32000 : 16000)) throw Error("Combined text exceeds the field limit. Use a smaller excerpt.");
+              text = combined;
+              if (toLean) setLean(text); else setProblem(text);
+            }
+            setAttachmentStatus("Attachments read. Review the extracted text before submitting.");
+          } catch (err) { setError(err instanceof Error ? err.message : "Could not read attachment."); setAttachmentStatus(""); }
+          finally { setBusy(false); input.value = ""; }
+        }} />
+      </label>
+      <p className="muted">Photos, PDFs (up to 10 pages), and text files · 10 MB each. Review extracted text; OCR can misread handwriting and mathematical symbols.</p>
+      {attachmentStatus && <p role="status">{attachmentStatus}</p>}
       <p className="muted">Qwen generates a formulation; Lean checks it, then our fine-tuned Qwen model scores its alignment with your problem.</p>
-      {busy && <p role="status">Generating and checking Lean… Hosted models may take a few minutes to start.</p>}
+      {busy && !attachmentStatus.startsWith("Reading") && <p role="status">Generating and checking Lean… Hosted models may take a few minutes to start.</p>}
       {error && <p role="alert" className="notice">{error}</p>}
       {result && <section aria-label="Formalization result">
         <h3>{result.status === "checked" ? "Lean checked · fidelity accepted" : result.lean_checked ? "Lean checked · alignment needs review" : "Lean validation failed"}</h3>

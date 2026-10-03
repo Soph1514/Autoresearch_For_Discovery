@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import "@xyflow/react/dist/style.css";
 import "./style.css";
+import "./paper-theme.css";
 import App from "./App";
 import { ResearchProvider } from "./research";
 import { HttpResearchClient } from "./http";

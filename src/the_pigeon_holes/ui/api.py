@@ -119,3 +119,13 @@ def demo_page():
     from pathlib import Path
     from fastapi.responses import FileResponse
     return FileResponse(Path(__file__).resolve().parents[3] / 'output' / 'idea-tree-demo.html')
+
+from .attachments import router as attachment_router
+app.include_router(attachment_router)
+
+
+@app.get('/api/paper-theme.css')
+def paper_theme():
+    from pathlib import Path
+    from fastapi.responses import FileResponse
+    return FileResponse(Path(__file__).resolve().parents[3] / 'frontend/src/paper-theme.css', media_type='text/css')

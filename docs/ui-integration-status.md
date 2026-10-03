@@ -95,3 +95,29 @@ The original standalone demo is accessible using **Open demo page** in the heade
 (`/api/demo`), and **Run routing demo** retains the engine-backed demo.
 Custom formalizations are returned for review; building custom evaluation suites,
 seed programs, and contracts for autonomous evolution remains separate work.
+
+## Attachments and shared AntiAI theme
+
+Both natural-language and existing-Lean modes accept photos and attachments.
+PNG/JPEG/WebP, PDF (up to 10 pages), UTF-8 text/Markdown, JSON/CSV, and Lean
+files are supported, up to 10 MB each. `POST /api/attachments?filename=...`
+accepts raw file bytes and returns extracted text. Text files are decoded in the
+backend; images and scanned PDF pages use the CPU-only `lean-attachments` Modal
+service in `arin06`. Deploy using:
+
+```sh
+.venv/bin/modal deploy --profile arin06 research/lean-fidelity/modal_attachments.py
+```
+
+Extraction populates editable fields before submission. Users must review OCR,
+especially handwriting and mathematical symbols. In formal mode, attachment text
+can populate either the problem description or Lean source. No attachment is
+silently passed to the text-only generation model.
+
+The workbench, live engine demo (`/engine.html`), and retained scripted demo
+(`/api/demo`) share `frontend/src/paper-theme.css`: monospace typography, paper
+backgrounds, square controls, and restrained orange selection accents. The main
+**Open demo page** link opens the themed engine demo.
+
+Validation: 63 Python tests, three frontend tests, production build, live hosted
+PNG and scanned-PDF OCR, and a browser check of the running engine demo.

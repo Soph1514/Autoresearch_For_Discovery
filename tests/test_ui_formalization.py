@@ -52,5 +52,5 @@ def test_demo_page_remains_available():
     with TestClient(app) as client:
         response = client.get('/api/demo')
         assert response.status_code == 200
-        assert 'Paper workbench' in response.text and 'Idea lineage' in response.text
+        assert '/api/paper-theme.css' in response.text and 'Idea lineage' in response.text
         assert client.post('/api/formalizations', json={'mode': 'formal', 'problem': 'A problem'}).status_code == 422

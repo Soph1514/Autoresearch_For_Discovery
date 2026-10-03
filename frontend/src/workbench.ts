@@ -1,3 +1,4 @@
+import { readAttachment } from './attachments';
 const element = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const dialog = element('dialog');
 const form = element<HTMLFormElement>('upload-form');
@@ -10,6 +11,7 @@ element('cancel').onclick = () => { dialog.hidden = true; };
 mode.onchange = () => {
   element('formal-input').hidden = mode.value !== 'formal';
   source.required = mode.value === 'formal';
+  element('attachment-target-label').hidden = mode.value !== 'formal';
   form.querySelector('button.primary')!.textContent = mode.value === 'formal' ? 'Validate Lean' : 'Generate and validate';
 };
 element<HTMLInputElement>('lean-file').onchange = async (event) => {
@@ -18,6 +20,30 @@ element<HTMLInputElement>('lean-file').onchange = async (event) => {
   if (file.size > 32000) { element('form-error').textContent = 'Lean file must be under 32 KB.'; return; }
   source.value = await file.text();
 };
+
+element<HTMLInputElement>('attachment-file').onchange = async (event) => {
+  const input = event.target as HTMLInputElement;
+  const files = Array.from(input.files || []);
+  input.disabled = true;
+  const submit = form.querySelector<HTMLButtonElement>('button.primary')!;
+  submit.disabled = true;
+  element('form-error').textContent = '';
+  const target = mode.value === 'formal' && element<HTMLSelectElement>('attachment-target').value === 'lean' ? source : problem;
+  try {
+    for (const file of files) {
+      element('attachment-status').textContent = 'Reading ' + file.name + '…';
+      const result = await readAttachment(file);
+      const text = [target.value.trim(), result.text].filter(Boolean).join('\n\n');
+      if (text.length > target.maxLength) throw Error('Combined text exceeds the field limit. Use a smaller excerpt.');
+      target.value = text;
+    }
+    element('attachment-status').textContent = `${files.length} attachment(s) read. Review the extracted text above before submitting.`;
+  } catch (error) {
+    element('form-error').textContent = error instanceof Error ? error.message : 'Could not read attachment.';
+    element('attachment-status').textContent = 'Check the fields above; files read before the error have been added.';
+  } finally { input.disabled = false; submit.disabled = false; input.value = ''; }
+};
+
 function log(message: string) {
   const row = document.createElement('div'); row.className = 'line';
   row.textContent = new Date().toLocaleTimeString() + '  ' + message;
