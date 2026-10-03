@@ -1,0 +1,1 @@
+Show that the equation $7 x^{3}+2=y^{3}$ has no solution in integers.

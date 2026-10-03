@@ -1,0 +1,1 @@
+If $f$ is a real continuous function defined on a closed set $E \subset \mathbb{R}$, prove that there exist continuous real functions $g$ on $\mathbb{R}$ such that $g(x)=f(x)$ for all $x \in E$.

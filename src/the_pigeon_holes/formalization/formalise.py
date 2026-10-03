@@ -41,7 +41,7 @@ def lea_root() -> Path:
     if configured:
         return Path(configured)
 
-    checkout = ROOT / "runs" / "lea-prover"
+    checkout = ROOT / ".cache" / "lea-prover"
     if not (checkout / "lea/cli.py").is_file():
         if checkout.exists():
             raise RuntimeError(f"Invalid Lea checkout: {checkout}")

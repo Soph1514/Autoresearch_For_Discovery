@@ -32,19 +32,46 @@ Use `--limit 0` to generate every unique item:
 uv run python -m the_pigeon_holes.formalization.generate_benchmark --limit 0
 ```
 
-Then run BEq+ locally as often as needed without making API calls:
+Generate the semantic-equivalence proofs separately:
+
+```sh
+uv run python -m the_pigeon_holes.formalization.generate_validation
+```
+
+Then check the saved Lean proofs locally as often as needed without making API calls:
 
 ```sh
 uv run python -m the_pigeon_holes.formalization.benchmark
 ```
 
+Run all three stages and record per-problem time, tokens, cost, and results in
+`problems/proofnetverif/results.csv`:
+
+```sh
+uv run python -m the_pigeon_holes.formalization.run_benchmark_pipeline
+```
+
+Add `--force` to regenerate existing paid artifacts and collect fresh end-to-end
+generation metrics.
+
 The default Lea model uses `ANTHROPIC_API_KEY` from the repository's ignored
 `.env` file. Use `LEA_MODEL` to select another Lea-supported provider.
+
+Each generated benchmark directory contains only the specification and its
+three Lean artifacts:
+
+```text
+problems/proofnetverif/valid/<problem>/
+    Spec.txt
+    Generated.lean
+    Reference.lean
+    Verification.lean
+```
 
 ```text
 src/the_pigeon_holes/
     formalization/lea.py       Lea CLI integration
-    formalization/beq_plus.py  Bidirectional semantic-equivalence checker
+    formalization/benchmark.py Checks Lean semantic-equivalence proofs
     formalization/validate.py  Compilation and cheating check
     specification/            Problem loading
     models/                   Shared records

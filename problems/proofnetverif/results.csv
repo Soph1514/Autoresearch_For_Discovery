@@ -1,0 +1,11 @@
+problem_id,generation_success,generation_seconds,generation_input_tokens,generation_output_tokens,generation_total_tokens,generation_cost_usd,generation_error,verification_generation_success,verification_generation_seconds,verification_generation_input_tokens,verification_generation_output_tokens,verification_generation_total_tokens,verification_generation_cost_usd,verification_generation_error,lean_verification_success,lean_verification_seconds,lean_verification_error,result,total_seconds,total_tokens,total_cost_usd
+Artin|exercise_3_5_6,True,27.427,20722,1532,22254,0.0568,,True,45.137,31554,3507,35061,0.0982,,True,4.701,,equivalent,77.265,57315,0.155000
+Dummit-Foote|exercise_3_4_5a,True,21.257,14769,704,15473,0.0366,,True,26.454,21168,1213,22381,0.0545,,True,4.056,,equivalent,51.767,37854,0.091100
+Dummit-Foote|exercise_7_3_37,True,23.353,14962,911,15873,0.039,,True,36.823,39370,2953,42323,0.1083,,True,4.484,,equivalent,64.660,58196,0.147300
+Ireland-Rosen|exercise_3_5,True,19.937,14691,600,15291,0.0354,,True,26.445,21533,1034,22567,0.0534,,True,4.162,,equivalent,50.544,37858,0.088800
+Munkres|exercise_13_4b1,True,28.516,14978,1217,16195,0.0421,,True,97.114,126292,10330,136622,0.3559,,True,4.127,,equivalent,129.757,152817,0.398000
+Munkres|exercise_13_6,True,27.666,14927,1616,16543,0.046,,False,131.224,84320,16337,100657,0.332,Lea produced invalid Verification.lean; see lean_check.log,True,6.413,,not_equivalent,165.303,117200,0.378000
+Munkres|exercise_18_8b,True,22.078,14547,814,15361,0.0372,,True,28.448,21742,1360,23102,0.0571,,True,4.104,,equivalent,54.630,38463,0.094300
+Munkres|exercise_33_8,True,27.889,20183,1485,21668,0.0552,,True,52.395,35567,4378,39945,0.1149,,False,4.539,unapproved axiom or missing #print axioms,not_proven,84.823,61613,0.170100
+Rudin|exercise_1_18a,True,26.75,20836,1356,22192,0.0552,,True,26.23,21857,1231,23088,0.056,,True,4.659,,equivalent,57.639,45280,0.111200
+Rudin|exercise_4_5a,True,22.28,14935,799,15734,0.0379,,True,26.087,21629,1019,22648,0.0534,,True,4.203,,equivalent,52.570,38382,0.091300

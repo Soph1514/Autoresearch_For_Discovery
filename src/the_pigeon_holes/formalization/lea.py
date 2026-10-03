@@ -5,6 +5,8 @@ import os
 import shutil
 import signal
 import subprocess
+import time
+import re
 from pathlib import Path
 
 
@@ -31,7 +33,8 @@ def formalize(*, lea_root: Path, task: str, statement: str, lean_project: Path,
     (workspace / "lake-manifest.json").write_text(json.dumps(manifest, indent=2))
     (workspace / "lakefile.toml").write_text(
         'name = "lea_formalization"\n\n[[require]]\nname = "mathlib"\n'
-        f'git = {json.dumps(mathlib["url"])}\nrev = {json.dumps(mathlib["rev"])}\n\n'
+        f'git = {json.dumps(mathlib["url"])}\n'
+        f'rev = {json.dumps(mathlib.get("inputRev", mathlib["rev"]))}\n\n'
         '[[lean_lib]]\nname = "Generated"\n\n'
         '[[lean_lib]]\nname = "Reference"\n\n'
         '[[lean_lib]]\nname = "Validation"\n'
@@ -69,6 +72,7 @@ def formalize(*, lea_root: Path, task: str, statement: str, lean_project: Path,
     metadata = {"revision": revision, "model": model, "command": command,
                 "max_turns": max_turns, "timeout_seconds": timeout}
     (output / "lea_run.json").write_text(json.dumps(metadata, indent=2))
+    started = time.monotonic()
     with (output / "lea.log").open("w") as log:
         process = subprocess.Popen(command, cwd=workspace, stdin=subprocess.PIPE,
                                    stdout=log, stderr=subprocess.STDOUT,
@@ -78,7 +82,24 @@ def formalize(*, lea_root: Path, task: str, statement: str, lean_project: Path,
         except subprocess.TimeoutExpired:
             os.killpg(process.pid, signal.SIGKILL)
             process.wait()
+            metadata.update(elapsed_seconds=round(time.monotonic() - started, 3), lea_success=False)
+            (output / "lea_run.json").write_text(json.dumps(metadata, indent=2))
             raise RuntimeError(f"Lea timed out after {timeout} seconds; see lea.log") from None
+    metadata["elapsed_seconds"] = round(time.monotonic() - started, 3)
+    log_text = (output / "lea.log").read_text()
+    usage = re.search(
+        r"--- \d+ turns, ([\d,]+) tokens \(in: ([\d,]+), out: ([\d,]+)\), ~\$([\d.]+) ---",
+        log_text,
+    )
+    if usage:
+        metadata.update({
+            "total_tokens": int(usage.group(1).replace(",", "")),
+            "input_tokens": int(usage.group(2).replace(",", "")),
+            "output_tokens": int(usage.group(3).replace(",", "")),
+            "cost_usd": float(usage.group(4)),
+        })
+    metadata["lea_success"] = process.returncode == 0
+    (output / "lea_run.json").write_text(json.dumps(metadata, indent=2))
     if process.returncode != 0:
         raise RuntimeError(f"Lea exited with status {process.returncode}; see lea.log")
     if not generated.is_file():
