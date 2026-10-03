@@ -1,0 +1,75 @@
+{
+  "release": "lean-fidelity-v1",
+  "status": "frozen",
+  "frozen_date": "2026-10-03",
+  "run_id": "run-20261003T192204Z",
+  "checkpoint_step": 250,
+  "base_model": "Qwen/Qwen3-4B-Instruct-2507",
+  "base_revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+  "adapter_files_sha256": {
+    "README.md": "97290179dc5e97cf837b60b2812001e22fe496f68a3f76008a5f6463a93bb444",
+    "adapter_config.json": "de0ef5751fdf4cb8144fdfcaa855d36e460ef03666f7b348cc43897d2cc6d2c9",
+    "adapter_model.safetensors": "8665b2a6d47aab60521b56f7bcde6ef54aefa5b4c05b843d23c92346bca6b1f6",
+    "added_tokens.json": "c0284b582e14987fbd3d5a2cb2bd139084371ed9acbae488829a1c900833c680",
+    "chat_template.jinja": "64f85b198065d0fba2a81f37e10ed68161ce2c19a754c7100e67e0ca2ee9c326",
+    "merges.txt": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5",
+    "special_tokens_map.json": "a36726f7fe394c1324021cac4a9ee3ad6c4f6285c0d98721f9b0b95888ec9905",
+    "tokenizer.json": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+    "tokenizer_config.json": "6ea222687bb0c5b8b2f8df309357efc93c6f5bb5eb960270a9ac5d846a2780e5",
+    "training_args.bin": "67af2b0e4f6c23476b5e99bef562913d85c4d3f8d61749d3fd1ea0d0067fc8fc",
+    "vocab.json": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
+  },
+  "calibration": {
+    "temperature": 1.6439582109451294,
+    "accept_threshold": 0.8275328874588013,
+    "note": "Empirical <=5% error with >=20 accepts; no statistical guarantee."
+  },
+  "classification_threshold": 0.5,
+  "data": {
+    "model": "Qwen/Qwen3-4B-Instruct-2507",
+    "model_revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+    "dataset": "PAug/ProofNetVerif",
+    "dataset_revision": "91183e5b12d64374827bf2782db629b5b0f8f319",
+    "seed": 42,
+    "split": "custom grouped 80/20; development/calibration inside 80%",
+    "counts": {
+      "train": {
+        "rows": 2362,
+        "groups": 232
+      },
+      "dev": {
+        "rows": 309,
+        "groups": 28
+      },
+      "calibration": {
+        "rows": 303,
+        "groups": 28
+      },
+      "test": {
+        "rows": 778,
+        "groups": 73
+      }
+    },
+    "audit_required": "Review excluded rows, label quality and near-duplicates before training.",
+    "prepared_sha256": {
+      "train": "d595054f8fcecb3d2127e2f5b83658dcff0a25fb02676e075bf45f35200676fa",
+      "dev": "5eee4b6e39147ca3f24a3a21fa771233641cc0a25c6f10e2383532c0b45a6ffb",
+      "calibration": "8afc77bf9c27fb4be612601adc763b854908e7e7f2b21419972bed2befca2444",
+      "test": "d0c33b16eea52c74e892ff66514926dc51a0581fb48d289cfde6135bc404dede"
+    }
+  },
+  "storage": {
+    "modal_workspace": "arin06",
+    "modal_environment": "main",
+    "modal_volume": "lean-fidelity-research",
+    "modal_path": "run-20261003T192204Z/adapter",
+    "local_path": "artifacts/run-20261003T192204Z/adapter"
+  },
+  "policy": "Immutable evaluated release. No further training or recalibration in place. Future experiments must use a new release and artifact directory. Weights are stored outside Git; hashes identify the exact release.",
+  "limitations": [
+    "Single training seed.",
+    "Baseline is a reconstructed random classification head, not prompted Qwen.",
+    "CriticLeanBench accuracy 62.67%; frozen gate accepts only 2/450.",
+    "Library probes are small agent-authored diagnostics."
+  ]
+}

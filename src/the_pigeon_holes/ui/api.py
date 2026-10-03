@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from .bridge import LabRun
+from .formalization import FormalizationInput, prepare
 
 runs: dict[str, LabRun] = {}
 
@@ -94,3 +95,27 @@ async def events(run_id: str, request: Request, after: int = 0):
 
     return StreamingResponse(stream(), media_type='text/event-stream', headers={
         'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
+
+formalization_lock = asyncio.Lock()
+
+@app.post('/api/formalizations')
+async def formalize_problem(body: FormalizationInput):
+    if formalization_lock.locked():
+        raise HTTPException(409, 'A formalization is already running. Try again when it completes.')
+    async with formalization_lock:
+        try:
+            return await asyncio.wait_for(prepare(body), timeout=900)
+        except TimeoutError:
+            raise HTTPException(504, 'Formalization timed out. Please retry with a smaller problem.')
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception('Hosted formalization failed')
+            raise HTTPException(503, 'Hosted Lean/Qwen service unavailable. Check backend Modal authentication and deployments.')
+
+
+@app.get('/api/demo')
+def demo_page():
+    from pathlib import Path
+    from fastapi.responses import FileResponse
+    return FileResponse(Path(__file__).resolve().parents[3] / 'output' / 'idea-tree-demo.html')

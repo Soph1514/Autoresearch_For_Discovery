@@ -75,3 +75,34 @@ uv run --no-project --python 3.11 --with matplotlib==3.10.6 python summarize_ood
 ```
 
 The evaluation is capped at 15 minutes on one A100 80 GB, with no retries or optimizer updates. It verifies the saved adapter hash and scores the same frozen rows for both models. Both accuracy columns use threshold 0.5. Fine-tuned gate metrics reuse the original ID temperature and acceptance threshold; the random-head baseline uses its uncalibrated 0.5 threshold, so those gate points are not a matched-coverage comparison. `reports/ood-comparison.json` includes confusion counts, balanced accuracy, a paired problem-bootstrap interval on the CriticLeanBench accuracy change, and source strata. `reports/ood-predictions.json` retains per-example scores without benchmark text.
+
+## Frozen release: lean-fidelity-v1
+
+`frozen-model.json` locks checkpoint 250, the base revision, every adapter/tokenizer file hash, data split hashes, and the existing calibration. Weights remain in the local run directory and Modal volume listed in that manifest; Git contains the release manifest, not the model binaries. Do not overwrite this release or retune its thresholds. Future training must produce a new version.
+
+`frozen_model.py` verifies the saved files and loads the pinned backbone and adapter for inference, with all parameters frozen. Call `load_frozen(adapter_path)` in the pinned project environment. It returns `(model, tokenizer, calibration)`; wrap scoring in `torch.inference_mode()`. This prevents gradient updates through this loader, not deliberate file edits by other tools.
+
+## Modal inference API
+
+`modal_api.py` exposes the frozen **classifier**, not a Lean code generator. `POST` accepts `problem`, `lean_context`, and `candidate` strings. The response contains the raw logit, calibrated probability, `fidelity_decision` (`accept` or `review`), reason, release identifier, and hash of all three input strings. `lean_checked` is always false: the API does not execute Lean. The orchestration backend must independently check elaboration and combine that result with this score before approving a specification.
+
+Inputs exceeding 4,096 tokens return review with null scores; nothing is silently truncated. Empty fields and oversized fields return HTTP 422. The endpoint requires Modal proxy authentication before a GPU can start. Keep `Modal-Key` and `Modal-Secret` in the application backend, never in the browser or repository. The GPU scales to zero after 30 idle seconds, with one A100 container maximum; cold starts will take longer than warm requests. Each scoring invocation has a 180-second timeout. This is a serving deployment, not the earlier bounded training job; repeated authorized requests can incur ongoing usage.
+
+```sh
+uv run --no-project --python 3.11 --with 'modal>=1.0,<2' python -m modal run --profile arin06 --env main modal_api.py
+uv run --no-project --python 3.11 --with 'modal>=1.0,<2' python -m modal deploy --profile arin06 --env main modal_api.py
+```
+
+Required UI integration: English input → generative Lean writer → isolated Lean elaboration → this fidelity API → explicit approval/review → algorithm search. The sequence-classification adapter has no trained text-generation head and must not be presented as our fine-tuned Lean writer. Use a separately configured generative model for that node. The UI should show independent generation, elaboration, and fidelity states; a successful API call alone never means verified mathematics.
+
+Example request from a backend (the three environment variables are deployment configuration):
+
+```sh
+curl --fail-with-body "$FIDELITY_API_URL" \
+  -H "Modal-Key: $MODAL_PROXY_KEY" \
+  -H "Modal-Secret: $MODAL_PROXY_SECRET" \
+  -H 'Content-Type: application/json' \
+  --data '{"problem":"Every Boolean ring is commutative.","lean_context":"import Mathlib","candidate":"theorem dummy {R : Type*} [Ring R] (h : ∀ a : R, a ^ 2 = a) : ∀ a b : R, a * b = b * a"}'
+```
+
+Modal proxy tokens are separate from the Modal CLI credentials used for deployment. Create one in the workspace dashboard or via `modal workspace proxy-tokens`; do not send the secret to the frontend. Authentication is documented at https://modal.com/docs/guide/webhook-proxy-auth.
