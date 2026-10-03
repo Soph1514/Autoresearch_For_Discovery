@@ -25,7 +25,28 @@ from .models import (
     TokenUsage,
 )
 from .novelty import source_fingerprint
-from .ports import CandidateEvaluator, ProgramGenerator
+from .ports import CandidateEvaluator, EvolutionObserver, ProgramGenerator, RunCheckpoint
+
+
+class _NullObserver:
+    def candidate_created(self, candidate: ProgramCandidate) -> None:
+        pass
+
+    def evaluation_started(self, candidate: ProgramCandidate) -> None:
+        pass
+
+    def evaluation_completed(self, evaluation: CandidateEvaluation) -> None:
+        pass
+
+    def generation_failed(self, failure: GenerationFailure) -> None:
+        pass
+
+    def state_committed(self, state: EvolutionState) -> None:
+        pass
+
+
+async def _open_checkpoint() -> None:
+    """Default boundary hook for runs without external controls."""
 
 
 class _BudgetTracker:
@@ -88,12 +109,16 @@ class EvolutionLoop:
         limits: EvolutionLimits,
         generator: ProgramGenerator,
         evaluator: CandidateEvaluator,
+        observer: EvolutionObserver | None = None,
+        checkpoint: RunCheckpoint = _open_checkpoint,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.config = config
         self.limits = limits
         self.generator = generator
         self.evaluator = evaluator
+        self.observer = observer or _NullObserver()
+        self.checkpoint = checkpoint
         self.clock = clock
         self.engine = EvolutionEngine(config)
 
@@ -121,14 +146,25 @@ class EvolutionLoop:
             seed.source_code,
             problem.solve_signature,
         )
+        self.observer.candidate_created(seed)
         if seed_static_error:
             seed_evaluation = self._static_failure(seed, seed_static_error)
         else:
+            self.observer.evaluation_started(seed)
             seed_evaluation = (await self._evaluate((seed,), problem))[0]
+        self.observer.evaluation_completed(seed_evaluation)
         state = self.engine.initialise(seed, seed_evaluation)
+        self.observer.state_committed(state)
 
         stop_reason: StopReason | None = None
         while stop_reason is None:
+            stop_reason = budget.stop_reason()
+            if stop_reason is not None:
+                break
+
+            # Pause/cancellation belongs to orchestration, not provider adapters.
+            # Existing work is committed before this next-batch boundary is reached.
+            await self.checkpoint()
             stop_reason = budget.stop_reason()
             if stop_reason is not None:
                 break
@@ -157,6 +193,10 @@ class EvolutionLoop:
                 generated,
                 problem,
             )
+            for candidate in candidates:
+                self.observer.candidate_created(candidate)
+            for evaluation in local_evaluations.values():
+                self.observer.evaluation_completed(evaluation)
             if not candidates:
                 stop_reason = StopReason.GENERATION_FAILED
                 break
@@ -165,11 +205,15 @@ class EvolutionLoop:
                 for candidate in candidates
                 if candidate.id not in local_evaluations
             )
+            for candidate in external_candidates:
+                self.observer.evaluation_started(candidate)
             external_evaluations = (
                 await self._evaluate(external_candidates, problem)
                 if external_candidates
                 else ()
             )
+            for evaluation in external_evaluations:
+                self.observer.evaluation_completed(evaluation)
             evaluations = tuple(local_evaluations.values()) + tuple(external_evaluations)
             state = self.engine.apply_generation(
                 state,
@@ -177,6 +221,7 @@ class EvolutionLoop:
                 evaluations,
                 problem.optimisation_goal,
             )
+            self.observer.state_committed(state)
 
         assert stop_reason is not None
         return self._outcome(state, budget, stop_reason)
@@ -198,15 +243,15 @@ class EvolutionLoop:
         for result in sorted(results, key=lambda item: item.request_id):
             request = request_by_id[result.request_id]
             if result.error is not None:
-                state.generation_failures.append(
-                    GenerationFailure(
-                        request_id=result.request_id,
-                        generation=request.generation,
-                        error=result.error,
-                        usage=result.usage,
-                        prompt=request.prompt,
-                    )
+                failure = GenerationFailure(
+                    request_id=result.request_id,
+                    generation=request.generation,
+                    error=result.error,
+                    usage=result.usage,
+                    prompt=request.prompt,
                 )
+                state.generation_failures.append(failure)
+                self.observer.generation_failed(failure)
                 continue
 
             assert result.draft is not None

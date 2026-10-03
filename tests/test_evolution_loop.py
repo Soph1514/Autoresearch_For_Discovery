@@ -105,9 +105,34 @@ class _Evaluator:
         return evaluations
 
 
+class _Observer:
+    def __init__(self) -> None:
+        self.events: list[tuple[str, str | int]] = []
+
+    def candidate_created(self, candidate):
+        self.events.append(("candidate_created", candidate.id))
+
+    def evaluation_started(self, candidate):
+        self.events.append(("evaluation_started", candidate.id))
+
+    def evaluation_completed(self, evaluation):
+        self.events.append(("evaluation_completed", evaluation.candidate_id))
+
+    def generation_failed(self, failure):
+        self.events.append(("generation_failed", failure.request_id))
+
+    def state_committed(self, state):
+        self.events.append(("state_committed", state.generation))
+
+
 def test_loop_closes_generation_and_stops_at_reported_token_limit():
     generator = _Generator()
     evaluator = _Evaluator()
+    checkpoints = []
+
+    async def checkpoint():
+        checkpoints.append(len(generator.calls))
+
     loop = EvolutionLoop(
         config=EvolutionConfig(
             min_islands=4,
@@ -120,6 +145,7 @@ def test_loop_closes_generation_and_stops_at_reported_token_limit():
         limits=EvolutionLimits(max_tokens=80),
         generator=generator,
         evaluator=evaluator,
+        checkpoint=checkpoint,
     )
 
     outcome = asyncio.run(loop.run(CONTRACT))
@@ -132,6 +158,7 @@ def test_loop_closes_generation_and_stops_at_reported_token_limit():
     assert outcome.best_evaluation is not None
     assert outcome.best_evaluation.metrics["score"] == 8.0
     assert len(generator.calls) == 1
+    assert checkpoints == [0]
     assert len(generator.calls[0]) == 8
     assert evaluator.calls[0] == ("candidate-000000",)
     assert len(evaluator.calls[1]) == 8
@@ -182,11 +209,13 @@ def test_all_generation_errors_stop_and_preserve_failure_evidence():
             )
 
     generator = FailingGenerator()
+    observer = _Observer()
     loop = EvolutionLoop(
         config=EvolutionConfig(max_tokens_per_request=10),
         limits=EvolutionLimits(max_tokens=80),
         generator=generator,
         evaluator=_Evaluator(),
+        observer=observer,
     )
 
     outcome = asyncio.run(loop.run(CONTRACT))
@@ -195,6 +224,13 @@ def test_all_generation_errors_stop_and_preserve_failure_evidence():
     assert outcome.generations_completed == 0
     assert len(outcome.state.generation_failures) == 8
     assert outcome.state.generation_failures[0].prompt == generator.calls[0][0].prompt
+    assert observer.events[:4] == [
+        ("candidate_created", "candidate-000000"),
+        ("evaluation_started", "candidate-000000"),
+        ("evaluation_completed", "candidate-000000"),
+        ("state_committed", 0),
+    ]
+    assert [kind for kind, _ in observer.events].count("generation_failed") == 8
 
 
 def test_valid_evaluation_must_cover_the_complete_suite():

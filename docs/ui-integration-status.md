@@ -11,11 +11,17 @@ suite; production preparation and sandbox adapters are still outstanding.
 - React → Vite `/api` proxy → FastAPI on port 8000.
 - HTTP run creation, snapshots, pause/resume/stop, and ordered SSE with replay using `Last-Event-ID`.
 - Real `EvolutionLoop` and `EvolutionEngine`: generation planning, parent selection, novelty, islands, elite preservation, static rejection, and budget accounting.
-- `ObservedEngine` delegates to the original engine and publishes committed state. Demo evaluator publishes started/completed attempts; static rejections are published when the engine commits the batch.
+- Native `EvolutionObserver` callbacks publish candidates, evaluation lifecycle,
+  generation failures, and committed state without replacing or subclassing the
+  engine. The versioned snapshot/event and control semantics are specified in
+  [the API/event contract](api-events.md).
 - Candidate hypotheses become titles/descriptions; source, predictions, falsification conditions, islands, and inspirations are visible in the inspector. Inspirations are separate clickable references, not parent edges.
 - Actual backend generation numbers and primary metric direction are used. `crossover` maps to merge, `repair` remains repair. A merged mutation is not inferred: the backend currently has no explicit field for it.
 - Current/former island elites and global best come from the engine. No UI-side ranking determines elite membership.
-- Pausing drains the current batch and gates the next generator call. Stop cancels the local task. Snapshot/event history is in server memory; the browser remembers its run ID in session storage and can reconnect after refresh.
+- Pausing drains the current batch and gates the loop at its native next-batch
+  checkpoint, independent of generator implementation. Stop cancels the local
+  task. Snapshot/event history is in server memory; the browser remembers its
+  run ID in session storage and can reconnect after refresh.
 
 ## Explicit placeholders
 
@@ -25,10 +31,13 @@ The main AntiAI composer calls the hosted formalization pipeline described below
 
 ## Remaining work / decisions
 
-1. Production generator and sandboxed evaluator adapters implementing the existing async ports.
+1. The production Anthropic generator is implemented; the protected sandboxed
+   evaluator remains outstanding.
 2. Natural-language/image input → formalization → checked Lean → contract and seed preparation. The contract now carries the complete interface; production sandbox loading remains outstanding.
-3. Final wire schema and API ownership. The bridge currently emits the frontend camelCase contract; it can be revised at this boundary without changing the evolution policy.
-4. A native engine observer/control interface if maintainers prefer it over the separate observation subclass. Per-provider-call concurrency, live token updates, and cancellation need adapter support.
+3. Production orchestration must instantiate the documented version-one wire
+   boundary after contract preparation; the local API still starts only demo runs.
+4. Live token events are not emitted mid-call. Final provider usage and failures
+   are retained after each bounded generation request.
 5. Explicit short titles and crossover-plus-mutation provenance if required. Do not fabricate these fields from an operator label.
 6. Persistent run storage and authenticated deployment.
 7. Evolution time limits are checked between operations, not enforced as hard interruption of a stalled provider/evaluator. The development bridge excludes fully paused time through its active-time clock; production orchestration must preserve that semantic.

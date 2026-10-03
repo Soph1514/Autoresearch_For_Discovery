@@ -1,6 +1,6 @@
 # Idea-tree UI and backend integration
 
-Status: the UI is connected to the real Python evolution engine through a local FastAPI/SSE bridge, with explicit demo generator/evaluator ports. See `docs/ui-integration-status.md` for current behavior and remaining gaps. The sections below retain the original proposed contract; arbitrary problem upload and production adapters are not connected.
+Status: the UI is connected to the real Python evolution engine through a local FastAPI/SSE bridge, with explicit demo generator/evaluator ports. The authoritative evolution design is `docs/evolution.md`; the authoritative version-one wire and control contract is `docs/api-events.md`. See `docs/ui-integration-status.md` for current behavior and remaining gaps. The historical proposal below is retained for UI rationale; where it differs, the two authoritative documents win. Arbitrary problem upload and production orchestration are not connected.
 
 ## Ownership and stack
 

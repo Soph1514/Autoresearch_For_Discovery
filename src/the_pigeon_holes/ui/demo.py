@@ -32,12 +32,11 @@ def demo_contract():
 
 
 class DemoGenerator:
-    def __init__(self, checkpoint, log, delay=0.8):
-        self.checkpoint, self.log, self.delay = checkpoint, log, delay
+    def __init__(self, log, delay=0.8):
+        self.log, self.delay = log, delay
         self.number = 0
 
     async def generate(self, requests):
-        await self.checkpoint()
         self.log("generate", f"Generation {requests[0].generation}: {len(requests)} requests across search islands.")
         await asyncio.sleep(self.delay)
         results = []
@@ -61,13 +60,11 @@ class DemoGenerator:
 
 
 class DemoEvaluator:
-    def __init__(self, publish_candidate, publish_evaluation, delay=.8):
-        self.publish_candidate, self.publish_evaluation = publish_candidate, publish_evaluation
+    def __init__(self, delay=.8):
         self.delay = delay
 
     async def evaluate(self, candidates, problem):
         async def evaluate_one(candidate):
-            self.publish_candidate(candidate)
             await asyncio.sleep(self.delay)
             try:
                 tree = ast.parse(candidate.source_code)
@@ -84,6 +81,5 @@ class DemoEvaluator:
             except (ValueError, TypeError, SyntaxError, AttributeError) as error:
                 result = CandidateEvaluation(candidate.id, False, failure_stage="demo_validation",
                     failure_reasons=(str(error),), repairable=True, informative=True, total_cases=1)
-            self.publish_evaluation(result)
             return result
         return tuple(await asyncio.gather(*(evaluate_one(c) for c in candidates)))

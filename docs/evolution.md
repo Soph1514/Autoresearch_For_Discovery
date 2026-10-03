@@ -200,10 +200,18 @@ Evolution depends on two batch-oriented protocols:
   reports token use; and
 - `CandidateEvaluator`, which returns trusted deterministic evaluations.
 
-The future pipeline constructs their concrete adapters and calls the evolution
-sub-loop. Persistent archive storage, resumable runs, provider-specific API
-behavior, sandbox execution, Lean certificate checking, qualitative judging,
-and staged evaluation are deliberately deferred.
+It also accepts an optional synchronous `EvolutionObserver` for lifecycle
+evidence and an async next-generation checkpoint for orchestration controls.
+The checkpoint is outside both adapters, so replacing the demo generator does
+not change pause/resume semantics.
+
+`AnthropicProgramGenerator` is the first production generator adapter. It uses
+schema-constrained candidate submission and bounded concurrency, per-attempt
+timeouts, and retries; orchestration supplies its model/configuration. The
+future pipeline still needs to construct the production adapters and call the
+sub-loop. Persistent archive storage, resumable runs, sandbox execution, Lean
+certificate checking, qualitative judging, and staged evaluation remain
+deferred.
 
 ## Non-negotiable invariants
 

@@ -66,11 +66,15 @@ flowchart TD
   - If an LLM judge is included, keep its assessment separate from executable validity; it must not promote invalid candidates.
   - **Done when:** valid, invalid, crashing, and timed-out candidates produce consistent evidence and only valid results can become elites.
 
-- [ ] **5. Implement the production `ProgramGenerator` adapter.**
+- [x] **5. Implement the production `ProgramGenerator` adapter.**
   - Consume existing generation requests; return hypothesis and complete implementation together, following the current evolution design.
   - Preserve request IDs and return exactly one result or explicit failure per request, including measured token usage.
   - Bound concurrency, retries, provider calls, and cancellation. Preserve backend-selected ancestry and operators.
   - **Done when:** the existing loop can replace `DemoGenerator` without changing search policy.
+  - **Done:** `AnthropicProgramGenerator` uses one forced, schema-constrained
+    candidate submission per request, reports provider usage, preserves stable
+    request ordering, and bounds concurrency, timeouts, and retries. The client
+    is injectable for deterministic tests and cancellation propagates.
 
 - [ ] **6. Prepare a runnable problem contract.**
   - Supply or generate the seed, bind an evaluation suite, carry the full interface, and select the agreed evaluator version.
@@ -80,12 +84,18 @@ flowchart TD
 
 ## TODO: connect orchestration and UI
 
-- [ ] **7. Stabilize events and controls with backend owners.**
+- [x] **7. Stabilize events and controls with backend owners.**
   - Agree the versioned event envelope, snapshot format, ordered replay, terminal states, and reconnect behavior already prototyped by the bridge.
   - Decide whether to retain the separate observation subclass or provide native engine callbacks. Surface generation failures as well as evaluation failures.
   - Define pause-at-boundary, resume, stop, and cancellation behavior for real adapters.
   - Add explicit crossover-plus-mutation provenance if supported; the UI must not infer it from `crossover`. Keep inspiration references distinct from parent edges.
   - **Done when:** backend events fully drive the graph, research log, and controls without UI-side elite selection.
+  - **Done:** version 1 is specified in [the API/event contract](api-events.md).
+    Native loop observation includes candidate/evaluation lifecycle, committed
+    state, and generation failures. The loop owns an adapter-independent batch
+    checkpoint for pause/resume; stop uses task cancellation. Explicit
+    crossover-plus-mutation is intentionally unsupported until such a backend
+    stage exists.
 
 - [ ] **8. Wire the production orchestration entry point.**
   - Connect accepted Lean → extraction/preparation → `ProblemContract` → `EvolutionLoop.run(contract)` using production generator/evaluator adapters.

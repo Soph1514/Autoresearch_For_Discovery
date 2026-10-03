@@ -1,7 +1,10 @@
 """Integration bridge tests use the real engine and explicit demo ports."""
 import asyncio
 import copy
+import pytest
+from the_pigeon_holes.evolution import GenerationFailure, TokenUsage
 from the_pigeon_holes.ui.bridge import ActiveRunClock, LabRun
+from the_pigeon_holes.ui.contracts import InvalidControlTransition
 
 
 def test_active_run_clock_excludes_fully_paused_time():
@@ -22,6 +25,7 @@ def test_real_engine_publishes_lineage_evidence_and_ordered_events():
         run = LabRun(delay=0)
         await run.run()
         snapshot = run.snapshot
+        assert snapshot['schemaVersion'] == 1
         assert snapshot['run']['status'] == 'completed'
         assert len(snapshot['ideas']) > 1
         assert len(snapshot['experiments']) == len(snapshot['ideas'])
@@ -37,6 +41,38 @@ def test_real_engine_publishes_lineage_evidence_and_ordered_events():
         run.log('test', 'later event')
         assert first == run.events[0]
     asyncio.run(scenario())
+
+
+def test_generation_failures_and_control_acknowledgements_are_explicit():
+    run = LabRun(delay=0)
+    run.generation_failed(GenerationFailure(
+        request_id="request-7",
+        generation=2,
+        error="provider unavailable",
+        usage=TokenUsage(11, 3),
+        prompt="private generation prompt",
+    ))
+
+    assert run.snapshot["generationFailures"] == [{
+        "requestId": "request-7",
+        "generation": 2,
+        "error": "provider unavailable",
+        "inputTokens": 11,
+        "outputTokens": 3,
+    }]
+    acknowledgement = run.pause()
+    assert acknowledgement == {
+        "schemaVersion": 1,
+        "runId": run.id,
+        "action": "pause",
+        "applied": True,
+        "status": "pausing",
+    }
+    assert run.pause()["applied"] is False
+    assert run.resume()["status"] == "running"
+    with pytest.raises(InvalidControlTransition, match="cannot resume"):
+        run.snapshot["run"]["status"] = "completed"
+        run.resume()
 
 
 def test_pause_at_batch_boundary_and_stop():
