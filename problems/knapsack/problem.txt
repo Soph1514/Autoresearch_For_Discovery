@@ -1,0 +1,4 @@
+Given a finite collection of items, each with a natural-number weight and value,
+and a natural-number capacity, construct a subset of the items whose total weight
+does not exceed the capacity and whose total value is maximum among all feasible
+subsets. Each item may be selected at most once. The empty subset is allowed.
