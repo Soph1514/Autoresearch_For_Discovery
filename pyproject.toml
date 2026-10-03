@@ -5,3 +5,15 @@ dependencies = [
     "anthropic>=1.11.0",
     "pydantic>=2.13.5",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
+
+[project.optional-dependencies]
+ui = ["fastapi>=0.115", "uvicorn>=0.30"]
