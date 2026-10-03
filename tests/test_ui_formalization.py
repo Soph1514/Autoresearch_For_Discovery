@@ -119,3 +119,13 @@ def test_disconnect_cancels_stream_worker_and_unlocks(monkeypatch):
         assert cancelled.is_set()
         assert not api.formalization_lock.locked()
     asyncio.run(scenario())
+
+def test_repairs_lean4_refine_goal_hole_without_changing_statement():
+    class HoleTools(Tools):
+        async def check(self, source):
+            return {'valid': ', ?_⟩' in source, 'diagnostics': "don't know how to synthesize placeholder"}
+    source = 'theorem witness : ∃ n : Nat, n = 1 := by\n  refine ⟨1, _⟩\n  rfl'
+    tools = HoleTools([])
+    result = asyncio.run(prepare(FormalizationInput(mode='formal', problem='One exists', lean=source), tools))
+    assert result['lean'] == source.replace(', _⟩', ', ?_⟩')
+    assert result['attempts'] == 2 and tools.generations == 0

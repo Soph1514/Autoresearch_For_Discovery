@@ -151,3 +151,6 @@ a search policy, not a guarantee that an arbitrary statement can be proved.
 
 Repair sampling uses temperature 0.7 and top-p 0.9 with an attempt-specific seed.
 The pretrained fidelity benchmark judge remains greedy and unchanged.
+A compiler-confirmed `refine` inference-hole error also triggers a narrow syntax
+repair (`refine ⟨…, _⟩` → `refine ⟨…, ?_⟩`) before another model call. The repaired
+source must still pass the same Lean checker.

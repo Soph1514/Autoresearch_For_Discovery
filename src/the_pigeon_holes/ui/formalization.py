@@ -1,5 +1,6 @@
 """UI preparation pipeline. Model credentials remain in the Python service."""
 import asyncio
+import re
 from typing import Literal
 from pydantic import BaseModel, Field, model_validator
 
@@ -50,6 +51,7 @@ class HostedTools:
 
 async def prepare(body: FormalizationInput, tools=None, progress=None):
     tools = tools or HostedTools()
+    generated_by_qwen = body.mode == "natural"
     async def emit(**event):
         if progress:
             await progress(event)
@@ -64,6 +66,13 @@ async def prepare(body: FormalizationInput, tools=None, progress=None):
         if checked['valid']:
             break
         await emit(stage='repairing', attempt=attempts + 1)
+        if "don't know how to synthesize placeholder" in checked['diagnostics']:
+            # Lean 4 refine needs an explicit tactic goal (?_), not an inference hole (_).
+            repaired = re.sub(r'(?m)^([ \t]*refine[ \t]+⟨[^\n]*),[ \t]*_([ \t]*⟩)',
+                              r'\1, ?_\2', source)
+            if repaired != source:
+                source = repaired
+                continue
         feedback = (f'Repair attempt {attempts}. Keep the original problem, assumptions, and conclusion unchanged. '
                     'Fix the Lean errors; do not replace the claim with an easier statement or add sorry/axioms. '
                     'This is Lean 4.19, NOT Lean 3. Use := by and indentation, never begin/end, existsi, or comma-separated tactics. '
@@ -73,6 +82,7 @@ async def prepare(body: FormalizationInput, tools=None, progress=None):
         if body.mode == 'formal':
             feedback += '\nOriginal user formulation (preserve its statement):\n' + body.lean
         source = await tools.generate(body.problem, feedback)
+        generated_by_qwen = True
     await emit(stage='scoring', attempt=attempts, lean=source)
     fidelity = None
     fidelity_error = None
@@ -85,5 +95,5 @@ async def prepare(body: FormalizationInput, tools=None, progress=None):
             'attempts': attempts, 'fidelity': fidelity, 'fidelity_error': fidelity_error,
             'status': ('checked' if fidelity and fidelity['fidelity_decision'] == 'accept'
                        else 'review' if checked['valid'] else 'invalid'),
-            'generator': 'user' if body.mode == 'formal' and attempts == 1 else 'Qwen/Qwen3-4B-Instruct-2507',
+            'generator': 'user' if not generated_by_qwen else 'Qwen/Qwen3-4B-Instruct-2507',
             'generation_fine_tuned': False}
