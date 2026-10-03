@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 from the_pigeon_holes.evolution.loop import EvolutionLoop
 from the_pigeon_holes.evolution.models import (
+    Assessment,
     CandidateEvaluation,
     EvolutionConfig,
     EvolutionLimits,
@@ -68,7 +69,7 @@ class LabRun:
                 "evaluatorVersion": "pigou-analytic-demo-v1",
                 "signature": "def solve() -> float:", "formalVerification": "Not performed",
                 "maxTokens": 160, "maxTimeSeconds": 60,
-            }}, "ideas": [], "experiments": [], "elites": [], "logs": [],
+            }}, "ideas": [], "experiments": [], "elites": [], "logs": [], "assessments": [],
             "generationFailures": [], "schemaVersion": SCHEMA_VERSION, "sequence": 0}
 
     @property
@@ -91,6 +92,7 @@ class LabRun:
                 "elite_changed": ("elites", "niche"),
                 "log_added": ("logs", "id"),
                 "generation_failed": ("generationFailures", "requestId"),
+                "assessment_recorded": ("assessments", "candidateId"),
             }[kind]
             records = self.snapshot[key]
             index = next((i for i, record in enumerate(records) if record[identity] == payload[identity]
@@ -153,6 +155,17 @@ class LabRun:
             "outputTokens": failure.usage.output_tokens,
         })
         self.log("generation_failure", failure.error)
+
+    def assessment_recorded(self, assessment: Assessment) -> None:
+        self.emit("assessment_recorded", {
+            "candidateId": assessment.candidate_id,
+            "promiseRating": assessment.promise_rating,
+            "approachSummary": assessment.approach_summary,
+            "noveltyNote": assessment.novelty_note,
+            "riskFlags": list(assessment.risk_flags),
+            "model": assessment.model,
+            "promptVersion": assessment.prompt_version,
+        })
 
     def state_committed(self, state: EvolutionState) -> None:
         self.state(state)

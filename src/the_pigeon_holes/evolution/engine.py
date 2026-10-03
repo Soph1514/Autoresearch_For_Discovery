@@ -67,6 +67,27 @@ def compare_evaluations(
     return 0
 
 
+def cell_key(evaluation: CandidateEvaluation) -> str:
+    """Archive cell for a valid evaluation, from its integer behaviour descriptor."""
+    descriptor = evaluation.behavioral_descriptor
+    if descriptor is None:
+        return "none"
+    return ",".join(str(int(part)) for part in descriptor)
+
+
+def best_candidate_id(
+    candidate_ids: Iterable[str],
+    evaluations: dict[str, CandidateEvaluation],
+    goal: OptimisationGoal,
+) -> str | None:
+    """Best valid candidate under the goal; ties are broken by candidate ID."""
+    best: str | None = None
+    for candidate_id in sorted(candidate_ids):
+        if best is None or compare_evaluations(evaluations[candidate_id], evaluations[best], goal) > 0:
+            best = candidate_id
+    return best
+
+
 class EvolutionEngine:
     """Plan generations and apply completed evidence to in-memory state."""
 
@@ -108,6 +129,7 @@ class EvolutionEngine:
                 search_mode=_SEARCH_MODES[index % len(_SEARCH_MODES)],
                 status=IslandStatus.ACTIVE,
                 created_generation=0,
+                cells={cell_key(evaluation): seed.id} if evaluation.valid else {},
             )
         return state
 
@@ -207,7 +229,7 @@ class EvolutionEngine:
         island: IslandState,
     ) -> GenerationRequest:
         operator = self._choose_operator(state, island)
-        parent_ids = self._select_parents(state, island, operator)
+        parent_ids = self._select_parents(state, island, operator, problem.optimisation_goal)
         inspiration_ids = self._select_inspirations(state, parent_ids)
         strength = self._mutation_strength(island, operator)
         parents = [
@@ -235,6 +257,7 @@ class EvolutionEngine:
                 mutation_strength=strength,
                 parents=parents,
                 inspirations=inspirations,
+                assessments=state.assessments,
             ),
         )
 
@@ -281,22 +304,42 @@ class EvolutionEngine:
             k=1,
         )[0]
 
+    def _tournament(
+        self,
+        state: EvolutionState,
+        island: IslandState,
+        goal: OptimisationGoal,
+        exclude: Iterable[str] = (),
+    ) -> str | None:
+        """Pick the best of `tournament_size` random members of the island pool."""
+        excluded = set(exclude)
+        pool = sorted(set(island.cells.values()) - excluded)
+        if not pool:
+            return None
+        contenders = self._random.sample(pool, min(self.config.tournament_size, len(pool)))
+        return best_candidate_id(contenders, state.evaluations, goal)
+
     def _select_parents(
         self,
         state: EvolutionState,
         island: IslandState,
         operator: EvolutionOperator,
+        goal: OptimisationGoal,
     ) -> tuple[str, ...]:
         if operator is EvolutionOperator.MUTATE:
-            return (island.elite_id,) if island.elite_id else ()
+            parent = self._tournament(state, island, goal) or island.elite_id
+            return (parent,) if parent else ()
         if operator is EvolutionOperator.CROSSOVER and island.elite_id:
-            others = [
-                candidate_id
-                for candidate_id in self._valid_candidate_ids(state)
-                if candidate_id != island.elite_id
-            ]
-            second = self._most_distant(state, island.elite_id, others)
-            return (island.elite_id, second) if second else (island.elite_id,)
+            first = self._tournament(state, island, goal) or island.elite_id
+            second = self._tournament(state, island, goal, exclude={first})
+            if second is None:
+                others = [
+                    candidate_id
+                    for candidate_id in self._valid_candidate_ids(state)
+                    if candidate_id != first
+                ]
+                second = self._most_distant(state, first, others)
+            return (first, second) if second else (first,)
         if operator is EvolutionOperator.DEVELOP_NOVELTY:
             choices = self._valid_novelty_ids(state)
             return (self._random.choice(choices),) if choices else ()
@@ -345,11 +388,28 @@ class EvolutionEngine:
         island = state.active_islands.get(candidate.island_id or "")
         if island is None:
             return
-        incumbent = state.evaluations.get(island.elite_id or "")
+        key = cell_key(evaluation)
+        incumbent_id = island.cells.get(key)
+        incumbent = state.evaluations.get(incumbent_id or "")
         if incumbent is None or compare_evaluations(evaluation, incumbent, goal) > 0:
-            island.elite_id = candidate.id
-            island.founder_id = island.founder_id or candidate.id
-            island.trials_since_improvement = 0
+            island.cells[key] = candidate.id
+        # Keep the pool bounded: evict the weakest cell representative.
+        while len(island.cells) > self.config.pool_size:
+            weakest = min(
+                island.cells.values(),
+                key=cmp_to_key(
+                    lambda left, right: compare_evaluations(
+                        state.evaluations[left], state.evaluations[right], goal
+                    )
+                ),
+            )
+            island.cells = {k: v for k, v in island.cells.items() if v != weakest}
+        best = best_candidate_id(island.cells.values(), state.evaluations, goal)
+        if best is not None and best != island.elite_id:
+            island.elite_id = best
+            island.founder_id = island.founder_id or best
+            if best == candidate.id:
+                island.trials_since_improvement = 0
 
     def _consider_global_best(
         self,
@@ -422,6 +482,7 @@ class EvolutionEngine:
                 status=IslandStatus.ACTIVE,
                 created_generation=state.generation + 1,
                 protected_for_evaluations=self.config.incubation_evaluations,
+                cells={cell_key(state.evaluations[candidate.id]): candidate.id},
             )
             spawned += 1
 
