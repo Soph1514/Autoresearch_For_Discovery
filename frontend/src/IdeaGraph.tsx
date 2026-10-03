@@ -320,7 +320,7 @@ function Graph({
           nodeTypes={nodeTypes}
           onNodeClick={(_, n) => onSelect(n.id)}
           onNodeDragStart={() => setFollow(false)}
-          onMoveStart={(e) => {
+          onMove={(e) => {
             if (e) setFollow(false);
           }}
           nodesDraggable={false}
@@ -331,7 +331,7 @@ function Graph({
           proOptions={{ hideAttribution: false }}
         >
           <Background color="#d9dfd2" gap={23} />
-          <Controls showInteractive={false} />
+          <Controls showInteractive={false} onZoomIn={() => setFollow(false)} onZoomOut={() => setFollow(false)} onFitView={() => setFollow(false)} />
         </ReactFlow>
       </div>
       <div className="graph-caption">
