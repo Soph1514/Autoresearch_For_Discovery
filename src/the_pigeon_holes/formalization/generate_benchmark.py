@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from .formalise import DEFAULT_MODEL, ROOT, lea_root, load_dotenv, require_model_credentials
 from .lea import formalize
+from .metrics import lea_metrics, update_metrics
 from .proofnet import load_problems, problem_directory, proofnet_project
 
 TASK = """Translate the natural-language statement into exactly one Lean theorem.
@@ -17,7 +18,7 @@ the benchmark evaluates its statement. Do not add definitions, axioms, assumptio
 other theorems. Check that Generated.lean compiles."""
 
 
-def generate(split: str = "valid", limit: int | None = 10) -> None:
+def generate(split: str = "valid", limit: int | None = 10, force: bool = False) -> None:
     load_dotenv()
     model = os.environ.get("LEA_MODEL", DEFAULT_MODEL)
     require_model_credentials(model)
@@ -31,11 +32,11 @@ def generate(split: str = "valid", limit: int | None = 10) -> None:
         reference = row["lean4_src_header"] + "\n\n" + row["lean4_formalization"] + "\n"
         (problem / "Reference.lean").write_text(reference)
         generated = problem / "Generated.lean"
-        if generated.is_file():
+        if generated.is_file() and not force:
             print(f"EXISTS       {row['id']}")
             continue
         print(f"FORMALISING  {index}/{len(rows)} {row['id']}")
-        run = ROOT / "runs" / "proofnetverif" / ".lea" / f"{row['id']}-{uuid4().hex[:8]}"
+        run = ROOT / ".cache" / "proofnetverif" / f"{row['id']}-{uuid4().hex[:8]}"
         run.mkdir(parents=True)
         try:
             result = formalize(
@@ -45,7 +46,12 @@ def generate(split: str = "valid", limit: int | None = 10) -> None:
                 max_turns=12, timeout=None, allow_sorry=True,
             )
             shutil.copy2(result, generated)
+            update_metrics(ROOT / "problems/proofnetverif/results.csv", row["id"],
+                           **lea_metrics(run, "generation", True))
         except Exception as error:
+            if (run / "lea_run.json").is_file():
+                update_metrics(ROOT / "problems/proofnetverif/results.csv", row["id"],
+                               **lea_metrics(run, "generation", False, str(error)))
             print(f"FAILED       {row['id']}: {error}")
 
 
@@ -54,8 +60,9 @@ def main() -> None:
     parser.add_argument("--split", choices=("valid", "test"), default="valid")
     parser.add_argument("--limit", type=int, default=10,
                         help="unique problems (default: 10; use 0 for all)")
+    parser.add_argument("--force", action="store_true", help="regenerate existing formalizations")
     args = parser.parse_args()
-    generate(args.split, None if args.limit == 0 else args.limit)
+    generate(args.split, None if args.limit == 0 else args.limit, args.force)
 
 
 if __name__ == "__main__":

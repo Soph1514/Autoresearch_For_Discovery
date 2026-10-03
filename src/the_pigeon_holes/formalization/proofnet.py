@@ -12,7 +12,7 @@ LEAN_TOOLCHAIN = "leanprover/lean4:v4.8.0"
 def problem_directory(root: Path, split: str, problem_id: str) -> Path:
     """Return the readable artifact directory for one dataset problem."""
     name = re.sub(r"[^A-Za-z0-9._-]+", "__", problem_id).strip("_")
-    return root / "runs" / "proofnetverif" / split / name
+    return root / "problems" / "proofnetverif" / split / name
 
 
 def use_proofnet_toolchain() -> None:

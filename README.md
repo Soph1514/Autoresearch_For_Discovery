@@ -44,6 +44,16 @@ Then check the saved Lean proofs locally as often as needed without making API c
 uv run python -m the_pigeon_holes.formalization.benchmark
 ```
 
+Run all three stages and record per-problem time, tokens, cost, and results in
+`problems/proofnetverif/results.csv`:
+
+```sh
+uv run python -m the_pigeon_holes.formalization.run_benchmark_pipeline
+```
+
+Add `--force` to regenerate existing paid artifacts and collect fresh end-to-end
+generation metrics.
+
 The default Lea model uses `ANTHROPIC_API_KEY` from the repository's ignored
 `.env` file. Use `LEA_MODEL` to select another Lea-supported provider.
 
@@ -51,11 +61,11 @@ Each generated benchmark directory contains only the specification and its
 three Lean artifacts:
 
 ```text
-runs/proofnetverif/valid/<problem>/
+problems/proofnetverif/valid/<problem>/
     Spec.txt
     Generated.lean
     Reference.lean
-    Validation.lean
+    Verification.lean
 ```
 
 ```text
