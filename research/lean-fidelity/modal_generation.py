@@ -39,3 +39,27 @@ class Generator:
         if source.startswith('```'):
             source = source.split('\n', 1)[1].rsplit('```', 1)[0].strip()
         return source
+
+    @modal.method()
+    def judge(self, problem: str, lean_context: str, candidate: str) -> dict:
+        """Prompted pretrained baseline; no reference answer or label is supplied."""
+        import time
+        import torch
+        messages = [
+            {'role': 'system', 'content': 'Judge whether the Lean theorem statement faithfully expresses the natural-language mathematical problem. Compare assumptions, quantifiers, domains, and conclusion. Ignore placeholder proofs. Output exactly faithful or unfaithful, with no explanation.'},
+            {'role': 'user', 'content': f'<problem>\n{problem}\n</problem>\n<lean_context>\n{lean_context}\n</lean_context>\n<candidate>\n{candidate}\n</candidate>'}]
+        text = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        batch = self.tokenizer(text, return_tensors='pt').to(self.model.device)
+        if batch.input_ids.shape[1] > 4096:
+            raise ValueError('Judgment context exceeds 4096 tokens')
+        torch.cuda.synchronize()
+        start = time.perf_counter()
+        with torch.inference_mode():
+            output = self.model.generate(**batch, max_new_tokens=8, do_sample=False,
+                                         pad_token_id=self.tokenizer.eos_token_id)
+        torch.cuda.synchronize()
+        elapsed = time.perf_counter() - start
+        raw = self.tokenizer.decode(output[0, batch.input_ids.shape[1]:], skip_special_tokens=True).strip()
+        normalized = raw.lower().strip(' .\n\t')
+        return {'raw': raw, 'faithful': {'faithful': True, 'unfaithful': False}.get(normalized),
+                'inference_seconds': elapsed, 'model': MODEL, 'revision': REVISION}
