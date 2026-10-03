@@ -1,70 +1,55 @@
-# UI integration status
+# UI integration
 
-The UI bridge uses the shared evolution engine and prepared contract. The
-contract now binds a complete versioned interface and immutable evaluation
-suite; production preparation and sandbox adapters are still outstanding.
+The AntiAI workbench prepares Lean; the separate routing demo runs the evolution
+engine. Custom formalizations do not yet start autonomous evolution.
 
-![Integrated pipeline](ui-pipeline.svg)
+## Problem preparation
 
-## Connected now
+Both composers accept natural-language problems or existing Lean. A problem
+description is required for fidelity scoring; formal mode also requires Lean source.
+Attachments are optional. Extracted text stays editable before submission.
 
-- React → Vite `/api` proxy → FastAPI on port 8000.
-- HTTP run creation, snapshots, pause/resume/stop, and ordered SSE with replay using `Last-Event-ID`.
-- Real `EvolutionLoop` and `EvolutionEngine`: generation planning, parent selection, novelty, islands, elite preservation, static rejection, and budget accounting.
-- Native `EvolutionObserver` callbacks publish candidates, evaluation lifecycle,
-  generation failures, and committed state without replacing or subclassing the
-  engine. The versioned snapshot/event and control semantics are specified in
-  [the API/event contract](api-events.md).
-- Candidate hypotheses become titles/descriptions; source, predictions, falsification conditions, islands, and inspirations are visible in the inspector. Inspirations are separate clickable references, not parent edges.
-- Actual backend generation numbers and primary metric direction are used. `crossover` maps to merge, `repair` remains repair. A merged mutation is not inferred: the backend currently has no explicit field for it.
-- Current/former island elites and global best come from the engine. No UI-side ranking determines elite membership.
-- Pausing drains the current batch and gates the loop at its native next-batch
-  checkpoint, independent of generator implementation. Stop cancels the local
-  task. Snapshot/event history is in server memory; the browser remembers its
-  run ID in session storage and can reconnect after refresh.
+`POST /api/attachments?filename=...` accepts raw file bytes: PNG/JPEG/WebP,
+PDF (up to 10 pages), UTF-8 text/Markdown, Lean, JSON or CSV, up to 10 MB.
+The backend decodes text; the hosted CPU OCR service handles images and PDFs.
+Review extracted mathematical notation before submitting.
 
-## Explicit placeholders
+`POST /api/formalizations?stream=true` streams preparation as NDJSON:
 
-`ui/demo.py` supplies a prepared Pigou contract, deterministic proposals, and an analytic evaluator. The evaluator reads a restricted constant-return AST and never executes generated Python. No LLM call, sandbox, image interpretation, or Lean proof check happens in this demonstration. Token counts are simulated adapter usage. Search policy and archive decisions are real.
+1. Pretrained Qwen3-4B generates Lean, or the checker receives existing Lean.
+2. Pinned Lean 4.19/Mathlib checks it. Failed checks feed diagnostics back into
+   repairs until a check passes or the user stops; success is not guaranteed.
+3. The frozen fine-tuned Qwen classifier scores fidelity to the problem.
+   A review result remains review, independently of successful compilation.
 
-The problem composer remains a local preview. Arbitrary uploads are not routed into the prepared demo. The API accepts only explicit demo runs. The development API binds to localhost and has no deployment authentication or durable storage; it is not a public hosting configuration.
+There is no overall retry limit. Individual service calls have timeouts.
+Stop or stream disconnection cancels the task and active Modal call.
+Generation/checking service failures stop preparation; a scoring failure preserves
+checked Lean for review. Only Lean checking is deterministic; repair uses sampling.
 
-## Remaining work / decisions
+## Evolution demo
 
-1. The production Anthropic generator is implemented; the protected sandboxed
-   evaluator remains outstanding.
-2. Natural-language/image input → formalization → checked Lean → contract and seed preparation. The contract now carries the complete interface; production sandbox loading remains outstanding.
-3. Production orchestration must instantiate the documented version-one wire
-   boundary after contract preparation; the local API still starts only demo runs.
-4. Live token events are not emitted mid-call. Final provider usage and failures
-   are retained after each bounded generation request.
-5. Explicit short titles and crossover-plus-mutation provenance if required. Do not fabricate these fields from an operator label.
-6. Persistent run storage and authenticated deployment.
-7. Evolution time limits are checked between operations, not enforced as hard interruption of a stalled provider/evaluator. The development bridge excludes fully paused time through its active-time clock; production orchestration must preserve that semantic.
-8. `uv.lock` was already locally modified (Python 3.12 resolution). It is tracked despite `.gitignore`. That modification was preserved and excluded from integration commits; the team should agree its Python version/lock policy. Optional UI dependencies were installed directly into the existing virtual environment without rewriting the lock.
+**Open demo page** opens `/engine.html`; **Run routing demo** explicitly starts
+Pigou evolution. `/api/demo` retains the original scripted demo. All three pages
+share `frontend/src/paper-theme.css`.
 
-## Run locally
+The live demo uses the real evolution loop, with deterministic proposals and an
+analytic evaluator that reads restricted constant-return Python without executing
+it. It does not call an LLM or check Lean. Backend events drive lineage, metrics,
+elites, failures and controls; the UI never substitutes mock results on API failure.
 
-Install existing project dependencies as usual, then install the additive API dependencies:
+Pause drains the active batch; resume continues scheduling; stop cancels the task.
+SSE supports ordered replay and snapshot recovery. History survives browser refresh,
+but not a backend restart. The local server retains at most 20 runs and permits one
+active evolution run. See the [wire contract](api-events.md) for details.
 
-```sh
-uv pip install --python .venv/bin/python 'fastapi>=0.115' 'uvicorn>=0.30'
-```
+## Setup and remaining work
 
-Terminal 1, repository root:
+Use the [frontend setup](../frontend/README.md) to run locally and the
+[model README](../research/lean-fidelity/README.md) to deploy the four Modal services
+in `arin06`. Credentials stay on the backend. For a classifier in another workspace,
+configure `FIDELITY_ENDPOINT`, `FIDELITY_TOKEN_ID` and `FIDELITY_TOKEN_SECRET` there.
 
-```sh
-PYTHONPATH=src .venv/bin/python -m uvicorn the_pigeon_holes.ui.api:app --host 127.0.0.1 --port 8000
-```
-
-Terminal 2:
-
-```sh
-cd frontend
-npm ci
-npm run dev
-```
-
-Open http://127.0.0.1:5173 and run the routing demo. `GET /api/health` identifies the real engine and demo adapters. At most one run is active and 20 runs are retained in this development server; restarting clears history.
-
-Validation: Python suite plus bridge tests (`.venv/bin/python -m pytest -q`), frontend tests (`npm --prefix frontend test`), production build (`npm --prefix frontend run build`), and browser/HTTP integration checks. These do not establish scientific novelty or production adapter correctness.
+The API is a localhost development service without authentication or durable storage.
+Custom contract/seed preparation, a protected evaluator and production orchestration
+remain unconnected; see [remaining work](pipeline-next-steps.md).

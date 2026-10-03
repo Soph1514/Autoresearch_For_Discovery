@@ -36,7 +36,7 @@ function Inspector({
           {e.current ? "★ Elite" : "Former elite"} · {e.niche}
         </span>
       ))}
-      <p>{idea.description}</p>
+      <ul className="idea-points">{idea.description.split(/(?<=\.)\s+(?=[A-Z])/).map((point, i) => <li key={i}>{point}</li>)}</ul>
       <h3>How it was formed</h3>
       <div className="parent-links">
         {idea.parents.length ? (
@@ -223,6 +223,7 @@ export default function App() {
           PYTHON ENGINE · DEMO GENERATOR & EVALUATOR
         </span>
         <button onClick={() => setComposer(true)}>＋ Add problem</button>
+        <a href="/">Back to workbench ↗</a>
         {active ? (
           <>
             <button
@@ -332,9 +333,9 @@ export default function App() {
               Run routing demo
             </button>
             <p className="muted">
-              Your own problem can be previewed with Add problem.
+              Use Add problem to generate or validate a Lean formulation.
               <br />
-              Its interpretation and execution await the backend.
+              Qwen fidelity scoring highlights formulations that need review.
             </p>
           </section>
         )}

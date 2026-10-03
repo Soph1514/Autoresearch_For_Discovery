@@ -1,7 +1,11 @@
 # The Pigeon Holes
 
 Algorithm autoresearch framework based on [the agreed design](context/agents.md).
-The first implemented step is 0/1 knapsack specification validation.
+The AntiAI UI supports hosted Lean generation, checking/repair and fidelity review,
+plus a separate evolution demo. Start with the [UI setup](frontend/README.md);
+see [integration status](docs/ui-integration-status.md) for remaining gaps.
+
+The Lea CLI path below supports 0/1 knapsack specification validation.
 
 Generate its formalisation with:
 
@@ -13,7 +17,7 @@ generated, instance = formalise("knapsack")
 
 The first run downloads the pinned Lea checkout under `runs/lea-prover`. Set
 `LEA_ROOT` to use an existing checkout instead. Set `LEA_MODEL` to override
-Lea's default Gemini model. The function writes
+the configured default Anthropic model. The function writes
 `problems/knapsack/Generated.lean` and returns its path together with the original
 natural-language instance. The next pipeline step receives those two values.
 

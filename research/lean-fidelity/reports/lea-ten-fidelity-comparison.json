@@ -1,0 +1,312 @@
+{
+  "task": "Binary fidelity classification of the same saved dataset candidate for each problem",
+  "dataset": "PAug/ProofNetVerif",
+  "dataset_revision": "91183e5b12d64374827bf2782db629b5b0f8f319",
+  "selection": "First candidate row for each of the first ten unique IDs in valid, matching default problem selection in the merged Lea runner. Actual friend run unconfirmed.",
+  "baseline": "Pretrained Qwen3-4B-Instruct-2507, greedy prompted faithful/unfaithful judgment",
+  "fine_tuned": "Frozen lean-fidelity-v1 sequence classifier; raw_logit >= 0 (equivalent to calibrated p >= 0.5)",
+  "timing": "Measured client wall time per sequential authenticated Modal request, excluding explicit warmup. Includes RPC overhead; one trial per candidate, not a timing estimate or distribution.",
+  "lea": {
+    "accuracy": null,
+    "seconds": null,
+    "reason": "No saved predictions, verdicts or timing log in merged branch; Lea is a generation pipeline, not this classification task."
+  },
+  "warmup_seconds": {
+    "baseline": 21.21547208307311,
+    "fine_tuned": 44.73967079212889
+  },
+  "rows": [
+    {
+      "id": "Munkres|exercise_13_4b1",
+      "classifier_split": "train",
+      "gold_faithful": false,
+      "candidate_sha256": "a7f9576a4c49fb36a09347aca1a18947d19fdd50c7fba0dd994e3c46baea36b2",
+      "initial": {
+        "raw": "unfaithful",
+        "faithful": false,
+        "inference_seconds": 0.1387271920000046,
+        "model": "Qwen/Qwen3-4B-Instruct-2507",
+        "revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+        "request_seconds": 0.2523292079567909,
+        "correct": true
+      },
+      "fine_tuned": {
+        "model_version": "lean-fidelity-v1",
+        "specification_hash": "a1648218518eca53b0fe0e1be1c9f40d8723473db0a0bb5a2e7ed18f5913d384",
+        "raw_logit": -6.53125,
+        "p_faithful": 0.018471522256731987,
+        "fidelity_decision": "review",
+        "reason_code": "uncertain_alignment",
+        "lean_checked": false,
+        "accept_threshold": 0.8275328874588013,
+        "faithful": false,
+        "request_seconds": 0.19436966720968485,
+        "correct": true
+      }
+    },
+    {
+      "id": "Rudin|exercise_4_5a",
+      "classifier_split": "test",
+      "gold_faithful": true,
+      "candidate_sha256": "3f64d83e56b404f0f91de213fcd627c8977bfc67ca84715e6197e6038b0169ed",
+      "initial": {
+        "raw": "faithful",
+        "faithful": true,
+        "inference_seconds": 0.0848812549999991,
+        "model": "Qwen/Qwen3-4B-Instruct-2507",
+        "revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+        "request_seconds": 0.1975321671925485,
+        "correct": true
+      },
+      "fine_tuned": {
+        "model_version": "lean-fidelity-v1",
+        "specification_hash": "bca7e319c65a170a2b8cc92303c5a410dea5da6b655330a167607d67fd4c287d",
+        "raw_logit": 0.2373046875,
+        "p_faithful": 0.5360248684883118,
+        "fidelity_decision": "review",
+        "reason_code": "uncertain_alignment",
+        "lean_checked": false,
+        "accept_threshold": 0.8275328874588013,
+        "faithful": true,
+        "request_seconds": 0.19691341556608677,
+        "correct": true
+      }
+    },
+    {
+      "id": "Rudin|exercise_1_18a",
+      "classifier_split": "train",
+      "gold_faithful": false,
+      "candidate_sha256": "011f740202d17df3f20ea10510edeb5c94cf4b50e0a2e42dc18a60a686380ea0",
+      "initial": {
+        "raw": "faithful",
+        "faithful": true,
+        "inference_seconds": 0.08347098999999503,
+        "model": "Qwen/Qwen3-4B-Instruct-2507",
+        "revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+        "request_seconds": 0.20099500007927418,
+        "correct": false
+      },
+      "fine_tuned": {
+        "model_version": "lean-fidelity-v1",
+        "specification_hash": "e0d42034f64a16e34a3f98fbbc1174d7a7c3cea3128e85a91860db180c5aa6c3",
+        "raw_logit": -1.9296875,
+        "p_faithful": 0.2361677885055542,
+        "fidelity_decision": "review",
+        "reason_code": "uncertain_alignment",
+        "lean_checked": false,
+        "accept_threshold": 0.8275328874588013,
+        "faithful": false,
+        "request_seconds": 0.20685733389109373,
+        "correct": true
+      }
+    },
+    {
+      "id": "Ireland-Rosen|exercise_3_5",
+      "classifier_split": "train",
+      "gold_faithful": true,
+      "candidate_sha256": "585abb3f69ece0e992326a00729b9d15a17dbc1112dbd339224a163dd689184b",
+      "initial": {
+        "raw": "faithful",
+        "faithful": true,
+        "inference_seconds": 0.08254231799999445,
+        "model": "Qwen/Qwen3-4B-Instruct-2507",
+        "revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+        "request_seconds": 0.2022717078216374,
+        "correct": true
+      },
+      "fine_tuned": {
+        "model_version": "lean-fidelity-v1",
+        "specification_hash": "388d45c8f40060b31f2188a9c43ad7488c13802e960a60408fcb5aa07363c206",
+        "raw_logit": 2.34375,
+        "p_faithful": 0.8062265515327454,
+        "fidelity_decision": "review",
+        "reason_code": "uncertain_alignment",
+        "lean_checked": false,
+        "accept_threshold": 0.8275328874588013,
+        "faithful": true,
+        "request_seconds": 0.20034637534990907,
+        "correct": true
+      }
+    },
+    {
+      "id": "Dummit-Foote|exercise_7_3_37",
+      "classifier_split": "train",
+      "gold_faithful": false,
+      "candidate_sha256": "4898f34842e2b5bc0368013d238ad2cb6d6696a64ab1efa2b27e92458f2971e0",
+      "initial": {
+        "raw": "unfaithful",
+        "faithful": false,
+        "inference_seconds": 0.10930350299999247,
+        "model": "Qwen/Qwen3-4B-Instruct-2507",
+        "revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+        "request_seconds": 0.22741287481039762,
+        "correct": true
+      },
+      "fine_tuned": {
+        "model_version": "lean-fidelity-v1",
+        "specification_hash": "4b176b9cfac2c65489c5100460bcf6b6f5e626e0535a4f03024a8fcf9c7e68ca",
+        "raw_logit": -5.03125,
+        "p_faithful": 0.044768501073122025,
+        "fidelity_decision": "review",
+        "reason_code": "uncertain_alignment",
+        "lean_checked": false,
+        "accept_threshold": 0.8275328874588013,
+        "faithful": false,
+        "request_seconds": 0.19661049963906407,
+        "correct": true
+      }
+    },
+    {
+      "id": "Munkres|exercise_33_8",
+      "classifier_split": "train",
+      "gold_faithful": false,
+      "candidate_sha256": "1f2fbdedae8766e2c4917802474153461a0dd9f2514fd2f26ad9de68b52fd57b",
+      "initial": {
+        "raw": "unfaithful",
+        "faithful": false,
+        "inference_seconds": 0.1154194739999923,
+        "model": "Qwen/Qwen3-4B-Instruct-2507",
+        "revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+        "request_seconds": 0.23154141614213586,
+        "correct": true
+      },
+      "fine_tuned": {
+        "model_version": "lean-fidelity-v1",
+        "specification_hash": "5a624fe62dbdf8bae473e4893d985511c08fca1f401bdc550aeaa1c4e3975bff",
+        "raw_logit": -7.03125,
+        "p_faithful": 0.013693785294890404,
+        "fidelity_decision": "review",
+        "reason_code": "uncertain_alignment",
+        "lean_checked": false,
+        "accept_threshold": 0.8275328874588013,
+        "faithful": false,
+        "request_seconds": 0.1987260840833187,
+        "correct": true
+      }
+    },
+    {
+      "id": "Munkres|exercise_18_8b",
+      "classifier_split": "dev",
+      "gold_faithful": false,
+      "candidate_sha256": "ed02817aa08ae182d22a7e5138a8cd32eccadf73d398424eb09f9d57241704e4",
+      "initial": {
+        "raw": "faithful",
+        "faithful": true,
+        "inference_seconds": 0.08960600899999349,
+        "model": "Qwen/Qwen3-4B-Instruct-2507",
+        "revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+        "request_seconds": 0.2039536666125059,
+        "correct": false
+      },
+      "fine_tuned": {
+        "model_version": "lean-fidelity-v1",
+        "specification_hash": "c5f01fce179bb798c7d1c54f5c55c074dfe6f74d3b7d4ca0bc24a5e15a257e1b",
+        "raw_logit": -1.65625,
+        "p_faithful": 0.26747390627861023,
+        "fidelity_decision": "review",
+        "reason_code": "uncertain_alignment",
+        "lean_checked": false,
+        "accept_threshold": 0.8275328874588013,
+        "faithful": false,
+        "request_seconds": 0.1994145419448614,
+        "correct": true
+      }
+    },
+    {
+      "id": "Munkres|exercise_13_6",
+      "classifier_split": "train",
+      "gold_faithful": false,
+      "candidate_sha256": "2f4d8f4f0a8917557b1067f246419f1d42fd3d68be86b5782a93084bd00d52ad",
+      "initial": {
+        "raw": "unfaithful",
+        "faithful": false,
+        "inference_seconds": 0.1122965349999987,
+        "model": "Qwen/Qwen3-4B-Instruct-2507",
+        "revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+        "request_seconds": 0.2242799997329712,
+        "correct": true
+      },
+      "fine_tuned": {
+        "model_version": "lean-fidelity-v1",
+        "specification_hash": "2a862b36e703fc95e79ffa5ce7b70eeb82113cb644ef91826b99d09a555b549f",
+        "raw_logit": -7.375,
+        "p_faithful": 0.011138754896819592,
+        "fidelity_decision": "review",
+        "reason_code": "uncertain_alignment",
+        "lean_checked": false,
+        "accept_threshold": 0.8275328874588013,
+        "faithful": false,
+        "request_seconds": 0.1944806668907404,
+        "correct": true
+      }
+    },
+    {
+      "id": "Artin|exercise_3_5_6",
+      "classifier_split": "train",
+      "gold_faithful": true,
+      "candidate_sha256": "18bd83c019a0bfde0788e187b5b9a01260622f421d1ae63784a44c4dc82877ca",
+      "initial": {
+        "raw": "unfaithful",
+        "faithful": false,
+        "inference_seconds": 0.10918457799999715,
+        "model": "Qwen/Qwen3-4B-Instruct-2507",
+        "revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+        "request_seconds": 0.22265958320349455,
+        "correct": false
+      },
+      "fine_tuned": {
+        "model_version": "lean-fidelity-v1",
+        "specification_hash": "1dd0669cbb0b1025b5e7d77ecd322453d51c772507b4cc9d55a822f02aee6302",
+        "raw_logit": -1.3359375,
+        "p_faithful": 0.30732935667037964,
+        "fidelity_decision": "review",
+        "reason_code": "uncertain_alignment",
+        "lean_checked": false,
+        "accept_threshold": 0.8275328874588013,
+        "faithful": false,
+        "request_seconds": 0.1918688751757145,
+        "correct": false
+      }
+    },
+    {
+      "id": "Dummit-Foote|exercise_3_4_5a",
+      "classifier_split": "train",
+      "gold_faithful": false,
+      "candidate_sha256": "5f88a3626fc8bcf66f49eae43d4142e2349a65d52b4d063c72f3996bc6c192db",
+      "initial": {
+        "raw": "unfaithful",
+        "faithful": false,
+        "inference_seconds": 0.11150547799999799,
+        "model": "Qwen/Qwen3-4B-Instruct-2507",
+        "revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+        "request_seconds": 0.2223979588598013,
+        "correct": true
+      },
+      "fine_tuned": {
+        "model_version": "lean-fidelity-v1",
+        "specification_hash": "75773c8fb95b95e548fe9bb7e3009bcbda400dc596f86726477dd9288ef27174",
+        "raw_logit": -7.3125,
+        "p_faithful": 0.011565386317670345,
+        "fidelity_decision": "review",
+        "reason_code": "uncertain_alignment",
+        "lean_checked": false,
+        "accept_threshold": 0.8275328874588013,
+        "faithful": false,
+        "request_seconds": 0.19365895818918943,
+        "correct": true
+      }
+    }
+  ],
+  "summary": {
+    "initial": {
+      "correct": 7,
+      "total": 10,
+      "total_request_seconds": 2.1853735824115574
+    },
+    "fine_tuned": {
+      "correct": 9,
+      "total": 10,
+      "total_request_seconds": 1.973246417939663
+    }
+  }
+}

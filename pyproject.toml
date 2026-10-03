@@ -27,4 +27,4 @@ testpaths = ["tests"]
 
 
 [project.optional-dependencies]
-ui = ["fastapi>=0.115", "uvicorn>=0.30"]
+ui = ["fastapi>=0.115", "uvicorn>=0.30", "modal>=1.0,<2", "httpx>=0.28"]

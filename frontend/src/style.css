@@ -1,3 +1,5 @@
+/* Layout defaults are layered so the shared AntiAI theme wins in every build. */
+@layer engine-defaults {
 :root {
   font-family: Inter, system-ui, sans-serif;
   color: #2c3b32;
@@ -649,4 +651,6 @@ dialog::backdrop {
 }
 .node-meta span {
   flex-shrink: 0;
+}
+
 }
