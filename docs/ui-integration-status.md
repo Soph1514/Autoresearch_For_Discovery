@@ -1,6 +1,8 @@
 # UI integration status
 
-Merged `origin/eo_loop` through `af85167` into `feat/idea-tree`. Existing evolution, contract, and extraction implementations are preserved. The only compatibility fix to teammates' existing files adds the newly required `instance_id` and `instance` to two evolution test fixtures.
+The UI bridge uses the shared evolution engine and prepared contract. The
+contract now binds a complete versioned interface and immutable evaluation
+suite; production preparation and sandbox adapters are still outstanding.
 
 ![Integrated pipeline](ui-pipeline.svg)
 
@@ -24,12 +26,12 @@ The problem composer remains a local preview. Arbitrary uploads are not routed i
 ## Remaining work / decisions
 
 1. Production generator and sandboxed evaluator adapters implementing the existing async ports.
-2. Natural-language/image input → formalization → checked Lean → contract and seed preparation. The extracted interface code must be carried into the execution environment.
+2. Natural-language/image input → formalization → checked Lean → contract and seed preparation. The contract now carries the complete interface; production sandbox loading remains outstanding.
 3. Final wire schema and API ownership. The bridge currently emits the frontend camelCase contract; it can be revised at this boundary without changing the evolution policy.
 4. A native engine observer/control interface if maintainers prefer it over the separate observation subclass. Per-provider-call concurrency, live token updates, and cancellation need adapter support.
 5. Explicit short titles and crossover-plus-mutation provenance if required. Do not fabricate these fields from an operator label.
 6. Persistent run storage and authenticated deployment.
-7. Evolution time limits are checked between operations, not enforced as hard interruption of a stalled provider/evaluator. Paused time currently counts toward the engine's wall-clock budget. Agree whether it should before production integration.
+7. Evolution time limits are checked between operations, not enforced as hard interruption of a stalled provider/evaluator. The development bridge excludes fully paused time through its active-time clock; production orchestration must preserve that semantic.
 8. `uv.lock` was already locally modified (Python 3.12 resolution). It is tracked despite `.gitignore`. That modification was preserved and excluded from integration commits; the team should agree its Python version/lock policy. Optional UI dependencies were installed directly into the existing virtual environment without rewriting the lock.
 
 ## Run locally

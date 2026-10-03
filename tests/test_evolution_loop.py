@@ -4,32 +4,49 @@ import asyncio
 import re
 from collections.abc import Sequence
 
+import pytest
+
 from the_pigeon_holes.evolution import (
     CandidateDraft,
     CandidateEvaluation,
     EvolutionConfig,
     EvolutionLimits,
     EvolutionLoop,
+    EvolutionProtocolError,
     GenerationRequest,
     GenerationResult,
     ProgramCandidate,
     StopReason,
     TokenUsage,
 )
-from the_pigeon_holes.execution.signature_extractor import MetricGoal, OptimisationGoal
-from the_pigeon_holes.models.problem_contract import ProblemContract, ResourceLimits
+from the_pigeon_holes.models.problem_contract import (
+    EvaluationCase,
+    EvaluationSuite,
+    InterfaceDefinition,
+    MetricGoal,
+    OptimisationGoal,
+    Parameter,
+    ProblemContract,
+    ResourceLimits,
+)
 
 
 CONTRACT = ProblemContract(
     natural_language_spec="Return an integer; higher is better.",
     lean_specification="def solve (x : Int) : Int",
-    solve_signature="def solve(x: int) -> int:",
+    interface=InterfaceDefinition(
+        "python-interface-v1",
+        (Parameter("x", "int"),),
+        "int",
+        "def solve(x: int) -> int:",
+    ),
     seed_program="def solve(x: int) -> int:\n    return 0\n",
+    evaluation_suite=EvaluationSuite(
+        "integer-test", (EvaluationCase("zero", {"x": 0}),)
+    ),
     optimisation_goal=OptimisationGoal(MetricGoal("score", "maximize"), "mean"),
-    resource_limits=ResourceLimits(1.0, 128, 100),
+    resource_limits=ResourceLimits(1.0, 5.0, 128, 100),
     evaluator_version="test-v1",
-    instance_id="integer-test",
-    instance={"x": 0},
 )
 
 
@@ -178,3 +195,39 @@ def test_all_generation_errors_stop_and_preserve_failure_evidence():
     assert outcome.generations_completed == 0
     assert len(outcome.state.generation_failures) == 8
     assert outcome.state.generation_failures[0].prompt == generator.calls[0][0].prompt
+
+
+def test_valid_evaluation_must_cover_the_complete_suite():
+    class IncompleteEvaluator(_Evaluator):
+        async def evaluate(self, candidates, problem):
+            return tuple(
+                CandidateEvaluation(
+                    candidate.id,
+                    valid=True,
+                    metrics={"score": 1.0},
+                )
+                for candidate in candidates
+            )
+
+    loop = EvolutionLoop(
+        config=EvolutionConfig(max_tokens_per_request=10),
+        limits=EvolutionLimits(max_tokens=80),
+        generator=_Generator(),
+        evaluator=IncompleteEvaluator(),
+    )
+
+    with pytest.raises(EvolutionProtocolError, match="every evaluation-suite case"):
+        asyncio.run(loop.run(CONTRACT))
+
+
+@pytest.mark.parametrize(
+    "limits",
+    [
+        {"max_time_seconds": float("nan")},
+        {"max_time_seconds": float("inf")},
+        {"max_tokens": 1.5},
+    ],
+)
+def test_run_limits_reject_non_finite_time_and_non_integer_tokens(limits):
+    with pytest.raises(ValueError):
+        EvolutionLimits(**limits)

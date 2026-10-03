@@ -12,21 +12,35 @@ from the_pigeon_holes.evolution.models import (
     ProgramCandidate,
 )
 from the_pigeon_holes.evolution.novelty import source_fingerprint
-from the_pigeon_holes.execution.signature_extractor import MetricGoal, OptimisationGoal
-from the_pigeon_holes.models.problem_contract import ProblemContract, ResourceLimits
+from the_pigeon_holes.models.problem_contract import (
+    EvaluationCase,
+    EvaluationSuite,
+    InterfaceDefinition,
+    MetricGoal,
+    OptimisationGoal,
+    Parameter,
+    ProblemContract,
+    ResourceLimits,
+)
 
 
 GOAL = OptimisationGoal(MetricGoal("score", "maximize"), "mean")
 CONTRACT = ProblemContract(
     natural_language_spec="Return a high-scoring integer.",
     lean_specification="def solve (x : Int) : Int",
-    solve_signature="def solve(x: int) -> int:",
+    interface=InterfaceDefinition(
+        "python-interface-v1",
+        (Parameter("x", "int"),),
+        "int",
+        "def solve(x: int) -> int:",
+    ),
     seed_program="def solve(x: int) -> int:\n    return 0\n",
+    evaluation_suite=EvaluationSuite(
+        "integer-test", (EvaluationCase("zero", {"x": 0}),)
+    ),
     optimisation_goal=GOAL,
-    resource_limits=ResourceLimits(1.0, 128, 100),
+    resource_limits=ResourceLimits(1.0, 5.0, 128, 100),
     evaluator_version="test-v1",
-    instance_id="integer-test",
-    instance={"x": 0},
 )
 
 

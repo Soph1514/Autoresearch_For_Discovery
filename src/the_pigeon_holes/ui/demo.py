@@ -6,7 +6,8 @@ LLM generator, sandbox, or Lean verifier.
 import ast
 import asyncio
 from the_pigeon_holes.models.problem_contract import (
-    ProblemContract, ResourceLimits, OptimisationGoal, MetricGoal,
+    EvaluationCase, EvaluationSuite, InterfaceDefinition, MetricGoal,
+    OptimisationGoal, ProblemContract, ResourceLimits,
 )
 from the_pigeon_holes.evolution.models import (
     CandidateDraft, GenerationResult, TokenUsage, CandidateEvaluation,
@@ -17,10 +18,16 @@ def demo_contract():
     return ProblemContract(
         natural_language_spec="Maximize the PoA witness for unit-demand Pigou routing: delays x and c, 0 < c <= 1.",
         lean_specification="-- Demo placeholder: no Lean proof has been checked.",
-        solve_signature="def solve() -> float:", seed_program="def solve() -> float:\n    return 0.3\n",
-        instance_id="pigou-unit-demand", instance={},
+        interface=InterfaceDefinition(
+            "python-interface-v1", (), "float", "def solve() -> float:"
+        ),
+        seed_program="def solve() -> float:\n    return 0.3\n",
+        evaluation_suite=EvaluationSuite(
+            "pigou-unit-demand", (EvaluationCase("unit-demand", {}),)
+        ),
         optimisation_goal=OptimisationGoal(MetricGoal("poa", "maximize"), "mean"),
-        resource_limits=ResourceLimits(2, 128, 20), evaluator_version="pigou-analytic-demo-v1",
+        resource_limits=ResourceLimits(2, 10, 128, 20),
+        evaluator_version="pigou-analytic-demo-v1",
     )
 
 

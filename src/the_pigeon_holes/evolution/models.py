@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Mapping
@@ -92,16 +93,26 @@ class EvolutionConfig:
 
 @dataclass(frozen=True)
 class EvolutionLimits:
+    """Whole-run token and active-time limits; the caller supplies the run clock."""
+
     max_time_seconds: float | None = None
     max_tokens: int | None = None
 
     def __post_init__(self) -> None:
         if self.max_time_seconds is None and self.max_tokens is None:
             raise ValueError("at least one evolution limit must be configured")
-        if self.max_time_seconds is not None and self.max_time_seconds <= 0:
-            raise ValueError("max_time_seconds must be positive")
-        if self.max_tokens is not None and self.max_tokens <= 0:
-            raise ValueError("max_tokens must be positive")
+        if self.max_time_seconds is not None:
+            if (
+                isinstance(self.max_time_seconds, bool)
+                or not isinstance(self.max_time_seconds, (int, float))
+                or not math.isfinite(self.max_time_seconds)
+                or self.max_time_seconds <= 0
+            ):
+                raise ValueError("max_time_seconds must be positive and finite")
+        if self.max_tokens is not None and (
+            type(self.max_tokens) is not int or self.max_tokens <= 0
+        ):
+            raise ValueError("max_tokens must be a positive integer")
 
 
 @dataclass(frozen=True)

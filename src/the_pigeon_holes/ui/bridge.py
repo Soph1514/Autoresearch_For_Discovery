@@ -1,6 +1,7 @@
 """Translate evolution state into ordered UI records; leave the engine intact."""
 import asyncio
 import copy
+import time
 from datetime import datetime, timezone
 from uuid import uuid4
 from the_pigeon_holes.evolution.engine import EvolutionEngine
@@ -13,19 +14,44 @@ def now():
     return datetime.now(timezone.utc).isoformat()
 
 
+class ActiveRunClock:
+    """Monotonic clock whose value does not advance while fully paused."""
+
+    def __init__(self, source=time.monotonic):
+        self.source = source
+        self.paused_at = None
+        self.paused_seconds = 0.0
+
+    def __call__(self):
+        current = self.source()
+        current_pause = 0.0 if self.paused_at is None else current - self.paused_at
+        return current - self.paused_seconds - current_pause
+
+    def pause(self):
+        if self.paused_at is None:
+            self.paused_at = self.source()
+
+    def resume(self):
+        if self.paused_at is not None:
+            self.paused_seconds += self.source() - self.paused_at
+            self.paused_at = None
+
+
 class LabRun:
     def __init__(self, delay=.8):
         self.delay = delay
         self.wake = asyncio.Event()
         self.gate = asyncio.Event()
         self.gate.set()
+        self.active_clock = ActiveRunClock()
         self.events = []
         self.task = None
         self.snapshot = {"run": {
             "id": str(uuid4()), "title": "How inefficient can selfish routing be?",
             "status": "running", "startedAt": now(), "metricName": "poa", "direction": "maximize",
             "backend": "python-demo", "contract": {
-                "instanceId": "pigou-unit-demand", "evaluatorVersion": "pigou-analytic-demo-v1",
+                "evaluationSuiteId": "pigou-unit-demand",
+                "evaluatorVersion": "pigou-analytic-demo-v1",
                 "signature": "def solve() -> float:", "formalVerification": "Not performed",
                 "maxTokens": 160, "maxTimeSeconds": 60,
             }}, "ideas": [], "experiments": [], "elites": [], "logs": [], "sequence": 0}
@@ -113,9 +139,13 @@ class LabRun:
 
     async def checkpoint(self):
         if not self.gate.is_set():
+            self.active_clock.pause()
             self.emit("run_status_changed", {"status": "paused"})
             self.log("control", "Paused between batches; completed evidence retained.")
-            await self.gate.wait()
+            try:
+                await self.gate.wait()
+            finally:
+                self.active_clock.resume()
 
     def pause(self):
         if self.snapshot["run"]["status"] == "running":
@@ -138,7 +168,8 @@ class LabRun:
             config = EvolutionConfig(min_islands=2, max_islands=4, max_batch_size=8, max_tokens_per_request=10)
             loop = EvolutionLoop(config=config, limits=EvolutionLimits(max_tokens=160, max_time_seconds=60),
                 generator=DemoGenerator(self.checkpoint, self.log, self.delay),
-                evaluator=DemoEvaluator(self.candidate, self.evaluation, self.delay))
+                evaluator=DemoEvaluator(self.candidate, self.evaluation, self.delay),
+                clock=self.active_clock)
             loop.engine = ObservedEngine(config, self.state)
             outcome = await loop.run(demo_contract())
             self.log("complete", f"Stopped: {outcome.stop_reason.value}; {outcome.tokens_used} demo tokens, {outcome.generations_completed} generations.")

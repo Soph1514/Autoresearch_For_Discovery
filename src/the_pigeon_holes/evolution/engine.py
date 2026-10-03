@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import ast
 import copy
 import math
 import random
 from collections.abc import Iterable, Sequence
 from functools import cmp_to_key
 
+from the_pigeon_holes.execution.interface_validation import validate_source_signature
 from the_pigeon_holes.models.problem_contract import OptimisationGoal, ProblemContract
 
 from .models import (
@@ -35,38 +35,6 @@ _SEARCH_MODES = (
     SearchMode.EFFICIENCY,
     SearchMode.RADICAL,
 )
-
-
-def validate_source_signature(source_code: str, required_signature: str) -> str | None:
-    """Return an error when source is invalid or does not match the fixed signature."""
-    try:
-        source_tree = ast.parse(source_code)
-    except SyntaxError as exc:
-        return f"source is not valid Python: {exc}"
-    solve_functions = [
-        node
-        for node in source_tree.body
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "solve"
-    ]
-    if len(solve_functions) != 1:
-        return "source must define exactly one top-level solve function"
-    if isinstance(solve_functions[0], ast.AsyncFunctionDef):
-        return "solve must be a synchronous function"
-    try:
-        required_tree = ast.parse(required_signature + "\n    ...")
-    except SyntaxError as exc:
-        raise ValueError(f"ProblemContract has an invalid solve_signature: {exc}") from exc
-    required_function = required_tree.body[0]
-    if not isinstance(required_function, ast.FunctionDef):
-        raise ValueError("ProblemContract solve_signature must be a function definition")
-    actual = solve_functions[0]
-    if ast.dump(actual.args, include_attributes=False) != ast.dump(
-        required_function.args, include_attributes=False
-    ) or ast.dump(actual.returns, include_attributes=False) != ast.dump(
-        required_function.returns, include_attributes=False
-    ):
-        return "solve signature does not match ProblemContract.solve_signature"
-    return None
 
 
 def compare_evaluations(

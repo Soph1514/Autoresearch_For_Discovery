@@ -29,13 +29,8 @@ def test_interface_syntax_verification_valid():
 
 
 def test_interface_rejects_unknown_direction():
-    interface = ExtractedInterface(
-        function_name="solve", parameters=[], return_type="int",
-        signature_str="def solve() -> int:", pydantic_classes_code="",
-        optimisation_goal=OptimisationGoal(MetricGoal("value", "largest"), "mean"),
-    )
     with pytest.raises(ValueError, match="must be 'maximize' or 'minimize'"):
-        verify_interface_syntax(interface)
+        MetricGoal("value", "largest")
 
 
 def test_interface_syntax_verification_catches_wrong_function_name():

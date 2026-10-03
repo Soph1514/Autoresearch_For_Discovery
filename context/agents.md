@@ -19,11 +19,12 @@ Preserve the original pipeline. Focus the novel contribution on diversified, eli
 
 ## Problem contract
 
-The `ProblemContract` is the frozen hand-off from Lean formalization (step 2) to the evolutionary loop (steps 3–5). It binds the general Lean statement to one concrete instance and holds everything the loop needs for a run: the Python `solve` signature, a seed program, the instance, the optimisation goal (primary metric, aggregation, tie-breakers), resource limits, and the evaluator version.
+The `ProblemContract` is the frozen hand-off from Lean formalization (step 2) to the evolutionary loop (steps 3–5). It binds the general Lean statement to an immutable evaluation suite and holds the complete versioned Python interface, a seed program, the optimisation goal (primary metric, aggregation, tie-breakers), per-evaluation resource limits, and the evaluator version.
 
-- The Lean statement is general, so the `solve` signature is the same for every instance. Candidates are never specialised to an instance.
-- The contract is built by `build_problem_contract` in `src/the_pigeon_holes/models/problem_contract.py`, which extracts and verifies the signature from Lean and validates the seed and instance.
-- The code-generation prompt includes the block from `render_solve_contract` in `src/the_pigeon_holes/llm/prompts.py`.
+- The Lean statement and `solve` signature are general. The evaluator maps a candidate over the suite and aggregates metrics; generation prompts never contain case values.
+- The contract builder preserves supporting types, validates the exact seed signature and every case value, and recursively freezes accepted suite data.
+- The code-generation prompt includes the complete interface block from `render_solve_contract` in `src/the_pigeon_holes/llm/prompts.py`.
+- Shared ownership, budget, pause/cancellation, and checked-Lean meanings are defined in [../docs/shared-semantics.md](../docs/shared-semantics.md).
 
 Full definition, verification scope and known gaps: [../docs/problem_contract.md](../docs/problem_contract.md).
 
@@ -41,7 +42,7 @@ separate idea-to-code translation stage.
 - Diversity should reflect mechanisms or observed performance, not merely different wording.
 - Candidate records should retain hypotheses, parent IDs, code versions, validity, scores, costs, and experimental evidence, including failures.
 - Keep the specification and evaluator fixed during a run; periodic changes to the Lean specification are not an agreed requirement. The problem contract enforces this by being frozen.
-- Aim to retain reusable algorithms, not just a good object for one instance.
+- Aim to retain reusable algorithms, not just a good object for one evaluation case.
 
 ## Diagrams
 

@@ -83,7 +83,7 @@ _EXTRACTION_TOOL = {
                     "aggregation": {
                         "type": "string",
                         "enum": ["mean", "median", "sum", "worst_case"],
-                        "description": "How the metric is combined across instances.",
+                        "description": "How the metric is combined across evaluation cases.",
                     },
                     "tie_breakers": {
                         "type": "array",
@@ -141,7 +141,7 @@ _SYSTEM_PROMPT = textwrap.dedent("""\
 
     • Identify the optimisation goal from the Lean statement: the primary metric
       and whether it is maximised or minimised, how it is aggregated across
-      instances, and any tie-breaking metrics. If the statement expresses no
+      evaluation cases, and any tie-breaking metrics. If the statement expresses no
       goal, do not guess one.
 
     • Respond ONLY by calling the ``submit_extracted_interface`` tool.
@@ -162,12 +162,32 @@ class MetricGoal:
     name: str
     direction: Literal["maximize", "minimize"]
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.name, str) or not self.name.strip():
+            raise ValueError("metric name cannot be empty")
+        if self.direction not in ("maximize", "minimize"):
+            raise ValueError("metric direction must be 'maximize' or 'minimize'")
+
 
 @dataclass(frozen=True)
 class OptimisationGoal:
     primary: MetricGoal
     aggregation: Literal["mean", "median", "sum", "worst_case"]
     tie_breakers: tuple[MetricGoal, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "tie_breakers", tuple(self.tie_breakers))
+        if not isinstance(self.primary, MetricGoal) or not all(
+            isinstance(metric, MetricGoal) for metric in self.tie_breakers
+        ):
+            raise ValueError("optimisation metrics must be MetricGoal values")
+        if self.aggregation not in ("mean", "median", "sum", "worst_case"):
+            raise ValueError(
+                "metric aggregation must be mean, median, sum, or worst_case"
+            )
+        names = [self.primary.name, *(metric.name for metric in self.tie_breakers)]
+        if len(names) != len(set(names)):
+            raise ValueError("primary and tie-breaker metric names must be unique")
 
 
 @dataclass

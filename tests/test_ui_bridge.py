@@ -1,7 +1,20 @@
 """Integration bridge tests use the real engine and explicit demo ports."""
 import asyncio
 import copy
-from the_pigeon_holes.ui.bridge import LabRun
+from the_pigeon_holes.ui.bridge import ActiveRunClock, LabRun
+
+
+def test_active_run_clock_excludes_fully_paused_time():
+    current = [10.0]
+    clock = ActiveRunClock(lambda: current[0])
+    started = clock()
+    current[0] += 2.0
+    clock.pause()
+    current[0] += 100.0
+    assert clock() - started == 2.0
+    clock.resume()
+    current[0] += 3.0
+    assert clock() - started == 5.0
 
 
 def test_real_engine_publishes_lineage_evidence_and_ordered_events():

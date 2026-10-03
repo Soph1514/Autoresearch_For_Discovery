@@ -3,7 +3,7 @@
 ## Status and precedence
 
 This document is the source of truth for evolution-specific behavior. It
-refines the evolution and Python-implementation stages in [agents.md](agents.md)
+refines the evolution and Python-implementation stages in [agents.md](../context/agents.md)
 without changing the rest of the accepted pipeline.
 
 The evolutionary unit is an executable program candidate. One LLM generation
@@ -30,10 +30,11 @@ Evolution receives the immutable `ProblemContract`, containing:
 
 - the natural-language specification;
 - the Lean formalization;
-- the exact Python `solve(...)` signature;
+- the complete versioned Python interface, including supporting types;
 - a seed program;
+- an immutable evaluation suite hidden from generation prompts;
 - the `OptimisationGoal`;
-- per-candidate resource limits; and
+- per-case and per-candidate resource limits; and
 - the evaluator version.
 
 Lean expresses the formal intent. It does not by itself prove that generated
@@ -163,7 +164,7 @@ Only then is the next generation planned from the updated snapshot.
 
 ## Stopping and budgets
 
-Evolution has a separate run budget from per-candidate resource limits. At
+Evolution has a separate run budget from evaluation resource limits. At
 least one of maximum elapsed time or maximum LLM tokens must be configured. The
 loop stops when:
 
@@ -176,8 +177,10 @@ returns a `generation_failed` outcome rather than retrying forever without
 producing evidence-bearing candidates. Provider adapters should handle
 transient retries before returning such errors.
 
-The time limit covers the entire evolution sub-loop, including seed evaluation
-and candidate execution. Token use covers every evolution-related LLM call.
+The time limit covers active evolution time, including seed evaluation and
+candidate execution, but excludes time fully paused at a batch boundary.
+In-flight draining before that boundary still counts. Token use covers every
+evolution-related LLM call.
 Initially this is program generation; future formatting repairs, reflections,
 novelty judgments, and qualitative judgments must charge the same budget.
 

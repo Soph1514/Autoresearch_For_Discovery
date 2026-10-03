@@ -260,8 +260,16 @@ class EvolutionLoop:
             problem.optimisation_goal.primary,
             *problem.optimisation_goal.tie_breakers,
         )
+        expected_cases = len(problem.evaluation_suite.cases)
         for evaluation in evaluations:
             if evaluation.valid:
+                if (
+                    evaluation.total_cases != expected_cases
+                    or evaluation.passing_cases != expected_cases
+                ):
+                    raise EvolutionProtocolError(
+                        "valid evaluator result must pass every evaluation-suite case"
+                    )
                 for metric in configured_metrics:
                     value = evaluation.metrics.get(metric.name)
                     if value is None or not math.isfinite(value):

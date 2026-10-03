@@ -17,7 +17,7 @@ flowchart TD
     A --> C[3. Produce checked Lean with provenance]
     A --> D[4. Implement protected sandbox evaluator]
     B --> E[5. Implement async LLM generation adapter]
-    B --> F[6. Prepare seed and concrete instance]
+    B --> F[6. Prepare seed and evaluation suite]
     C --> F
     D --> F
     B --> G[7. Stabilize API events and run controls]
@@ -34,19 +34,24 @@ flowchart TD
 
 ## TODO: unblock the core handoff
 
-- [ ] **1. Agree the shared semantics before editing shared models.**
+- [x] **1. Agree the shared semantics before editing shared models.**
   - Confirm ownership of formalization, contract/extraction, generation, evaluation, and the API/UI boundary.
-  - Decide how a contract bound to one instance relates to the declared metric aggregation “across instances.” Keep algorithms general; do not expose concrete benchmark answers in generation prompts.
+  - Resolve how run-bound cases relate to metric aggregation. Keep algorithms general; do not expose concrete benchmark answers in generation prompts.
   - Separate per-evaluation time/memory/iteration limits from whole-run time/token budgets. Define paused-time accounting, cancellation, and provider timeout behavior.
   - Define what “checked Lean” means and which check artifacts must accompany it. Lean specification checking does not prove generated Python correct.
-  - **Done when:** these decisions are documented and producers/consumers use the same meanings.
+  - **Done:** decisions are recorded in [shared semantics](shared-semantics.md).
+    Production enforcement explicitly assigned to later adapters remains noted
+    there rather than being implied by the shared models.
 
-- [ ] **2. Preserve the complete extracted interface in the contract.**
-  - Carry the required supporting type definitions (currently `pydantic_classes_code`) or an equivalent versioned schema into generation prompts and the evaluation environment. The current builder discards them.
+- [x] **2. Preserve the complete extracted interface in the contract.**
+  - Carry the required supporting type definitions (`pydantic_classes_code`) or an equivalent versioned schema into generation prompts and the evaluation environment.
   - Validate seed signature compatibility during contract preparation, reusing the existing signature validator where appropriate.
-  - Validate instance values/types as well as parameter names. Validate metric configuration and resource limits; prevent mutation of run-bound instance data after preparation.
+  - Validate case values/types as well as parameter names. Validate metric configuration and resource limits; prevent mutation of run-bound suite data after preparation.
   - Treat extracted helper code as generated code: parsing is not authorization to execute it in the API process.
-  - **Done when:** a structured-input example reaches generation and evaluation without missing types, and malformed inputs fail before a run starts.
+  - **Done:** the versioned interface and immutable evaluation suite are
+    validated during preparation. A focused builder-to-loop test carries a
+    structured input through generation and a contract-aware evaluator double;
+    production sandbox execution remains item 4.
 
 - [ ] **3. Connect Lean formalization and checking.**
   - Accept an existing Lean statement or obtain one from the natural-language specification; return checker diagnostics for correction.
@@ -55,7 +60,7 @@ flowchart TD
   - **Done when:** checked input can advance to preparation and failed checks remain visible without starting evolution.
 
 - [ ] **4. Implement the production `CandidateEvaluator` adapter.**
-  - Run candidate code with the contract's instance and required interface definitions in an isolated execution environment.
+  - Run candidate code with the contract's evaluation cases and required interface definitions in an isolated execution environment.
   - Enforce resource limits and use a fixed, versioned deterministic judge for validity, primary metric, and tie-breakers. Generated code must not modify the judge or benchmark data.
   - Return one `CandidateEvaluation` per candidate, including failures, partial evidence, and behavioral descriptors where supported. Valid results must contain finite configured metrics.
   - If an LLM judge is included, keep its assessment separate from executable validity; it must not promote invalid candidates.
@@ -68,9 +73,9 @@ flowchart TD
   - **Done when:** the existing loop can replace `DemoGenerator` without changing search policy.
 
 - [ ] **6. Prepare a runnable problem contract.**
-  - Supply or generate the seed, bind a concrete instance, carry the full interface, and select the agreed evaluator version.
+  - Supply or generate the seed, bind an evaluation suite, carry the full interface, and select the agreed evaluator version.
   - Use `build_problem_contract` rather than a separately assembled production contract. Check/evaluate the seed and define the response to an invalid baseline.
-  - Keep the prepared specification, instance, and evaluator fixed for the run.
+  - Keep the prepared specification, suite, and evaluator fixed for the run.
   - **Done when:** preparation returns either an accepted contract with baseline evidence or actionable diagnostics.
 
 ## TODO: connect orchestration and UI
@@ -89,10 +94,10 @@ flowchart TD
   - **Done when:** one API flow reaches the real loop from checked Lean without manually constructing a contract.
 
 - [ ] **9. Verify the complete handoff with focused integration checks.**
-  - Exercise contract builder → loop together, including an example requiring supporting types and a nonempty instance. Existing component tests and the demo do not establish this path.
-  - Cover signature mismatch, invalid instance, failed Lean checks, invalid/missing metrics, provider failure, timeout, and stop/reconnect behavior at their relevant boundaries.
+  - Exercise contract builder → loop together, including an example requiring supporting types and a nonempty evaluation suite.
+  - Cover signature mismatch, invalid cases, failed Lean checks, invalid/missing metrics, provider failure, timeout, and stop/reconnect behavior at their relevant boundaries.
   - Use deterministic provider doubles for repeatable checks, then run a small explicitly configured live-provider smoke test with a bounded budget.
-  - **Done when:** evidence shows the same contract, instance, and evaluator version are used throughout, with failures retained and no invalid elite.
+  - **Done when:** evidence shows the same contract, suite, and evaluator version are used throughout, with failures retained and no invalid elite.
 
 - [ ] **10. Connect the problem composer to preparation.**
   - Submit natural-language text, optional initial results, and supported image/document attachments to the backend preparation flow.
