@@ -27,5 +27,13 @@
     "valid_proof": "accepted",
     "false_proof": "rejected",
     "sorry": "rejected"
+  },
+  "formal_input_browser_smoke": {
+    "source": "import Mathlib\ntheorem nat_add_zero (n : Nat) : n + 0 = n := Nat.add_zero n",
+    "result": "Lean checked \u00b7 fidelity accepted",
+    "displayed_fidelity": "89.0%",
+    "elapsed_seconds": 53,
+    "checker_cpu": 4,
+    "checker_memory_mib": 8192
   }
 }
