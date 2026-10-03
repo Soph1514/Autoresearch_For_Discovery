@@ -108,6 +108,7 @@ function Graph({
   const pointerStart = useRef<{x:number;y:number}|null>(null);
   const flow = useReactFlow();
   const initialized = useRef(false);
+  const [viewportReady, setViewportReady] = useState(false);
   const previousRun = useRef(snapshot.run.id);
   const inactiveIds = new Set(
     snapshot.ideas
@@ -261,8 +262,8 @@ function Graph({
         canvas.current.clientHeight / 2 - ((top + bottom) / 2) * viewport.zoom;
     }
     void flow.setViewport(viewport, {
-      duration: reducedMotion ? 0 : gradual ? 1100 : 450,
-    });
+      duration: !initialized.current || reducedMotion ? 0 : gradual ? 1100 : 450,
+    }).then(() => setViewportReady(true));
     initialized.current = true;
   }
   useEffect(() => {
@@ -293,6 +294,7 @@ function Graph({
         <button onClick={() => frameGraph(false)}>Fit graph</button>
       </div>
       <div className="graph-canvas" ref={canvas}
+        style={{ visibility: viewportReady ? "visible" : "hidden" }}
         onWheelCapture={() => setFollow(false)}
         onPointerDownCapture={event => { pointerStart.current = {x:event.clientX,y:event.clientY}; }}
         onPointerMoveCapture={event => {
@@ -328,7 +330,7 @@ function Graph({
 export function IdeaGraph(props: Parameters<typeof Graph>[0]) {
   return (
     <ReactFlowProvider>
-      <Graph {...props} />
+      <Graph key={props.snapshot.run.id} {...props} />
     </ReactFlowProvider>
   );
 }
