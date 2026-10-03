@@ -1,5 +1,7 @@
 # Problem Contract
 
+Project context and where this fits in the pipeline: [../context/agents.md](../context/agents.md#problem-contract).
+
 The `ProblemContract` is the frozen, validated hand-off between the Lean formalization step and the evolutionary loop. Everything the loop needs to know about a problem is in this object, and nothing in it changes during a run.
 
 Code: `src/the_pigeon_holes/models/problem_contract.py` (contract and builder), `src/the_pigeon_holes/execution/signature_extractor.py` (LLM extraction and verification), `src/the_pigeon_holes/llm/prompts.py` (prompt rendering).
@@ -93,6 +95,12 @@ Not verified:
 - **Instance values.** Keys are checked, but not whether values have the right Python types or sizes.
 - **Seed behaviour.** The seed is parsed, not run. Running it on the instance needs the execution sandbox, which is not built yet.
 - **Pydantic classes.** The extractor produces `pydantic_classes_code`, but the contract does not store it (see Known gaps).
+
+## Authoritative version
+
+The instance-bearing contract described on this page is the correct version. It includes `instance_id` and `instance`, which bind the general Lean-derived signature to the one instance a run solves.
+
+[evolution.md](evolution.md) lists the contract's inputs without `instance_id` or `instance`, so it does not account for instances yet. It also describes resource limits as per-candidate, whereas `ResourceLimits` here is supplied per run. When the two documents conflict, keep this version: the instance fields and the per-run resource limits. Update `evolution.md` to match rather than dropping these fields from the contract.
 
 ## Known gaps
 
