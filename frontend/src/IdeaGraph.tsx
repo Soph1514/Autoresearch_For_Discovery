@@ -109,6 +109,7 @@ function Graph({
     (i) => visibleIds.includes(i.id) || i.id === selected,
   );
   const canvas = useRef<HTMLDivElement>(null);
+  const pointerStart = useRef<{x:number;y:number}|null>(null);
   const flow = useReactFlow();
   const initialized = useRef(false);
   const previousRun = useRef(snapshot.run.id);
@@ -313,16 +314,22 @@ function Graph({
         </label>
         <button onClick={() => frameGraph(false)}>Fit graph</button>
       </div>
-      <div className="graph-canvas" ref={canvas}>
+      <div className="graph-canvas" ref={canvas}
+        onWheelCapture={() => setFollow(false)}
+        onPointerDownCapture={event => { pointerStart.current = {x:event.clientX,y:event.clientY}; }}
+        onPointerMoveCapture={event => {
+          const start = pointerStart.current;
+          if (start && Math.hypot(event.clientX-start.x,event.clientY-start.y)>5) setFollow(false);
+        }}
+        onPointerUpCapture={() => { pointerStart.current = null; }}
+        onPointerCancelCapture={() => { pointerStart.current = null; }}
+      >
         <ReactFlow
           nodes={[...waveNodes, ...nodes]}
           edges={edges}
           nodeTypes={nodeTypes}
           onNodeClick={(_, n) => onSelect(n.id)}
           onNodeDragStart={() => setFollow(false)}
-          onMove={(e) => {
-            if (e) setFollow(false);
-          }}
           nodesDraggable={false}
           nodesConnectable={false}
           elementsSelectable
