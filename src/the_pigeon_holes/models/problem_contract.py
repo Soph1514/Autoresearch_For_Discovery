@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import ast
+from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Any
 
 from the_pigeon_holes.execution.signature_extractor import (
     FUNCTION_NAME,
@@ -36,6 +38,8 @@ class ProblemContract:
     lean_specification: str
     solve_signature: str
     seed_program: str
+    instance_id: str
+    instance: Mapping[str, Any]
     optimisation_goal: OptimisationGoal
     resource_limits: ResourceLimits
     evaluator_version: str
@@ -56,23 +60,37 @@ def build_problem_contract(
     natural_language_spec: str,
     lean_specification: str,
     seed_program: str,
+    instance_id: str,
+    instance: Mapping[str, Any],
     resource_limits: ResourceLimits,
     evaluator_version: str,
     model: str,
     client=None,
 ) -> ProblemContract:
-    """Derive the interface and optimisation goal from the Lean statement and build a contract.
+    """Derive the general interface from the Lean statement and bind it to one instance.
 
-    Raises ValueError if the extracted interface is inconsistent or the seed program is invalid.
+    The Lean statement is general, so the signature is the same for every instance.
+    `instance` supplies the concrete data for one run; its keys must match the
+    signature's parameter names.
+
+    Raises ValueError if the extracted interface is inconsistent, the seed is invalid,
+    or the instance does not match the signature.
     """
     interface = extract_signature(lean_specification, model=model, client=client)
     verify_interface_syntax(interface)
     validate_seed_program(seed_program)
+    expected = [p.name for p in interface.parameters]
+    if sorted(instance) != sorted(expected):
+        raise ValueError(
+            f"instance keys {sorted(instance)} do not match signature parameters {sorted(expected)}"
+        )
     return ProblemContract(
         natural_language_spec=natural_language_spec,
         lean_specification=lean_specification,
         solve_signature=interface.signature_str,
         seed_program=seed_program,
+        instance_id=instance_id,
+        instance=dict(instance),
         optimisation_goal=interface.optimisation_goal,
         resource_limits=resource_limits,
         evaluator_version=evaluator_version,

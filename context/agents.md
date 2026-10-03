@@ -17,13 +17,30 @@ Preserve the original pipeline. Focus the novel contribution on diversified, eli
 7. **Solution and elite archive:** retain verified winners across diverse niches and select them as parents for further experiments.
 8. **Feedback and stopping:** return rejected attempts and experimental feedback to idea generation; return the best valid solution when time or cost limits are reached.
 
+## Problem contract
+
+The `ProblemContract` is the frozen hand-off from Lean formalization (step 2) to the evolutionary loop (steps 3–5). It binds the general Lean statement to one concrete instance and holds everything the loop needs for a run: the Python `solve` signature, a seed program, the instance, the optimisation goal (primary metric, aggregation, tie-breakers), resource limits, and the evaluator version.
+
+- The Lean statement is general, so the `solve` signature is the same for every instance. Candidates are never specialised to an instance.
+- The contract is built by `build_problem_contract` in `src/the_pigeon_holes/models/problem_contract.py`, which extracts and verifies the signature from Lean and validates the seed and instance.
+- The code-generation prompt includes the block from `render_solve_contract` in `src/the_pigeon_holes/llm/prompts.py`.
+
+Full definition, verification scope and known gaps: [../docs/problem_contract.md](../docs/problem_contract.md).
+
 ## Evolution principles
+
+For the detailed and authoritative evolution-loop design, including executable
+candidate generation, dynamic islands, elite and novelty archives, and stopping
+rules, see [../docs/evolution.md](../docs/evolution.md). That document supersedes this file only
+for evolution-specific behavior. In particular, evolutionary generation emits
+the hypothesis and complete `solve(...)` implementation atomically; it is not a
+separate idea-to-code translation stage.
 
 - Ideas are hypotheses; elite status requires measured experimental evidence.
 - Preserve strong candidates across behavioral niches rather than only one global winner.
 - Diversity should reflect mechanisms or observed performance, not merely different wording.
 - Candidate records should retain hypotheses, parent IDs, code versions, validity, scores, costs, and experimental evidence, including failures.
-- Keep the specification and evaluator fixed during a run; periodic changes to the Lean specification are not an agreed requirement.
+- Keep the specification and evaluator fixed during a run; periodic changes to the Lean specification are not an agreed requirement. The problem contract enforces this by being frozen.
 - Aim to retain reusable algorithms, not just a good object for one instance.
 
 ## Diagrams

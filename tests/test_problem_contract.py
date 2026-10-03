@@ -18,6 +18,7 @@ from the_pigeon_holes.models.problem_contract import (
 SEED = "def solve(items: list[int], capacity: int) -> list[bool]:\n    return [False] * len(items)\n"
 LEAN = "def solve (items : List Nat) (capacity : Nat) : List Bool -- maximise total_value"
 GOAL = OptimisationGoal(MetricGoal("total_value", "maximize"), "mean")
+INSTANCE = {"items": [3, 4, 5], "capacity": 7}
 
 
 def _mock_client(input_dict):
@@ -56,6 +57,8 @@ def _build(client, seed=SEED):
         natural_language_spec="Pick items under capacity.",
         lean_specification=LEAN,
         seed_program=seed,
+        instance_id="knapsack-01",
+        instance=INSTANCE,
         resource_limits=ResourceLimits(2.0, 512, 100),
         evaluator_version="v1",
         model="claude-sonnet-5-5",
@@ -79,6 +82,8 @@ def test_contract_is_frozen():
         lean_specification=LEAN,
         solve_signature="def solve() -> int:",
         seed_program="def solve(): ...",
+        instance_id="knapsack-01",
+        instance=INSTANCE,
         optimisation_goal=GOAL,
         resource_limits=ResourceLimits(2.0, 512, 100),
         evaluator_version="v1",
@@ -92,6 +97,8 @@ def test_build_contract_from_lean_statement():
     contract = _build(client)
     assert contract.solve_signature == "def solve(items: list[int], capacity: int) -> list[bool]:"
     assert contract.optimisation_goal == GOAL
+    assert contract.instance_id == "knapsack-01"
+    assert contract.instance == INSTANCE
     assert contract.resource_limits == ResourceLimits(2.0, 512, 100)
     assert client.messages.create.call_args.kwargs["model"] == "claude-sonnet-5-5"
 
@@ -128,6 +135,22 @@ def test_build_rejects_unknown_direction():
         _build(client)
 
 
+def test_build_rejects_instance_not_matching_signature():
+    client = _mock_client(_tool_output())
+    with pytest.raises(ValueError, match="do not match signature parameters"):
+        build_problem_contract(
+            natural_language_spec="x",
+            lean_specification=LEAN,
+            seed_program=SEED,
+            instance_id="bad",
+            instance={"items": [1]},
+            resource_limits=ResourceLimits(2.0, 512, 100),
+            evaluator_version="v1",
+            model="claude-sonnet-5-5",
+            client=client,
+        )
+
+
 def test_build_rejects_invalid_seed():
     client = _mock_client(_tool_output())
     with pytest.raises(ValueError, match="seed_program"):
@@ -140,6 +163,8 @@ def test_render_includes_signature_and_objective():
         lean_specification=LEAN,
         solve_signature="def solve(jobs: list[int]) -> int:",
         seed_program=SEED,
+        instance_id="jobs-03",
+        instance={"jobs": []},
         optimisation_goal=OptimisationGoal(
             MetricGoal("makespan", "minimize"), "worst_case", (MetricGoal("idle_time", "minimize"),)
         ),
