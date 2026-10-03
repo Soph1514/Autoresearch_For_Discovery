@@ -4,9 +4,23 @@ import copy
 import time
 from datetime import datetime, timezone
 from uuid import uuid4
-from the_pigeon_holes.evolution.engine import EvolutionEngine
 from the_pigeon_holes.evolution.loop import EvolutionLoop
-from the_pigeon_holes.evolution.models import EvolutionConfig, EvolutionLimits
+from the_pigeon_holes.evolution.models import (
+    CandidateEvaluation,
+    EvolutionConfig,
+    EvolutionLimits,
+    EvolutionState,
+    GenerationFailure,
+    ProgramCandidate,
+)
+from .contracts import (
+    ControlAcknowledgement,
+    ControlAction,
+    EVENT_TYPES,
+    InvalidControlTransition,
+    SCHEMA_VERSION,
+    TERMINAL_STATUSES,
+)
 from .demo import demo_contract, DemoGenerator, DemoEvaluator
 
 
@@ -54,22 +68,30 @@ class LabRun:
                 "evaluatorVersion": "pigou-analytic-demo-v1",
                 "signature": "def solve() -> float:", "formalVerification": "Not performed",
                 "maxTokens": 160, "maxTimeSeconds": 60,
-            }}, "ideas": [], "experiments": [], "elites": [], "logs": [], "sequence": 0}
+            }}, "ideas": [], "experiments": [], "elites": [], "logs": [],
+            "generationFailures": [], "schemaVersion": SCHEMA_VERSION, "sequence": 0}
 
     @property
     def id(self):
         return self.snapshot["run"]["id"]
 
     def emit(self, kind, payload):
+        if kind not in EVENT_TYPES:
+            raise ValueError(f"unsupported event type: {kind}")
         payload = copy.deepcopy(payload)
         self.snapshot["sequence"] += 1
-        event = {"schemaVersion": 1, "runId": self.id, "eventId": str(uuid4()),
+        event = {"schemaVersion": SCHEMA_VERSION, "runId": self.id, "eventId": str(uuid4()),
                  "sequence": self.snapshot["sequence"], "timestamp": now(), "type": kind, "payload": payload}
         if kind == "run_status_changed":
             self.snapshot["run"].update(payload)
         else:
-            key, identity = {"idea_created": ("ideas", "id"), "experiment_updated": ("experiments", "id"),
-                             "elite_changed": ("elites", "niche"), "log_added": ("logs", "id")}[kind]
+            key, identity = {
+                "idea_created": ("ideas", "id"),
+                "experiment_updated": ("experiments", "id"),
+                "elite_changed": ("elites", "niche"),
+                "log_added": ("logs", "id"),
+                "generation_failed": ("generationFailures", "requestId"),
+            }[kind]
             records = self.snapshot[key]
             index = next((i for i, record in enumerate(records) if record[identity] == payload[identity]
                           and (kind != "elite_changed" or record["ideaId"] == payload["ideaId"])), None)
@@ -84,7 +106,7 @@ class LabRun:
         self.emit("log_added", {"id": str(uuid4()), "timestamp": now(), "category": category,
                                 "message": message, "ideaId": idea_id})
 
-    def candidate(self, candidate):
+    def candidate(self, candidate: ProgramCandidate):
         if any(i["id"] == candidate.id for i in self.snapshot["ideas"]):
             return
         operation = {"mutate": "mutation", "crossover": "merge", "repair": "repair",
@@ -101,7 +123,7 @@ class LabRun:
             "status": "running", "valid": None, "metrics": {}, "feedback": "Evaluation pending."})
         self.log("candidate", f"{candidate.operator.value}: {candidate.hypothesis}", candidate.id)
 
-    def evaluation(self, result):
+    def evaluation(self, result: CandidateEvaluation):
         record = {"id": "eval-"+result.candidate_id, "ideaId": result.candidate_id,
             "status": "completed" if result.valid else "failed", "valid": result.valid,
             "metrics": dict(result.metrics), "feedback": "; ".join(result.failure_reasons) if not result.valid
@@ -112,6 +134,28 @@ class LabRun:
             return
         self.emit("experiment_updated", record)
         self.log("verify" if result.valid else "failure", record["feedback"], result.candidate_id)
+
+    def candidate_created(self, candidate: ProgramCandidate) -> None:
+        self.candidate(candidate)
+
+    def evaluation_started(self, candidate: ProgramCandidate) -> None:
+        self.candidate(candidate)
+
+    def evaluation_completed(self, evaluation: CandidateEvaluation) -> None:
+        self.evaluation(evaluation)
+
+    def generation_failed(self, failure: GenerationFailure) -> None:
+        self.emit("generation_failed", {
+            "requestId": failure.request_id,
+            "generation": failure.generation,
+            "error": failure.error,
+            "inputTokens": failure.usage.input_tokens,
+            "outputTokens": failure.usage.output_tokens,
+        })
+        self.log("generation_failure", failure.error)
+
+    def state_committed(self, state: EvolutionState) -> None:
+        self.state(state)
 
     def state(self, state):
         # Engine decides elites and islands. Publish invalid/static-rejected candidates too.
@@ -147,30 +191,52 @@ class LabRun:
             finally:
                 self.active_clock.resume()
 
-    def pause(self):
-        if self.snapshot["run"]["status"] == "running":
+    def control(self, action: ControlAction) -> ControlAcknowledgement:
+        status = self.snapshot["run"]["status"]
+        applied = False
+        if action == "pause" and status == "running":
             self.gate.clear()
             self.emit("run_status_changed", {"status": "pausing"})
-
-    def resume(self):
-        if self.snapshot["run"]["status"] in ("paused", "pausing"):
+            applied = True
+        elif action == "pause" and status not in ("pausing", "paused"):
+            raise InvalidControlTransition(f"cannot pause a run in {status!r} state")
+        elif action == "resume" and status in ("paused", "pausing"):
             self.gate.set()
             self.emit("run_status_changed", {"status": "running"})
-
-    def stop(self):
-        if self.task and not self.task.done():
+            applied = True
+        elif action == "resume" and status != "running":
+            raise InvalidControlTransition(f"cannot resume a run in {status!r} state")
+        elif action == "stop" and status not in TERMINAL_STATUSES and status != "stopping":
             self.emit("run_status_changed", {"status": "stopping"})
-            self.task.cancel()
+            if self.task and not self.task.done():
+                self.task.cancel()
+            applied = True
+        return {
+            "schemaVersion": SCHEMA_VERSION,
+            "runId": self.id,
+            "action": action,
+            "applied": applied,
+            "status": self.snapshot["run"]["status"],
+        }
+
+    def pause(self) -> ControlAcknowledgement:
+        return self.control("pause")
+
+    def resume(self) -> ControlAcknowledgement:
+        return self.control("resume")
+
+    def stop(self) -> ControlAcknowledgement:
+        return self.control("stop")
 
     async def run(self):
         try:
             self.log("start", "Real evolution engine; deterministic demo generator and analytic demo evaluator. No LLM calls.")
             config = EvolutionConfig(min_islands=2, max_islands=4, max_batch_size=8, max_tokens_per_request=10)
             loop = EvolutionLoop(config=config, limits=EvolutionLimits(max_tokens=160, max_time_seconds=60),
-                generator=DemoGenerator(self.checkpoint, self.log, self.delay),
-                evaluator=DemoEvaluator(self.candidate, self.evaluation, self.delay),
+                generator=DemoGenerator(self.log, self.delay),
+                evaluator=DemoEvaluator(self.delay), observer=self,
+                checkpoint=self.checkpoint,
                 clock=self.active_clock)
-            loop.engine = ObservedEngine(config, self.state)
             outcome = await loop.run(demo_contract())
             self.log("complete", f"Stopped: {outcome.stop_reason.value}; {outcome.tokens_used} demo tokens, {outcome.generations_completed} generations.")
             self.emit("run_status_changed", {"status": "completed", "endedAt": now()})
@@ -182,20 +248,3 @@ class LabRun:
         except Exception as error:
             self.log("error", str(error))
             self.emit("run_status_changed", {"status": "failed", "endedAt": now()})
-
-
-class ObservedEngine(EvolutionEngine):
-    """Observation only: policy and state transitions delegate to the original engine."""
-    def __init__(self, config, publish):
-        super().__init__(config)
-        self.publish = publish
-
-    def initialise(self, *args, **kwargs):
-        state = super().initialise(*args, **kwargs)
-        self.publish(state)
-        return state
-
-    def apply_generation(self, *args, **kwargs):
-        state = super().apply_generation(*args, **kwargs)
-        self.publish(state)
-        return state

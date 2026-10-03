@@ -150,6 +150,8 @@ export class MockResearchClient implements ResearchClient {
       experiments: [],
       elites: [],
       logs: [],
+      generationFailures: [],
+      schemaVersion: 1,
       sequence: 0,
     };
     this.log("start", "Demo: Pigou network, unit demand. Known target: 4/3.");
@@ -168,20 +170,32 @@ export class MockResearchClient implements ResearchClient {
     };
   }
   async pauseRun(id: string) {
-    if (this.require(id).run.status !== "running") return;
-    this.emit({ type: "run_status_changed", payload: { status: "pausing" } });
-    this.log("control", "Pause requested; active experiments will finish.");
-    this.settle();
+    const state = this.require(id);
+    const applied = state.run.status === "running";
+    if (applied) {
+      this.emit({ type: "run_status_changed", payload: { status: "pausing" } });
+      this.log("control", "Pause requested; active experiments will finish.");
+      this.settle();
+    }
+    return { schemaVersion: 1 as const, runId: id, action: "pause" as const,
+      applied, status: this.require(id).run.status };
   }
   async resumeRun(id: string) {
-    if (this.require(id).run.status !== "paused") return;
-    this.emit({ type: "run_status_changed", payload: { status: "running" } });
-    this.log("control", "Lab resumed.");
-    this.pump();
+    const state = this.require(id);
+    const applied = state.run.status === "paused" || state.run.status === "pausing";
+    if (applied) {
+      this.emit({ type: "run_status_changed", payload: { status: "running" } });
+      this.log("control", "Lab resumed.");
+      this.pump();
+    }
+    return { schemaVersion: 1 as const, runId: id, action: "resume" as const,
+      applied, status: this.require(id).run.status };
   }
   async stopRun(id: string) {
     const s = this.require(id);
-    if (["completed", "stopped", "failed"].includes(s.run.status)) return;
+    if (["completed", "stopped", "failed", "stopping"].includes(s.run.status))
+      return { schemaVersion: 1 as const, runId: id, action: "stop" as const,
+        applied: false, status: s.run.status };
     this.emit({ type: "run_status_changed", payload: { status: "stopping" } });
     this.clear();
     for (const e of s.experiments.filter((e) => e.status === "running"))
@@ -195,6 +209,8 @@ export class MockResearchClient implements ResearchClient {
       type: "run_status_changed",
       payload: { status: "stopped", endedAt: new Date().toISOString() },
     });
+    return { schemaVersion: 1 as const, runId: id, action: "stop" as const,
+      applied: true, status: this.require(id).run.status };
   }
   private pump() {
     if (this.state?.run.status !== "running") return;

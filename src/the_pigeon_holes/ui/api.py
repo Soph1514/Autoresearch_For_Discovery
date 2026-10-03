@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from .bridge import LabRun
+from .contracts import InvalidControlTransition, TERMINAL_STATUSES
 
 runs: dict[str, LabRun] = {}
 
@@ -65,8 +66,10 @@ async def control(run_id: str, action: str):
     run = get_run(run_id)
     if action not in ('pause', 'resume', 'stop'):
         raise HTTPException(404, 'Unknown command')
-    getattr(run, action)()
-    return {"status": run.snapshot['run']['status']}
+    try:
+        return run.control(action)
+    except InvalidControlTransition as error:
+        raise HTTPException(409, str(error)) from error
 
 
 @app.get('/api/runs/{run_id}/events')
@@ -87,6 +90,8 @@ async def events(run_id: str, request: Request, after: int = 0):
             for event in pending:
                 cursor = event['sequence']
                 yield f"id: {cursor}\ndata: {json.dumps(event)}\n\n"
+            if run.snapshot['run']['status'] in TERMINAL_STATUSES:
+                return
             try:
                 await asyncio.wait_for(run.wake.wait(), timeout=15)
             except TimeoutError:

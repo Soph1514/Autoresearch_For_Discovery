@@ -4,6 +4,7 @@ import type {
   Run,
   Snapshot,
   ResearchEvent,
+  ControlAcknowledgement,
 } from "./contracts";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -37,8 +38,16 @@ export class HttpResearchClient implements ResearchClient {
       body: JSON.stringify({ mode: "demo" }),
     });
   }
-  getSnapshot(id: string): Promise<Snapshot> {
-    return request("/runs/" + encodeURIComponent(id));
+  async getSnapshot(id: string): Promise<Snapshot> {
+    const snapshot = await request<Snapshot>("/runs/" + encodeURIComponent(id));
+    if (
+      snapshot.schemaVersion !== 1 ||
+      snapshot.run?.id !== id ||
+      !Number.isInteger(snapshot.sequence) ||
+      !Array.isArray(snapshot.generationFailures)
+    )
+      throw Error("Unsupported research snapshot; refresh the application.");
+    return snapshot;
   }
   subscribe(
     id: string,
@@ -68,11 +77,17 @@ export class HttpResearchClient implements ResearchClient {
             "experiment_updated",
             "elite_changed",
             "log_added",
+            "generation_failed",
             "run_status_changed",
           ].includes(event.type)
         )
           throw Error("Unsupported research event");
         listener(event as ResearchEvent);
+        if (
+          event.type === "run_status_changed" &&
+          ["stopped", "completed", "failed"].includes(event.payload.status)
+        )
+          stream.close();
       } catch {
         stream.close();
         onConnection?.(
@@ -83,12 +98,18 @@ export class HttpResearchClient implements ResearchClient {
     return () => stream.close();
   }
   async pauseRun(id: string) {
-    await request(`/runs/${encodeURIComponent(id)}/pause`, { method: "POST" });
+    return request<ControlAcknowledgement>(`/runs/${encodeURIComponent(id)}/pause`, {
+      method: "POST",
+    });
   }
   async resumeRun(id: string) {
-    await request(`/runs/${encodeURIComponent(id)}/resume`, { method: "POST" });
+    return request<ControlAcknowledgement>(`/runs/${encodeURIComponent(id)}/resume`, {
+      method: "POST",
+    });
   }
   async stopRun(id: string) {
-    await request(`/runs/${encodeURIComponent(id)}/stop`, { method: "POST" });
+    return request<ControlAcknowledgement>(`/runs/${encodeURIComponent(id)}/stop`, {
+      method: "POST",
+    });
   }
 }

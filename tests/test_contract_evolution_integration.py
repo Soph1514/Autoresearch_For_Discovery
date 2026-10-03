@@ -1,18 +1,17 @@
 """Focused handoff check from contract preparation into evolution ports."""
 
 import asyncio
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from the_pigeon_holes.evolution import (
-    CandidateDraft,
     CandidateEvaluation,
     EvolutionConfig,
     EvolutionLimits,
     EvolutionLoop,
-    GenerationResult,
     StopReason,
-    TokenUsage,
 )
+from the_pigeon_holes.llm import AnthropicGeneratorConfig, AnthropicProgramGenerator
 from the_pigeon_holes.models.problem_contract import ResourceLimits, build_problem_contract
 
 
@@ -57,27 +56,41 @@ def test_structured_contract_reaches_generation_and_evaluation_ports():
         client=_extractor_client(),
     )
 
-    class Generator:
-        async def generate(self, requests):
-            assert len(requests) == 1
-            assert "class Item(BaseModel)" in requests[0].prompt
-            assert secret_label not in requests[0].prompt
-            return (
-                GenerationResult(
-                    request_id=requests[0].id,
-                    usage=TokenUsage(4, 6),
-                    draft=CandidateDraft(
-                        hypothesis="Count the supplied items.",
-                        predicted_effect="Return a finite score for every case.",
-                        falsification_condition="A case cannot be processed.",
-                        mechanism_tags=("count",),
-                        source_code=(
-                            "def solve(items: list[Item]) -> int:\n"
-                            "    return len(items)\n"
-                        ),
-                    ),
+    async def create_candidate(**kwargs):
+        prompt = kwargs["messages"][0]["content"]
+        assert "class Item(BaseModel)" in prompt
+        assert secret_label not in prompt
+        block = SimpleNamespace(
+            type="tool_use",
+            name="submit_candidate",
+            input={
+                "hypothesis": "Count the supplied items.",
+                "predicted_effect": "Return a finite score for every case.",
+                "falsification_condition": "A case cannot be processed.",
+                "mechanism_tags": ["count"],
+                "source_code": (
+                    "def solve(items: list[Item]) -> int:\n"
+                    "    return len(items)\n"
                 ),
-            )
+            },
+        )
+        return SimpleNamespace(
+            content=[block],
+            stop_reason="tool_use",
+            usage=SimpleNamespace(input_tokens=4, output_tokens=6),
+        )
+
+    provider = SimpleNamespace(
+        messages=SimpleNamespace(create=create_candidate),
+    )
+    generator = AnthropicProgramGenerator(
+        AnthropicGeneratorConfig(
+            model="test-model",
+            max_attempts=1,
+            max_concurrency=1,
+        ),
+        client=provider,
+    )
 
     class Evaluator:
         async def evaluate(self, candidates, problem):
@@ -106,7 +119,7 @@ def test_structured_contract_reaches_generation_and_evaluation_ports():
                 max_tokens_per_request=10,
             ),
             limits=EvolutionLimits(max_tokens=10),
-            generator=Generator(),
+            generator=generator,
             evaluator=Evaluator(),
         ).run(contract)
     )
