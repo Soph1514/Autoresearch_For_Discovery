@@ -17,6 +17,7 @@ Applies to all four teammates and coding agents working on this hackathon reposi
 - Coordinate ownership across the four teammates. Agree on shared interfaces early and flag overlapping file changes before starting work.
 - Keep each pull request focused and easy to review. Explain what changed, why, and how it was checked; get another teammate's review before merging.
 - Use version control consistently: make small, focused commits with clear, concise messages describing the change. Avoid vague messages such as "updates" or "fix stuff".
+- Regularly pull the latest changes from `main` into your feature branch, especially before starting work and opening a pull request. Commit or stash local changes first, and resolve conflicts promptly.
 - Do not adopt TDD for now. Use focused checks where needed to verify behavior, especially candidate validity and benchmark evaluation.
 - Add only files needed for the agreed feature. Avoid boilerplate, redundant documentation, generated clutter, and filler content. Keep temporary outputs and local artifacts out of commits.
 - Before requesting review, inspect the diff, run the relevant checks, and remove accidental or unrelated changes. Never commit credentials or secrets.

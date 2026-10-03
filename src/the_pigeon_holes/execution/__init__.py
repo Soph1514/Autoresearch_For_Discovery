@@ -1,1 +1,1 @@
-"""Candidate Python generation and isolated execution."""
+"""Execution subsystem — sandbox running, signature extraction, and result capture."""
