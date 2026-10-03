@@ -14,4 +14,3 @@ dist/
 **/.lake/
 runs/*
 !runs/.gitkeep
-uv.lock
