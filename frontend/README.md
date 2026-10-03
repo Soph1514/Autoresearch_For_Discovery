@@ -29,4 +29,4 @@ npm test
 npm run build
 ```
 
-Tests cover pause/drain/resume, lineage and elite transitions, rejected candidates, event replay/duplicates/gaps, stop cancellation, and the analytic routing witness. Auto overview starts enabled and gently zooms out as the graph grows. Manual pan or zoom disables it; enable it again to resume automatic framing. New candidates appear in one-second reveal batches, organized by generation. Inactive branches fade but remain clickable, with reduced motion preferences respected. **Compact inactive** shrinks inactive nodes but retains their ancestry and selection.
+Tests cover pause/drain/resume, lineage and elite transitions, rejected candidates, event replay/duplicates/gaps, stop cancellation, and the analytic routing witness. Auto overview starts enabled and gently zooms out as the graph grows. Manual pan or zoom disables it; enable it again to resume automatic framing. New candidates appear in one-second reveal batches, organized by generation. Inactive branches fade but remain clickable, with reduced motion preferences respected. Nodes enter with opacity-only fades; no sliding or scaling entrance effects.

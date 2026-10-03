@@ -202,10 +202,6 @@ a {
   outline: 2px solid #59896a;
   outline-offset: 4px;
 }
-.idea-box.compact {
-  width: 164px;
-  height: 86px;
-}
 .node-meta {
   display: flex;
   justify-content: space-between;
@@ -579,9 +575,6 @@ dialog::backdrop {
 .node-score {
   margin-top: 5px;
 }
-.idea-box.compact .node-operation {
-  font-size: 8px;
-}
 .wave-label {
   font:
     10px ui-monospace,
@@ -615,10 +608,6 @@ dialog::backdrop {
 @keyframes idea-arrive {
   from {
     opacity: 0;
-    transform: translateY(9px) scale(0.975);
-  }
-  to {
-    transform: translateY(0) scale(1);
   }
 }
 @keyframes edge-arrive {

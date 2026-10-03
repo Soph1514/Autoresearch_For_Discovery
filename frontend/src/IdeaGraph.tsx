@@ -26,7 +26,6 @@ type IdeaNode = Node<{
   elite: boolean;
   inactive: boolean;
   score?: number;
-  compact: boolean;
   parents: string[];
   select: () => void;
 }>;
@@ -35,14 +34,14 @@ function IdeaBox({ data, selected, id }: NodeProps<IdeaNode>) {
   useEffect(() => {
     const frame = requestAnimationFrame(() => updateInternals(id));
     return () => cancelAnimationFrame(frame);
-  }, [id, data.compact, updateInternals]);
+  }, [id, updateInternals]);
   return (
     <button
       type="button"
       onClick={data.select}
       aria-label={`Inspect idea ${id}: ${data.title}`}
       aria-pressed={selected}
-      className={`idea-box ${data.elite ? "elite" : ""} ${data.inactive ? "inactive" : ""} ${selected ? "selected" : ""} ${data.compact ? "compact" : ""}`}
+      className={`idea-box ${data.elite ? "elite" : ""} ${data.inactive ? "inactive" : ""} ${selected ? "selected" : ""}`}
     >
       <Handle type="target" position={Position.Top} />
       <div className="node-meta">
@@ -61,7 +60,6 @@ function IdeaBox({ data, selected, id }: NodeProps<IdeaNode>) {
         {data.parents.length > 0 &&
           ` · ${data.parents.map((p) => "#" + p).join(" + ")}`}
       </div>
-      {!data.compact && (
         <div className="node-score">
           {data.score != null
             ? `PoA ${data.score.toFixed(4)}`
@@ -71,7 +69,6 @@ function IdeaBox({ data, selected, id }: NodeProps<IdeaNode>) {
                 ? "Cancelled"
                 : "Awaiting evaluation"}
         </div>
-      )}
       <Handle type="source" position={Position.Bottom} />
     </button>
   );
@@ -89,8 +86,7 @@ function Graph({
   selected: string | null;
   onSelect: (id: string) => void;
 }) {
-  const [compact, setCompact] = useState(true),
-    [follow, setFollow] = useState(true);
+  const [follow, setFollow] = useState(true);
   // Coalesce arriving candidates into readable reveal beats, without delaying logs.
   const [visibleIds, setVisibleIds] = useState<string[]>([]);
   const pendingIdeas = useRef(snapshot.ideas);
@@ -132,16 +128,7 @@ function Graph({
       })
       .map((i) => i.id),
   );
-  const structuralKey = visibleIdeas
-    .map(
-      (i) =>
-        i.id +
-        ":" +
-        i.parents.join(",") +
-        ":" +
-        (compact && inactiveIds.has(i.id)),
-    )
-    .join("|");
+  const structuralKey = visibleIdeas.map(i => i.id + ":" + i.parents.join(",")).join("|");
   const positions = useMemo(() => {
     const g = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
     g.setGraph({
@@ -153,8 +140,8 @@ function Graph({
     });
     visibleIdeas.forEach((i) =>
       g.setNode(i.id, {
-        width: compact && inactiveIds.has(i.id) ? 164 : 202,
-        height: compact && inactiveIds.has(i.id) ? 86 : 112,
+        width: 202,
+        height: 112,
       }),
     );
     visibleIdeas.forEach((i) => i.parents.forEach((p) => g.setEdge(p, i.id)));
@@ -165,13 +152,13 @@ function Graph({
         return [
           i.id,
           {
-            x: p.x - (compact && inactiveIds.has(i.id) ? 82 : 101),
-            y: p.y - (compact && inactiveIds.has(i.id) ? 43 : 56),
+            x: p.x - 101,
+            y: p.y - 56,
           },
         ];
       }),
     );
-  }, [structuralKey, compact]);
+  }, [structuralKey]);
   const nodes: IdeaNode[] = visibleIdeas.map((i) => {
     const experiment = snapshot.experiments
       .filter((e) => e.ideaId === i.id)
@@ -180,8 +167,8 @@ function Graph({
     return {
       id: i.id,
       type: "idea",
-      width: compact && inactiveIds.has(i.id) ? 164 : 202,
-      height: compact && inactiveIds.has(i.id) ? 86 : 112,
+      width: 202,
+      height: 112,
       position: positions[i.id],
       selected: i.id === selected,
       ariaLabel: `Idea ${i.id}: ${i.title}, ${operationLabel(i.operation)}`,
@@ -194,7 +181,6 @@ function Graph({
         elite,
         inactive: inactiveIds.has(i.id),
         score: experiment?.valid ? experiment.metrics.poa : undefined,
-        compact: compact && inactiveIds.has(i.id),
       },
     };
   });
@@ -296,14 +282,6 @@ function Graph({
         <span className="legend">
           ★ Elite <span>● Exploring</span> <span>○ Inactive</span>
         </span>
-        <label>
-          <input
-            type="checkbox"
-            checked={compact}
-            onChange={(e) => setCompact(e.target.checked)}
-          />{" "}
-          Compact inactive
-        </label>
         <label>
           <input
             type="checkbox"
