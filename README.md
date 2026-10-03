@@ -3,6 +3,18 @@
 Algorithm autoresearch framework based on [the agreed design](context/agents.md).
 The first implemented step is 0/1 knapsack specification validation.
 
+Generate its formalisation with:
+
+```python
+from the_pigeon_holes import formalise
+
+generated = formalise("knapsack")
+```
+
+Set `LEA_ROOT` to the Lea checkout if it is not at `../lea-prover`. Set
+`LEA_MODEL` to override Lea's default Gemini model. The function writes
+`problems/knapsack/Generated.lean` and returns that path.
+
 ```text
 src/the_pigeon_holes_autoresearch/
     formalization/lea.py       Lea CLI integration
