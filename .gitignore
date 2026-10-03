@@ -10,7 +10,7 @@ dist/
 .env
 .env.*
 !.env.example
-lean/.lake/
+**/.lake/
 runs/*
 !runs/.gitkeep
 uv.lock

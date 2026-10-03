@@ -1,44 +1,112 @@
 # The Pigeon Holes
 
-An algorithm autoresearch framework scaffold based on [the project context](context/agents.md) and its [MVP pipeline](context/autoresearch-pipeline.png). The pipeline and benchmarks are not implemented yet.
+Algorithm autoresearch framework based on [the agreed design](context/agents.md).
+The first implemented step is 0/1 knapsack specification validation.
 
-## Directory structure
+Generate its formalisation with:
 
-```text
-context/                       Original requirements and diagrams
-src/the_pigeon_holes/
-    pipeline/                  Research loop, feedback, time and cost limits
-    models/                    Shared problem, idea, candidate and result records
-    specification/             Natural-language problem, objective and constraints
-    formalization/             Lean translation and checker feedback integration
-    evolution/                 Parent selection, fresh ideas, mutation, combination,
-                               novelty checks and behavioral diversity
-    execution/                 Python generation and isolated candidate execution
-    judging/                   Deterministic validity/scoring and LLM assessment
-    archive/                   Verified elites by niche, evidence and lineage graph
-    llm/                       Model client adapters and prompt handling
-lean/
-    ThePigeonHoles/             Lean definitions and specification support
-problems/                      Benchmark problem packages
-configs/                       Run settings, model choices and budget settings
-docs/                          Design, reproducibility and presentation materials
-runs/                          Generated run artifacts (ignored by Git)
-pyproject.toml                 Existing Python project metadata and dependencies
-uv.lock                        Dependency lockfile
+```python
+from the_pigeon_holes import formalise
+
+generated, instance = formalise("knapsack")
 ```
 
-Each future `problems/<name>/` package should keep its natural-language specification, Lean specification, fixed deterministic evaluator, instances and baseline algorithms together. This keeps the framework reusable across optimization and construction problems.
+The first run downloads the pinned Lea checkout under `runs/lea-prover`. Set
+`LEA_ROOT` to use an existing checkout instead. Set `LEA_MODEL` to override
+Lea's default Gemini model. The function writes
+`problems/knapsack/Generated.lean` and returns its path together with the original
+natural-language instance. The next pipeline step receives those two values.
 
-Each future `runs/<run_id>/` directory should retain configuration, random seeds, fixed specification/evaluator snapshots, generated code versions, constructed objects, validity results, scores, costs and experimental evidence, including failed attempts.
+The formalizer benchmark uses natural-language statements and trusted Lean 4
+references from [ProofNetVerif](https://huggingface.co/datasets/PAug/ProofNetVerif).
+Generate predictions with Lea once (the default is ten unique validation items):
 
-## Component boundaries
+```sh
+uv run python -m the_pigeon_holes.formalization.generate_benchmark
+```
 
-The `pipeline` coordinates specification → formalization → evolution → execution → judging → archive, feeding experimental results and preserved elites back into evolution. It stops at the time or cost limit and returns the best valid solution.
+Generation saves each result immediately and resumes without repeating API calls.
+Use `--limit 0` to generate every unique item:
 
-The `models` records should distinguish an algorithm idea, its generated implementation and its output object. They should retain hypotheses, parent IDs, code versions and measured evidence. The `archive` maintains lineage as a graph because combination can have multiple parents; the [separate lineage diagram](context/idea-lineage-tree.png) is a tree-style view of that graph.
+```sh
+uv run python -m the_pigeon_holes.formalization.generate_benchmark --limit 0
+```
 
-Lean checking validates the formal specification, not generated Python correctness. Deterministic executable validity checks gate acceptance; LLM assessments cannot override failure. Elite status requires measured evidence, with winners preserved across behavioral niches. Specifications and evaluators stay fixed during a run.
+Then run BEq+ locally as often as needed without making API calls:
 
-## Development setup
+```sh
+uv run python -m the_pigeon_holes.formalization.benchmark
+```
 
-Install the existing dependencies with `uv sync`. Source packages live under `src/`; no CLI, build configuration, Lean toolchain or runnable research loop has been added yet. Add installation and run instructions as those components are implemented.
+The default Lea model uses `ANTHROPIC_API_KEY` from the repository's ignored
+`.env` file. Use `LEA_MODEL` to select another Lea-supported provider.
+
+```text
+src/the_pigeon_holes/
+    formalization/lea.py       Lea CLI integration
+    formalization/beq_plus.py  Bidirectional semantic-equivalence checker
+    formalization/validate.py  Compilation and cheating check
+    specification/            Problem loading
+    models/                   Shared records
+    evolution/                Idea generation and selection
+    execution/                Candidate implementation and execution
+    judging/                  Validity and objective scoring
+    archive/                  Elites, evidence and lineage
+    pipeline/                 Research loop and budgets
+    llm/                      Shared model integration
+problems/
+    lea_task.txt              Shared Lea formalization contract
+    lean/                     Shared pinned Lean and mathlib project
+problems/knapsack/
+    problem.txt               General natural-language problem
+    instance.txt              Concrete instance to solve
+    Generated.lean            Lea-generated general specification
+    test_validation.py        Runs this problem's Lean validation
+context/                      Requirements and diagrams
+configs/                      Run settings
+runs/                         Generated evidence (ignored by Git)
+tests/                        Validator and integration checks
+```
+
+## Setup and run
+
+Install Python dependencies with `uv sync`, and install [elan](https://github.com/leanprover/elan)
+for Lean. Prepare the problem's Lean project:
+
+```sh
+cd problems/lean
+lake update
+lake exe cache get Mathlib.Algebra.BigOperators.Group.Finset.Basic
+lake build
+cd ../..
+```
+
+If macOS rejects the cache executable, use
+`lake env lean --run .lake/packages/mathlib/Cache/Main.lean get Mathlib.Algebra.BigOperators.Group.Finset.Basic`
+from the same Lean directory.
+
+Validate the generated specification:
+
+```sh
+uv run python -m the_pigeon_holes.formalization.validate \
+  problems/knapsack
+```
+
+For NL formalization, use [Lea's prover](https://vida-nyu.github.io/Lea/).
+Clone the linked prover repository outside this project and install its dependencies:
+
+```sh
+git clone https://github.com/darturi/lea-prover.git ../lea-prover
+git -C ../lea-prover checkout 2709009dca410c1fc4d8de55f4e272f715b18334
+uv sync --project ../lea-prover
+```
+
+The application validator compiles `Generated.lean` and rejects `sorry`, `admit`,
+and custom `axiom` declarations when no reference exists. ProofNetVerif is a
+separate statement-formalization benchmark and permits an omitted theorem proof.
+
+Run tests, including real Lean checks after setup:
+
+```sh
+LEAN_TEST_LAKE=lake PYTHONPATH=src:. uv run python -m unittest discover -v
+```
