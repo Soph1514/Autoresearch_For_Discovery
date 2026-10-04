@@ -7,8 +7,8 @@ See docs/known-problems.md for the supported variant and qualification.
 from __future__ import annotations
 
 from the_pigeon_holes.models.problem_contract import EvaluationCase, FitnessFunctionRef, ProblemContract
-from .base import CaseFitness
-from .registry import source_sha256
+from the_pigeon_holes.fitness.base import CaseFitness
+from the_pigeon_holes.fitness.registry import source_sha256
 
 MAX_CUT_FITNESS_REF = FitnessFunctionRef("max-cut", "exact-v1", source_sha256(__file__))
 MAX_VERTICES = 4096

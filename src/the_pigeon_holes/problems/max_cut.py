@@ -1,6 +1,6 @@
 """Built-in max-cut construction instances and baseline."""
 
-from the_pigeon_holes.fitness.max_cut import MAX_CUT_FITNESS_REF
+from problems.max_cut.fitness import MAX_CUT_FITNESS_REF
 from the_pigeon_holes.models.problem_contract import (
     EvaluationCase, EvaluationSuite, InterfaceDefinition, MetricGoal,
     OptimisationGoal, Parameter, ProblemContract, ResourceLimits,

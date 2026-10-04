@@ -5,7 +5,7 @@ from fractions import Fraction
 
 import pytest
 
-from the_pigeon_holes.fitness.autocorrelation import (
+from problems.autocorrelation.fitness import (
     AUTOCORRELATION_FITNESS_REF,
     AutocorrelationFitnessFunction,
 )

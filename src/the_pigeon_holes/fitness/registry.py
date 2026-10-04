@@ -62,12 +62,12 @@ class FitnessFunctionRegistry:
 
 
 def builtin_registry() -> FitnessFunctionRegistry:
-    from .autocorrelation import AutocorrelationFitnessFunction
-    from .bin_packing import BinPackingFitnessFunction
-    from .knapsack import KnapsackFitnessFunction
-    from .tsp import TspFitnessFunction
-    from .max_cut import MaxCutFitnessFunction
-    from .makespan import MakespanFitnessFunction
+    from problems.autocorrelation.fitness import AutocorrelationFitnessFunction
+    from problems.bin_packing.fitness import BinPackingFitnessFunction
+    from problems.knapsack.fitness import KnapsackFitnessFunction
+    from problems.tsp.fitness import TspFitnessFunction
+    from problems.max_cut.fitness import MaxCutFitnessFunction
+    from problems.makespan.fitness import MakespanFitnessFunction
 
     registry = FitnessFunctionRegistry()
     registry.register(AutocorrelationFitnessFunction())

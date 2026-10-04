@@ -14,7 +14,7 @@ from the_pigeon_holes.execution.signature_extractor import (
     OptimisationGoal,
     Parameter,
 )
-from the_pigeon_holes.fitness.bin_packing import (
+from problems.bin_packing.fitness import (
     BIN_PACKING_FITNESS_REF,
     EXCESS_CAP,
     FILL_BINS,

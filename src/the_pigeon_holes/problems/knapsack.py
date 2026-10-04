@@ -1,6 +1,6 @@
 """Built-in knapsack construction instances and baseline."""
 
-from the_pigeon_holes.fitness.knapsack import KNAPSACK_FITNESS_REF
+from problems.knapsack.fitness import KNAPSACK_FITNESS_REF
 from the_pigeon_holes.models.problem_contract import (
     EvaluationCase, EvaluationSuite, InterfaceDefinition, MetricGoal,
     OptimisationGoal, Parameter, ProblemContract, ResourceLimits,

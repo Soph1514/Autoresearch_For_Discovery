@@ -6,7 +6,7 @@ Merged from `origin/eo_loop` (`36fadc0`) into the custom-research integration on
 
 ## Implemented
 
-- `fitness/autocorrelation.py`: exact integer validation and rational `c1` scoring.
+- `problems/autocorrelation/fitness.py`: exact integer validation and rational `c1` scoring.
   Candidates return nonnegative integers representing `q_i / 2**40`. Length must
   be between 2 and 4096; bools/floats, all-zero and tiny-integral outputs fail.
   Its registered identity is `autocorrelation` version `exact-v1`, with a source

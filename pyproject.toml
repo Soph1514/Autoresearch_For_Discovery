@@ -14,7 +14,12 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["src", "."]
+include = ["the_pigeon_holes*", "problems", "problems.*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+problems = ["*/problem.txt", "*/instances.json"]
 
 [dependency-groups]
 dev = [
@@ -22,7 +27,7 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 testpaths = ["tests"]
 
 

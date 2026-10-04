@@ -22,7 +22,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from the_pigeon_holes.fitness.autocorrelation import PUBLISHED_UPPER_BOUND  # noqa: E402
+from problems.autocorrelation.fitness import PUBLISHED_UPPER_BOUND  # noqa: E402
 from the_pigeon_holes.pipeline.runner import PROBLEMS, run_problem  # noqa: E402
 
 

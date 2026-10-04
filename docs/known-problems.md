@@ -53,7 +53,9 @@ Autocorrelation retains its existing exact scorer and
 ## Instances and qualification
 
 Each new family has three fixed instances in `problems/<name>/instances.json`,
-alongside its `problem.txt`. The knapsack suite includes the existing five-item
+alongside its `problem.txt` and `fitness.py`. Folder names use underscores
+(`bin_packing`, `max_cut`); CLI problem names retain their hyphens.
+The knapsack suite includes the existing five-item
 instance from `problems/knapsack/instance.txt`.
 
 These twelve fixtures are local examples of established problems, not downloaded
@@ -80,6 +82,11 @@ be nonempty. Each new suite uses the sum of its case objectives, with no tie-bre
 Behavioral descriptors are bounded diversity features, not extra fitness terms.
 Scores are integers in the fitness functions; the existing evolution interface
 converts aggregate metrics to floats.
+
+The shared fitness protocol and registry remain in
+`src/the_pigeon_holes/fitness/`. Problem-specific scoring lives exclusively in
+`problems/<name>/fitness.py`; imports use, for example,
+`from problems.knapsack.fitness import KnapsackFitnessFunction`.
 
 ## Running
 

@@ -1,6 +1,6 @@
 """Built-in makespan construction instances and baseline."""
 
-from the_pigeon_holes.fitness.makespan import MAKESPAN_FITNESS_REF
+from problems.makespan.fitness import MAKESPAN_FITNESS_REF
 from the_pigeon_holes.models.problem_contract import (
     EvaluationCase, EvaluationSuite, InterfaceDefinition, MetricGoal,
     OptimisationGoal, Parameter, ProblemContract, ResourceLimits,

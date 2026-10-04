@@ -11,7 +11,7 @@ import asyncio
 import pytest
 
 from the_pigeon_holes.execution.container_runner import preflight
-from the_pigeon_holes.fitness.bin_packing import BinPackingFitnessFunction, bins_used
+from problems.bin_packing.fitness import BinPackingFitnessFunction, bins_used
 from the_pigeon_holes.pipeline.runner import (
     PROBLEMS,
     compare_to_best_known,

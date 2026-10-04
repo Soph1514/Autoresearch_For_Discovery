@@ -16,8 +16,8 @@ from the_pigeon_holes.models.problem_contract import (
     ProblemContract,
 )
 
-from .base import CaseFitness
-from .registry import source_sha256
+from the_pigeon_holes.fitness.base import CaseFitness
+from the_pigeon_holes.fitness.registry import source_sha256
 
 FITNESS_FUNCTION_ID = "bin-packing"
 FITNESS_FUNCTION_VERSION = "exact-v1"

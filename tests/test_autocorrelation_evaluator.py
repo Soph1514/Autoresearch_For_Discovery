@@ -12,7 +12,7 @@ from the_pigeon_holes.evaluation.production import SandboxCandidateEvaluator
 from the_pigeon_holes.evolution.models import EvolutionOperator, ProgramCandidate
 from the_pigeon_holes.execution.container_runner import ContainerLimits, preflight
 from the_pigeon_holes.execution.signature_extractor import MetricGoal, OptimisationGoal, Parameter
-from the_pigeon_holes.fitness.autocorrelation import (
+from problems.autocorrelation.fitness import (
     AUTOCORRELATION_FITNESS_REF, AutocorrelationFitnessFunction,
 )
 from the_pigeon_holes.models.problem_contract import (

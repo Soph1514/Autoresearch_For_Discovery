@@ -83,7 +83,7 @@ src/the_pigeon_holes/
     models/                   Shared records
     evolution/                Idea generation and selection
     execution/                Candidate implementation and execution
-    fitness/                  Trusted validity and objective scoring
+    fitness/                  Shared fitness interface and trusted registry
     problems/                 Built-in problem contracts
     archive/                  Elites, evidence and lineage
     pipeline/                 Research loop and budgets
@@ -91,6 +91,7 @@ src/the_pigeon_holes/
 problems/
     lea_task.txt              Shared Lea formalization contract
     lean/                     Shared pinned Lean and mathlib project
+    <problem>/fitness.py      Problem-specific validity and objective scoring
 problems/knapsack/
     problem.txt               General natural-language problem
     instance.txt              Concrete instance to solve

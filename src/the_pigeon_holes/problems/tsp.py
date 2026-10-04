@@ -1,6 +1,6 @@
 """Built-in tsp construction instances and baseline."""
 
-from the_pigeon_holes.fitness.tsp import TSP_FITNESS_REF
+from problems.tsp.fitness import TSP_FITNESS_REF
 from the_pigeon_holes.models.problem_contract import (
     EvaluationCase, EvaluationSuite, InterfaceDefinition, MetricGoal,
     OptimisationGoal, Parameter, ProblemContract, ResourceLimits,

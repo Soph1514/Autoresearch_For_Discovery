@@ -18,7 +18,7 @@ from the_pigeon_holes.execution.signature_extractor import (
     OptimisationGoal,
     Parameter,
 )
-from the_pigeon_holes.fitness.bin_packing import BIN_PACKING_FITNESS_REF
+from problems.bin_packing.fitness import BIN_PACKING_FITNESS_REF
 from the_pigeon_holes.models.problem_contract import (
     EvaluationCase,
     EvaluationSuite,
