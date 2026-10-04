@@ -1,4 +1,4 @@
-# The Bird Nest
+# Project BirdNest
 
 An autoresearch framework that uses an evolutionary algorithm to search for algorithms that solve any Lean-modelled problem. You describe a problem in plain language and give it instances. The system
 turns the statement into a checked Lean specification, compiles that into a frozen
