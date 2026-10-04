@@ -1,229 +1,86 @@
-# The Pigeon Holes
+# The Bird Nest
 
-Algorithm autoresearch framework based on [the agreed design](context/agents.md).
-The AntiAI UI supports hosted Lean generation, checking/repair and fidelity review,
-plus custom evolution through the generic Docker evaluator and registered
-fitness functions for six problem families, alongside a separate routing demo. Start with
-the [UI setup](frontend/README.md);
-see [integration status](docs/ui-integration-status.md) for remaining gaps.
+An autoresearch framework that uses an evolutionary algorithm to search for algorithms that solve any Lean-modelled problem. You describe a problem in plain language and give it instances. The system
+turns the statement into a checked Lean specification, compiles that into a frozen
+scorer, and then uses an LLM to propose Python candidates. Each candidate runs in an
+isolated Docker worker and gets an exact score. Every idea, its parents and its score
+are recorded in a lineage graph, so you can see how the search got where it did.
 
-The Lea CLI path below supports 0/1 knapsack specification validation.
-
-For problems without a registered scorer, the [Lean fitness compiler](docs/fitness-compiler.md)
-formalizes once, compiles a verified evaluator, and scores candidates directly in
-Lean with kernel checks. Existing scorers take precedence. Both frontend composers
-expose this through **Prepare research**: choose a known problem family or
-**New problem — Lean compiler**, enter cases, then start research with the saved scorer. Replay the
-saved subset-sum example without API calls:
-
-```sh
-uv run python scripts/run_lean_fitness.py
-```
-
-The end-to-end Python entry point is
-`the_pigeon_holes.pipeline.runner.autoresearch`: it takes the problem name,
-statement, instance, run directory, Lean project and search model. The fallback
-does not prove that generated Lean faithfully translates the English statement.
-
-Generate its formalisation with:
-
-```python
-from the_pigeon_holes import formalise
-
-generated, instance = formalise("knapsack")
-```
-
-The first run downloads the pinned Lea checkout under `runs/lea-prover`. Set
-`LEA_ROOT` to use an existing checkout instead. Set `LEA_MODEL` to override
-the configured default Anthropic model. The function writes
-`problems/knapsack/Generated.lean` and returns its path together with the original
-natural-language instance. The next pipeline step receives those two values.
-
-The formalizer benchmark uses natural-language statements and trusted Lean 4
-references from [ProofNetVerif](https://huggingface.co/datasets/PAug/ProofNetVerif).
-Generate predictions with Lea once (the default is ten unique validation items):
-
-```sh
-uv run python -m the_pigeon_holes.formalization.generate_benchmark
-```
-
-Generation saves each result immediately and resumes without repeating API calls.
-Use `--limit 0` to generate every unique item:
-
-```sh
-uv run python -m the_pigeon_holes.formalization.generate_benchmark --limit 0
-```
-
-Generate the semantic-equivalence proofs separately:
-
-```sh
-uv run python -m the_pigeon_holes.formalization.generate_validation
-```
-
-Then check the saved Lean proofs locally as often as needed without making API calls:
-
-```sh
-uv run python -m the_pigeon_holes.formalization.benchmark
-```
-
-Run all three stages and record per-problem time, tokens, cost, and results in
-`problems/proofnetverif/results.csv`:
-
-```sh
-uv run python -m the_pigeon_holes.formalization.run_benchmark_pipeline
-```
-
-Add `--force` to regenerate existing paid artifacts and collect fresh end-to-end
-generation metrics.
-
-The default Lea model uses `ANTHROPIC_API_KEY` from the repository's ignored
-`.env` file. Use `LEA_MODEL` to select another Lea-supported provider.
-
-Each generated benchmark directory contains only the specification and its
-three Lean artifacts:
-
-```text
-problems/proofnetverif/valid/<problem>/
-    Spec.txt
-    Generated.lean
-    Reference.lean
-    Verification.lean
-```
-
-```text
-src/the_pigeon_holes/
-    formalization/lea.py       Lea CLI integration
-    formalization/benchmark.py Checks Lean semantic-equivalence proofs
-    formalization/validate.py  Compilation and cheating check
-    specification/            Problem loading
-    models/                   Shared records
-    evolution/                Idea generation and selection
-    execution/                Candidate implementation and execution
-    fitness/                  Shared fitness interface and trusted registry
-    problems/                 Built-in problem contracts
-    archive/                  Elites, evidence and lineage
-    pipeline/                 Research loop and budgets
-    llm/                      Shared model integration
-problems/
-    lea_task.txt              Shared Lea formalization contract
-    lean/                     Shared pinned Lean and mathlib project
-    <problem>/fitness.py      Problem-specific validity and objective scoring
-problems/knapsack/
-    problem.txt               General natural-language problem
-    instance.txt              Concrete instance to solve
-    Generated.lean            Lea-generated general specification
-    test_validation.py        Runs this problem's Lean validation
-context/                      Requirements and diagrams
-configs/                      Run settings
-runs/                         Generated evidence (ignored by Git)
-tests/                        Validator and integration checks
-```
-
-## Setup and run
-
-Install Python dependencies with `uv sync`, and install [elan](https://github.com/leanprover/elan)
-for Lean. Prepare the problem's Lean project:
-
-```sh
-cd problems/lean
-lake update
-lake exe cache get Mathlib.Algebra.BigOperators.Group.Finset.Basic
-lake build
-cd ../..
-```
-
-If macOS rejects the cache executable, use
-`lake env lean --run .lake/packages/mathlib/Cache/Main.lean get Mathlib.Algebra.BigOperators.Group.Finset.Basic`
-from the same Lean directory.
-
-Validate the generated specification:
-
-```sh
-uv run python -m the_pigeon_holes.formalization.validate \
-  problems/knapsack
-```
-
-For NL formalization, use [Lea's prover](https://vida-nyu.github.io/Lea/).
-Clone the linked prover repository outside this project and install its dependencies:
-
-```sh
-git clone https://github.com/darturi/lea-prover.git ../lea-prover
-git -C ../lea-prover checkout 2709009dca410c1fc4d8de55f4e272f715b18334
-uv sync --project ../lea-prover
-```
-
-The application validator compiles `Generated.lean` and rejects `sorry`, `admit`,
-and custom `axiom` declarations when no reference exists. ProofNetVerif is a
-separate statement-formalization benchmark and permits an omitted theorem proof.
-
-Run tests, including real Lean checks after setup:
-
-```sh
-LEAN_TEST_LAKE=lake PYTHONPATH=src:. uv run python -m unittest discover -v
-```
+![Idea lineage and best candidate for a Sidon-set run](context/hack01.jpeg)
 
 
-## Autocorrelation fitness function
+## How it works
 
-The generic runner also supports bin packing, 0/1 knapsack, symmetric TSP,
-weighted max cut and identical-machine makespan. See
-[known construction problems](docs/known-problems.md) for objective sources,
-instances, tests and commands. For example:
+1. **Problem.** A natural-language statement and a set of instances. The problem must be
+   Lean-modelled, which steps 2 and 3 produce and check. 
+2. **Formalize.** A fine-tuned Qwen3-4B model drafts a Lean statement of the problem.
+   Compiler errors are fed back for repair.
+3. **Check.** Lean 4.19 with Mathlib compiles the statement, using a pinned checker on Modal.
+   A fine-tuned Qwen classifier, also on Modal, scores whether the formal statement matches
+   the problem. A low score goes to human review and is not accepted automatically.
+4. **Compile.** Lean turns the checked specification into a frozen scorer for feasibility
+   and objective, with kernel-checked certificates. This runs locally, and no model is
+   called during scoring.
+5. **Propose.** The evolutionary algorithm selects parents from an archive of elite ideas,
+   mutates or combines them, and an LLM (called through the Anthropic API) writes the
+   Python `solve` candidates.
+6. **Evaluate.** Candidates run in isolated local Docker containers against fixed cases,
+   and scores are exact rationals.
+7. **Archive.** Elites, lineage and evidence are stored in SQLite. The engine page shows
+   the lineage graph and the best candidate.
 
-```sh
-uv run python scripts/run_problem.py --problem knapsack \
-  --model "$RESEARCH_MODEL" --max-minutes 5 --max-critic-calls 0
-```
+The whole pipeline is hosted on Modal. 
 
-These families use registered hand-written scorers. Automatic fitness-function
-generation is not implemented.
+## Background and gaps
 
-The generic evaluator executes candidates in Docker and passes their outputs to
-the registered, content-addressed autocorrelation fitness function. It uses exact
-rational scoring and supports `solve(n: int) -> list[int]` with mean `c1`
-minimization. Its identity is `autocorrelation` version `exact-v1`.
+The loop builds on prior work, and that work shows where automated mathematical search
+goes wrong:
 
-```sh
-docker build -t the-pigeon-holes/candidate-worker:v1 docker/worker
-PYTHONPATH=src .venv/bin/python scripts/run_autocorrelation.py \
-  --model "$RESEARCH_MODEL" --n 64 --max-tokens 32768 --max-minutes 5 \
-  --max-critic-calls 0
-```
+- **Misread problems.** Aletheia's Erdős-problem study found 63 solutions that were
+  technically correct, but only 13 answered the question Erdős intended. The rest were
+  valid under a literal reading of the statement, often trivially
+  ([Gemini Erdős case study](https://arxiv.org/html/2601.22401v1)).
+- **Loopholes.** AlphaEvolve showed that an LLM can evolve programs against an evaluator,
+  but its search exploited loopholes in the scorers, such as degenerate solutions and
+  overly forgiving scoring ([Tao et al.](https://arxiv.org/pdf/2511.02864)). It also
+  assumes a human writes the `evaluate` function
+  ([AlphaEvolve](https://arxiv.org/abs/2506.13131)).
+- **Human checking.** Results still depend on human judgement. ProofCouncil's agent was
+  evaluated on 30 open problems from researchers. Of the 21 solutions that received human
+  feedback, 5 were judged completely correct and 2 were promising pending verification
+  ([ProofCouncil](https://arxiv.org/abs/2607.09474)).
 
-Set `ANTHROPIC_API_KEY` and select a model first. This CLI is a numerical benchmark:
-its Lean contract is a placeholder. The custom UI requires real checked Lean with
-provenance. See [current evaluator status](docs/candidate-evaluator-plan.md) and
-[the reconciled TODO list](docs/pipeline-next-steps.md).
+This project addresses three gaps:
 
-## Sidon-set end-to-end demo
+- **Specification (misread problems).** The problem is written as a Lean statement, not
+  only prose. Lean compiles the statement, and a fine-tuned classifier scores whether it
+  matches the problem. A low score sends the statement to human review instead of
+  accepting it, so a literal misreading is caught before search starts. Checking the
+  statement does not prove that the generated Python is correct.
+- **Deterministic fitness (loopholes).** For problems with a Lean statement, the
+  compiler produces the scorer, with kernel-checked certificates for its objective. The
+  scorer is frozen with content hashes, and scoring rejects any artifact that has
+  changed. No model is called during scoring, so an LLM cannot talk its way to a higher
+  score. 
+- **Interpretability (human checking).** Every candidate is recorded with its hypothesis,
+  its parents, its validity and its exact score, including failures. Failed ideas stay
+  visible and cannot become elites. Exporting a run gives the full event log, the lineage
+  as a table, the best source and its witnesses, which can be rechecked independently.
+  A suspicious result can be traced back to how it was found, and a person can check the
+  evidence rather than trust a summary.
 
-Run `scripts/start_lab.sh` to start this checkout on localhost:5173 with its API on
-8000. It refuses occupied ports to avoid accidentally displaying another checkout.
-The compatible default research model is `claude-sonnet-4-6`; set the Anthropic key
-in the launching environment. Docker and the deployed Modal services are required
-for new custom runs. Saved runs remain viewable without fresh model calls.
+## Results
 
-`problems/autocorrelation/problem.txt` and `Specification.lean` define the open
-problem and finite witness-search contract. The reviewed specification was checked
-with the hosted pinned Lean 4.19 checker. It does not prove the analytic reduction,
-Python correctness, or the optimal constant. Natural-language Qwen generation is
-also available, but can need manual correction; compiler acceptance alone does not
-establish fidelity.
+![Results: scores and cost for five problems, Claude Opus 5.5 vs our GLM-5.3 pipeline](context/results.png)
 
-The engine supports direct `/engine.html?run=RUN_ID` links, saved history, live
-lineage, best-candidate inspection, witness plots and exact rational certificates.
-The custom form can enable bounded advisory critic calls sharing the generation
-token budget. Export all events, lineage, best source and independently recheck
-saved integer witnesses with:
+Our GLM-5.3 pipeline matched Claude Opus 5.5's score on all five benchmark problems
+(bin-packing, knapsack, TSP, max-cut and makespan). It reached the known optimum on four
+of them. The exception is bin-packing, where both arms scored 63 against a known optimum
+of 60. Across the five problems, GLM's spend up to the first run that matched Claude's
+score totals $1.31, against $3.33 for Claude's full run, about 61% lower.
 
-```sh
-PYTHONPATH=src .venv/bin/python scripts/export_run.py RUN_ID
-```
 
-See [the demo verification report](docs/demo-verification.md) for run links,
-measured results, limitations and a four-minute presentation outline. Exported
-runs can be imported into a fresh local store without executing their source:
+## Setup
 
-```sh
-PYTHONPATH=src .venv/bin/python scripts/import_run.py path/to/run.json
-```
+See [docs/setup.md](docs/setup.md) for installing dependencies, building the Lean project,
+and running the lab with `scripts/start_lab.sh`.
