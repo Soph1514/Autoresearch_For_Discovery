@@ -54,6 +54,7 @@ class ActiveRunClock:
 
 class LabRun:
     def __init__(self, delay=.8, *, contract=None, generator=None, evaluator=None, limits=None, config=None, store=None, provenance=None, critic=None, literature_review=False):
+        self.forest = None
         self.delay = delay
         self.contract = contract or demo_contract()
         self.custom = contract is not None
@@ -136,6 +137,7 @@ class LabRun:
     @classmethod
     def restore(cls, artifact, store):
         run = cls.__new__(cls)
+        run.forest = None
         run.store = store
         from .storage import contract_from_dict
         run.contract = contract_from_dict(artifact['contract'])
@@ -237,12 +239,16 @@ class LabRun:
 
     def candidate_created(self, candidate: ProgramCandidate) -> None:
         self.candidate(candidate)
+        if self.forest:
+            self.forest.candidate_created(self, candidate)
 
     def evaluation_started(self, candidate: ProgramCandidate) -> None:
         self.candidate(candidate)
 
     def evaluation_completed(self, evaluation: CandidateEvaluation) -> None:
         self.evaluation(evaluation)
+        if self.forest:
+            self.forest.evaluated(self, evaluation)
 
     def generation_failed(self, failure: GenerationFailure) -> None:
         self.evidence['generation_failures'][failure.request_id] = failure
@@ -254,6 +260,8 @@ class LabRun:
             "outputTokens": failure.usage.output_tokens,
         })
         self.log("generation_failure", failure.error)
+        if self.forest:
+            self.forest.failed_request(self, failure)
 
     def assessment_recorded(self, assessment: Assessment) -> None:
         self.emit("assessment_recorded", {
@@ -268,6 +276,8 @@ class LabRun:
 
     def state_committed(self, state: EvolutionState) -> None:
         self.state(state)
+        if self.forest:
+            self.forest.committed(self, state)
 
     def state(self, state):
         # Engine decides elites and islands. Publish invalid/static-rejected candidates too.
@@ -352,9 +362,14 @@ class LabRun:
                 self.generator.literature_context = research_context(self.literature)
                 self.log('literature', f"Review complete: {len(self.literature['sources'])} sources, {len(self.literature['queries'])} searches. Evolution keeps independent restarts.")
                 await self.checkpoint()
+            generator = self.generator if self.custom else DemoGenerator(self.log, self.delay)
+            evaluator = self.evaluator if self.custom else DemoEvaluator(self.delay)
+            if self.forest:
+                from .forest import PooledPort
+                generator, evaluator = PooledPort(generator, self.forest.pool), PooledPort(evaluator, self.forest.pool)
             loop = EvolutionLoop(config=self.config, limits=self.limits,
-                generator=self.generator if self.custom else DemoGenerator(self.log, self.delay),
-                evaluator=self.evaluator if self.custom else DemoEvaluator(self.delay), observer=self,
+                generator=generator, evaluator=evaluator, observer=self,
+                prepare_requests=(lambda requests: self.forest.prepare_requests(self, requests)) if self.forest else None,
                 checkpoint=self.checkpoint, clock=self.active_clock, require_valid_seed=self.require_valid_seed, critic=self.critic)
             outcome = await loop.run(self.contract)
             from .storage import encode
@@ -373,6 +388,8 @@ class LabRun:
             self.log("error", str(error))
             self.emit("run_status_changed", {"status": "failed", "endedAt": now()})
         finally:
+            if self.forest:
+                self.forest.finished(self)
             if self.custom:
                 close = getattr(self.generator, 'aclose', None)
                 if close:

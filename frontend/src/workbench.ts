@@ -22,7 +22,7 @@ mode.onchange = () => {
   leanTarget.hidden = mode.value !== 'formal';
   leanTarget.disabled = mode.value !== 'formal';
   if (mode.value !== 'formal' && leanTarget.selected) element<HTMLSelectElement>('attachment-target').value = 'problem';
-  form.querySelector('button.primary')!.textContent = mode.value === 'formal' ? 'Check Lean and generate instance JSON' : 'Generate Lean and instance JSON';
+  form.querySelector('button.primary')!.textContent = mode.value === 'formal' ? 'Check specification' : 'Prepare problem';
 };
 element<HTMLInputElement>('lean-file').onchange = async (event) => {
   const file = (event.target as HTMLInputElement).files?.[0];
@@ -67,7 +67,7 @@ function detail(title: string, text: string) {
 }
 form.onsubmit = async (event) => {
   event.preventDefault();
-  if (busy || !problem.value.trim() || !instance.value.trim()) return;
+  if (busy || !problem.value.trim()) return;
   clearHandoff?.();
   element('review-panel').hidden = true;
   document.querySelector<HTMLElement>('.workspace')!.hidden = false;
@@ -76,12 +76,12 @@ form.onsubmit = async (event) => {
   element('stop-formalization').hidden = false;
   element<HTMLButtonElement>('upload').disabled = true;
   element('problem-title').textContent = problem.value.split('\n')[0].slice(0, 120);
-  element('problem-sub').textContent = mode.value === 'formal' ? 'Existing Lean formulation' : 'Qwen / Claude fallback · generation + repair until Lean passes';
+  element('problem-sub').textContent = mode.value === 'formal' ? 'Existing Lean formulation' : 'Preparing your problem';
   element('validation-status').textContent = 'Processing…';
   element('run-state').textContent = 'Running';
   element('best').textContent = '—'; element('count').textContent = '0';
   element('lean-output').textContent = mode.value === 'formal' ? source.value : 'Generating Lean…';
-  detail('Preparing your formulation.', 'Hosted models may take a few minutes to start. Lean checking and fidelity scoring follow generation.');
+  detail('Preparing your formulation.', 'Preparing a specification and checking it. This can take a few minutes.');
   log('Submitted ' + (mode.value === 'formal' ? 'existing Lean' : 'natural-language problem'));
   element('elapsed').textContent = '00:00';
   const started = Date.now();
@@ -114,14 +114,14 @@ form.onsubmit = async (event) => {
 };
 
 function renderResult(result: Awaited<ReturnType<typeof formalize>>) {
-    element('problem-sub').textContent = `${result.generator} · ${result.generation_fallback || 'Lean checked'}`;
+    element('problem-sub').textContent = 'Specification prepared for review';
     element('lean-output').textContent = result.lean;
     element('count').textContent = String(result.attempts);
     element('best').textContent = result.fidelity?.p_faithful == null ? '—' : `${(result.fidelity.p_faithful * 100).toFixed(1)}%`;
-    const status = result.status === 'checked' ? 'Lean checked · fidelity accepted' : result.lean_checked ? 'Lean checked · review alignment' : 'Lean validation failed';
+    const status = result.status === 'checked' ? 'Specification checked' : result.lean_checked ? 'Specification checked · review needed' : 'Lean validation failed';
     element('validation-status').textContent = status;
     element('run-state').textContent = 'Complete';
-    detail(status, result.fidelity_error || (result.fidelity ? 'Fidelity: ' + result.fidelity.reason_code : result.diagnostics));
+    detail(status, result.fidelity_error || (result.fidelity ? 'Alignment: ' + result.fidelity.reason_code : result.diagnostics));
     if (result.diagnostics) log(result.diagnostics);
     log(status);
     if (result.formalization_id && result.lean_checked) {
@@ -160,7 +160,7 @@ if (savedId) {
     instance.value = artifact.input.instance || '';
     source.value = artifact.result.lean;
     element('problem-title').textContent = problem.value.split('\n')[0];
-    element('problem-sub').textContent = 'Saved specification · hosted checker provenance retained';
+    element('problem-sub').textContent = 'Saved specification';
     renderResult({...artifact.result, formalization_id: savedId, instance: artifact.input.instance,
       prepared_contract: artifact.prepared_contract});
   }).catch(error => { detail('Unable to load specification', String(error)); });

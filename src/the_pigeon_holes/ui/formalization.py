@@ -205,7 +205,7 @@ async def prepare(body: FormalizationInput, tools=None, progress=None, instance_
         await emit(stage='checked', attempt=attempts, lean=source, **checked)
         if checked['valid']:
             break
-        if hasattr(tools, 'repair'):
+        if hasattr(tools, 'repair') and not getattr(tools, 'fallback_reason', None):
             await emit(stage='repairing', attempt=attempts + 1, model='claude-opus-5-5')
             source = await tools.repair(body.problem, original_source, source, checked['diagnostics'])
             repaired_by_opus = True

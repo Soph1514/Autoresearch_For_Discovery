@@ -56,7 +56,7 @@ export type PreparedReview = {
 export function mountCustomResearch(host: HTMLElement, formalizationId: string, generated: InstanceReview = {}) {
   const hasInstance = Boolean(generated.instance?.trim());
   const controller = new AbortController();
-  host.innerHTML = `<h3>Review Lean and instance JSON</h3>
+  host.innerHTML = `<label class="field">Mathematician<input data-field="author" maxlength="120" placeholder="Your name (optional)"></label><h3>Review Lean and instance JSON</h3>
     <div class="formulation-review">
     <section ${generated.lean ? '' : 'hidden'}>
       <label class="field">General problem — Lean<textarea data-field="lean-review" rows="14" readonly aria-label="Checked Lean source"></textarea></label>
@@ -85,15 +85,17 @@ export function mountCustomResearch(host: HTMLElement, formalizationId: string, 
     <section data-review hidden></section>
     <p><a data-compiler hidden target="_blank" rel="noopener">View compiler result</a></p>
     <button type="button" data-action="refresh">Check evaluator availability</button>
+    <details><summary>Research settings</summary>
     <label class="field">Research time limit (seconds, optional)<input type="number" data-field="seconds" placeholder="No time cap" min="1"></label>
     <label class="field">Research API budget (USD)<input type="number" data-field="dollars" value="50" min="0.01" max="1000" step="0.01"></label>
     <p>Shared cap for literature search, generation and critic calls. Preparation and hosting are separate.</p>
-    <label class="field">Reasoning model<select data-field="model"><option value="claude-opus-5-5">Opus 5.5 · high reasoning</option><option value="claude-opus-4-6">Opus 4.6 · high reasoning</option><option value="claude-sonnet-4-6">Sonnet 4.6 · high reasoning</option></select></label>
+    <input type="hidden" data-field="model" value="claude-opus-5-5">
     <label><input type="checkbox" data-field="literature" checked> Search the literature before evolution</label>
     <label class="field">Output tokens per call (optional)<input type="number" data-field="output" placeholder="Model maximum" min="1" max="128000"></label>
     <label><input type="checkbox" data-field="execution"> Use the prepared contract's execution time limits</label>
     <label class="field">Token budget<input type="number" data-field="tokens" value="5000000" min="1" max="20000000"></label>
     <label class="field">Advisory critic calls<input type="number" data-field="critic" value="3" min="0" max="100"></label>
+    </details>
     <p><button type="button" data-action="start" disabled>Start research</button></p>`;
   const field = (name: string) => host.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(`[data-field="${name}"]`)!;
   host.querySelector<HTMLElement>('[data-description]')!.textContent = generated.instance || '';
@@ -141,7 +143,7 @@ export function mountCustomResearch(host: HTMLElement, formalizationId: string, 
     const target = event.target as HTMLElement;
     if (target.dataset.field === 'cases') (field('instance-reviewed') as HTMLInputElement).checked = false;
     prepare.disabled = working || !reviewed();
-    if (!['seconds', 'tokens', 'critic', 'dollars', 'model', 'literature', 'output', 'execution'].includes(target.dataset.field || '')) {
+    if (!['author', 'seconds', 'tokens', 'critic', 'dollars', 'model', 'literature', 'output', 'execution'].includes(target.dataset.field || '')) {
       contractId = null; start.disabled = true; compilerLink.hidden = true;
       if (target.dataset.field === 'fitness') objective.hidden = true;
     }
@@ -273,13 +275,13 @@ export function mountCustomResearch(host: HTMLElement, formalizationId: string, 
     if (working || !contractId) return;
     lock(true); status.textContent = 'Starting research…';
     try {
-      const run = await request('/api/runs', {mode: 'custom', contract_id: contractId,
+      const run = await request('/api/runs', {mode: 'custom', contract_id: contractId, author: field('author').value,
         max_cost_usd: Number(field('dollars').value), reasoning_model: field('model').value,
         literature_review: (field('literature') as HTMLInputElement).checked, max_critic_calls: Number(field('critic').value), max_tokens: Number(field('tokens').value), max_time_seconds: field('seconds').value ? Number(field('seconds').value) : null,
         max_output_tokens: field('output').value ? Number(field('output').value) : null,
         enforce_execution_time_limits: (field('execution') as HTMLInputElement).checked});
       sessionStorage.setItem('research-run', run.id);
-      window.location.assign('/engine.html');
+      window.location.assign(`/engine.html?run=${encodeURIComponent(run.id)}`);
     } catch (error) { status.textContent = error instanceof Error ? error.message : String(error); lock(false); }
   };
   // Populate both composers from the actual server registry, rather than assuming a family.

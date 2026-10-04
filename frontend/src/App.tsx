@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useResearch } from "./research";
 import { IdeaGraph, operationLabel } from "./IdeaGraph";
+import { CollaborationTraces, ForestView, TreeNavigation, useForest } from "./Forest";
+import type { Forest } from "./forestModel";
 import { Composer } from "./Composer";
 import type { PreparedReview } from './customResearch';
-import type { Run, Snapshot } from "./contracts";
+import type { Snapshot } from "./contracts";
 
 function PreparedDetails({id}: {id: string}) {
   const [prepared, setPrepared] = useState<PreparedReview | null>(null);
@@ -50,7 +52,7 @@ function RunProvenance({runId, status}: {runId: string; status: string}) {
       <p style={{whiteSpace: 'pre-wrap'}}>{summary.literature.text}</p>
       <ul>{summary.literature.sources.filter(s => /^https?:\/\//.test(s.url)).map(s => <li key={s.url}><a href={s.url} target="_blank" rel="noreferrer">{s.title}</a></li>)}</ul>
       <p>Source claims guide exploration; only the fixed evaluator decides validity and scores.</p></details>}
-    {summary.model && <span>Model: {summary.model}</span>}
+
     {summary.reported_tokens != null && <span>{summary.reported_tokens.toLocaleString()} reported evolution tokens · {summary.generations} generations · {summary.stop_reason?.replaceAll('_', ' ')}</span>}
   </div>;
 }
@@ -114,10 +116,12 @@ function OutputPreview({values}: {values: number[]}) {
   </p>;
 }
 function Inspector({
+  forest,
   snapshot,
   selected,
   onSelect,
 }: {
+  forest: Forest | null;
   snapshot: Snapshot;
   selected: string | null;
   onSelect: (id: string) => void;
@@ -150,6 +154,7 @@ function Inspector({
       <h3>Candidate hypothesis</h3>
       <p className="muted">Proposed by the generator. Only the recorded test cases were evaluated.</p>
       <ul className="idea-points">{idea.description.split(/(?<=\.)\s+(?=[A-Z])/).map((point, i) => <li key={i}>{point}</li>)}</ul>
+      <CollaborationTraces forest={forest} runId={snapshot.run.id} ideaId={idea.id}/>
       <h3>How it was formed</h3>
       <div className="parent-links">
         {idea.parents.length ? (
@@ -304,6 +309,8 @@ function ResearchLog({
 }
 export default function App() {
   const { snapshot, error, busy, command } = useResearch();
+  const { forest, error: forestError } = useForest();
+  const combined = new URLSearchParams(window.location.search).get("view") === "forest";
   const [composer, setComposer] = useState(false),
     [selected, setSelected] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -311,12 +318,7 @@ export default function App() {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
-  useEffect(() => setSelected(null), [snapshot?.run.id]);
-  const [history, setHistory] = useState<Run[]>([]);
-  useEffect(() => {
-    fetch('/api/runs').then(r => { if (!r.ok) throw Error('History unavailable'); return r.json(); })
-      .then(setHistory).catch(() => setHistory([]));
-  }, [snapshot?.run.id, snapshot?.run.status]);
+  useEffect(() => setSelected(new URLSearchParams(window.location.search).get("idea")), [snapshot?.run.id]);
   const custom = snapshot?.run.backend === "python";
   const status = snapshot?.run.status;
   const active =
@@ -333,7 +335,7 @@ export default function App() {
     : null;
   const winner = snapshot?.experiments.find(e => e.valid && e.metrics[metric] === best);
   useEffect(() => {
-    if (status && ['completed', 'stopped', 'failed'].includes(status) && winner) setSelected(winner.ideaId);
+    if (!new URLSearchParams(window.location.search).has('idea') && status && ['completed', 'stopped', 'failed'].includes(status) && winner) setSelected(winner.ideaId);
   }, [snapshot?.run.id, status]);
   const baseline = snapshot?.experiments.find(e => e.ideaId === 'candidate-000000' && e.valid)?.metrics[metric];
   const improvement = best !== null && baseline && baseline !== 0 ?
@@ -353,11 +355,11 @@ export default function App() {
       <header>
         <span className="wordmark">Research lab</span>
         <span className="demo-label">
-          {custom ? "PYTHON ENGINE · CUSTOM RESEARCH" : "PYTHON ENGINE · DEMO GENERATOR & EVALUATOR"}
+          {combined ? "CONNECTED IDEAS" : snapshot?.run.author || "RESEARCH"}
         </span>
         <button onClick={() => setComposer(true)}>＋ Add problem</button>
         <a href="/">Back to workbench ↗</a>
-        {active ? (
+        {!combined && (active ? (
           <>
             <button
               className="primary"
@@ -389,28 +391,23 @@ export default function App() {
           >
             {snapshot && !custom ? "Run demo again" : "Run routing demo"}
           </button>
-        )}
+        ))}
       </header>
       {error && (
         <p className="error" role="alert">
           {error}
         </p>
       )}
+      <TreeNavigation forest={forest} selected={snapshot?.run.id} combined={combined}/>
+      {forestError && <p className="error" role="alert">{forestError}</p>}
       <main>
-        {history.length > 0 && <nav className="run-history" aria-label="Saved runs">
-          <label htmlFor="run-history">Saved runs</label>
-          <select id="run-history" value={snapshot?.run.id || ''} onChange={e => window.location.assign(`/engine.html?run=${encodeURIComponent(e.target.value)}`)}>
-            <option value="" disabled>Select a research run</option>
-            {[...history].reverse().map(run => <option key={run.id} value={run.id}>{run.title} · {run.id.slice(0, 8)} · {run.status} · {new Date(run.startedAt).toLocaleString('en-GB')}</option>)}
-          </select>
-          {snapshot && <span className="badge">{snapshot.run.status} · {snapshot.sequence} saved events</span>}
-        </nav>}
+        {combined ? <ForestView forest={forest} onAdd={() => setComposer(true)}/> : <>
         <section className="intro">
           <div>
-            <div className="eyebrow">{custom ? "ALGORITHM RESEARCH" : "ROUTING GAMES / LOWER-BOUND SEARCH"}</div>
+            <div className="eyebrow">{snapshot?.run.backend === "python-demo" ? "ROUTING DEMO" : "RESEARCH"}</div>
             <h1>{snapshot?.run.title ?? "A space for branching ideas."}</h1>
             {custom && <p className="muted">Deterministic evaluation · {snapshot?.run.direction === 'maximize' ? 'higher' : 'lower'} {snapshot?.run.metricName || 'objective'} is better. Candidate scores do not prove global optimality.</p>}
-            {!custom && <><p className="muted">
+            {!custom && snapshot && <><p className="muted">
               Pigou network · unit demand · route delays ℓ₁(x) = x and ℓ₂(x) = c
             </p>
             <p className="source">
@@ -456,17 +453,22 @@ export default function App() {
           <>
             <div className="workspace">
               <IdeaGraph
+                connections={Object.fromEntries((snapshot.ideas).map(idea => [idea.id,
+                  forest?.bridges.filter(b => (b.sourceRunId === snapshot.run.id && b.sourceIdeaId === idea.id) ||
+                    (b.targetRunId === snapshot.run.id && b.targetIdeaId === idea.id)).length ?? 0]))}
                 winnerId={winner?.ideaId}
                 snapshot={snapshot}
                 selected={selected}
                 onSelect={setSelected}
               />
               <Inspector
+                forest={forest}
                 snapshot={snapshot}
                 selected={selected}
                 onSelect={setSelected}
               />
             </div>
+            <CollaborationTraces forest={forest} runId={snapshot.run.id}/>
             <ResearchLog snapshot={snapshot} onSelect={setSelected} />
           </>
         ) : (
@@ -486,9 +488,7 @@ export default function App() {
               Run routing demo
             </button>
             <p className="muted">
-              Use Add problem to generate or validate a Lean formulation.
-              <br />
-              Qwen fidelity scoring highlights formulations that need review.
+              Add a question or photograph to start a new research tree.
             </p>
           </section>
         )}
@@ -496,7 +496,7 @@ export default function App() {
         {snapshot && <p><a href={`/api/runs/${snapshot.run.id}/artifact`} download="research-run.json">Download run evidence</a></p>}
         {snapshot?.run.contract && (
           <details className="contract">
-            <summary>Problem contract · Python backend</summary>
+            <summary>Problem specification and evaluation</summary>
             {Object.entries(snapshot.run.contract).map(([key, value]) => (
               <div className="metric" key={key}>
                 <span>{key}</span>
@@ -507,11 +507,11 @@ export default function App() {
         )}
         <footer>
           <span>
-            All candidates preserved. Backend owns validity and archive
-            decisions.
+            Ideas, experiments, and connections are saved.
           </span>
-          <span>Python backend · saved run history</span>
+          <span>Independent evaluation · shared research</span>
         </footer>
+        </>}
       </main>
       {composer && <Composer onClose={() => setComposer(false)} />}
     </>

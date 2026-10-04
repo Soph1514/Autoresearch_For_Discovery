@@ -30,6 +30,7 @@ type IdeaNode = Node<{
   score?: number;
   metric: string;
   parents: string[];
+  connections: number;
   select: () => void;
 }>;
 function IdeaBox({ data, selected, id }: NodeProps<IdeaNode>) {
@@ -67,6 +68,7 @@ function IdeaBox({ data, selected, id }: NodeProps<IdeaNode>) {
               ? "Cancelled"
               : "Awaiting evaluation"}
       </div>
+      {data.connections > 0 && <small className="idea-connections">↗ {data.connections} cross-tree connection{data.connections > 1 ? "s" : ""}</small>}
       <Handle type="source" position={Position.Bottom} />
     </button>
   );
@@ -80,9 +82,11 @@ function Graph({
   selected,
   onSelect,
   winnerId,
+  connections = {},
 }: {
   snapshot: Snapshot;
   winnerId?: string;
+  connections?: Record<string, number>;
   selected: string | null;
   onSelect: (id: string) => void;
 }) {
@@ -152,7 +156,7 @@ function Graph({
       id: i.id,
       type: "idea",
       width: 202,
-      height: 112,
+      height: connections[i.id] ? 132 : 112,
       position: positions[i.id],
       selected: i.id === selected,
       ariaLabel: `Idea ${i.id}: ${i.title}, ${operationLabel(i.operation)}`,
@@ -161,6 +165,7 @@ function Graph({
         title: i.title,
         operation: i.operation,
         parents: i.parents,
+        connections: connections[i.id] ?? 0,
         status: experiment?.status ?? "proposed",
         elite,
         winner: i.id === winnerId,

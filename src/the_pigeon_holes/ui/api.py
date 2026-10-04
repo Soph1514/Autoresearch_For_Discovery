@@ -15,6 +15,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse, JSONResponse
 from pydantic import BaseModel, Field
 from .bridge import LabRun, now
+from .forest import ResearchForest
 from .formalization import FormalizationInput, prepare
 from .contracts import InvalidControlTransition, TERMINAL_STATUSES
 
@@ -30,6 +31,7 @@ from the_pigeon_holes.llm import AnthropicGeneratorConfig, AnthropicProgramGener
 
 store = ArtifactStore(os.environ.get('RESEARCH_STORE', 'runs/research.sqlite3'))
 runs: dict[str, LabRun] = {}
+forest = ResearchForest(store)
 syntheses: dict[str, asyncio.Task] = {}
 
 async def prepare_and_save(body, progress=None):
@@ -45,6 +47,7 @@ async def lifespan(app):
     for artifact in store.all('run'):
         restored = LabRun.restore(artifact, store)
         runs[restored.id] = restored
+        forest.attach(restored, restored=True)
     # A synthesis round cannot outlive its process; mark interrupted ones failed.
     restore_sessions(store)
     yield
@@ -80,6 +83,7 @@ async def optional_auth(request, call_next):
 class StartInput(BaseModel):
     mode: Literal['demo', 'custom']
     contract_id: str | None = None
+    author: str = Field(default='', max_length=120)
     max_critic_calls: int = Field(default=0, ge=0, le=100)
     max_tokens: int = Field(default=5000000, gt=0, le=20000000)
     max_cost_usd: float = Field(default=50, gt=0, le=1000, allow_inf_nan=False)
@@ -105,8 +109,6 @@ def health():
 
 @app.post('/api/runs', status_code=201)
 async def start_run(body: StartInput):
-    if any(r.task and not r.task.done() for r in runs.values()):
-        raise HTTPException(409, "Stop the active local run before starting another.")
     if body.mode == 'custom':
         artifact = store.get('contract', body.contract_id or '')
         if artifact is None:
@@ -128,9 +130,6 @@ async def start_run(body: StartInput):
             raise HTTPException(503, str(error)) from error
         except ValueError as error:
             raise HTTPException(422, str(error)) from error
-        if any(r.task and not r.task.done() for r in runs.values()):
-            await generator.aclose()
-            raise HTTPException(409, 'Stop the active local run before starting another.')
         from the_pigeon_holes.llm.critic import AnthropicCritic, CriticConfig
         critic = AnthropicCritic(CriticConfig(model='claude-sonnet-4-6'), budget=generator.budget) if body.max_critic_calls else None
         run = LabRun(contract=contract, generator=generator, evaluator=evaluator, critic=critic,
@@ -138,7 +137,10 @@ async def start_run(body: StartInput):
             store=store, provenance=artifact['provenance'], literature_review=body.literature_review)
     else:
         run = LabRun(store=store)
+    run.snapshot['run']['author'] = body.author.strip() or 'Anonymous mathematician'
+    run.persist()
     runs[run.id] = run
+    forest.attach(run)
     run.task = asyncio.create_task(run.run())
     def finished(task):
         if task.cancelled() and run.snapshot['run']['status'] not in TERMINAL_STATUSES:
@@ -146,6 +148,19 @@ async def start_run(body: StartInput):
             run.emit('run_status_changed', {'status': 'stopped', 'endedAt': now()})
     run.task.add_done_callback(finished)
     return copy.deepcopy(run.snapshot['run'])
+
+
+@app.get('/api/forest')
+async def forest_snapshot():
+    return forest.view()
+
+
+@app.get('/api/forest/bridges/{identity}')
+async def bridge_evidence(identity: str):
+    bridge = next((b for b in forest.bridges if b['id'] == identity), None)
+    if bridge is None:
+        raise HTTPException(404, 'Connection not found')
+    return copy.deepcopy(bridge)
 
 
 @app.get('/api/runs/{run_id}')

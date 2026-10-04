@@ -47,6 +47,7 @@ function useResearchState(client: ResearchClient) {
   const disconnect = useRef<() => void>(() => {});
   const epoch = useRef(0);
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("view") === "forest") return;
     const saved = new URLSearchParams(window.location.search).get("run") || sessionStorage.getItem("research-run");
     if (saved)
       void connect(saved).catch((error) => {
@@ -74,7 +75,10 @@ function useResearchState(client: ResearchClient) {
     dispatch({ type: "snapshot", snapshot });
     dispatch({ type: "error", error: null });
     sessionStorage.setItem("research-run", id);
-    window.history.replaceState(null, "", `/engine.html?run=${encodeURIComponent(id)}`);
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("run") !== id) url.searchParams.delete("idea");
+    url.searchParams.set("run", id);
+    window.history.replaceState(null, "", url);
     if (["completed", "stopped", "failed"].includes(snapshot.run.status)) return;
     let sequence = snapshot.sequence;
     let recovering = false;

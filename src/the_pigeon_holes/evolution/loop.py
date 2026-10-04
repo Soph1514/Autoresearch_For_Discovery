@@ -135,8 +135,10 @@ class EvolutionLoop:
         checkpoint: RunCheckpoint = _open_checkpoint,
         clock: Callable[[], float] = time.monotonic,
         require_valid_seed: bool = False,
+        prepare_requests: Callable[[Sequence[GenerationRequest]], Sequence[GenerationRequest]] | None = None,
         critic: CandidateCritic | None = None,
     ) -> None:
+        self.prepare_requests = prepare_requests
         self.require_valid_seed = require_valid_seed
         self.config = config
         self.limits = limits
@@ -223,6 +225,9 @@ class EvolutionLoop:
             if not requests:
                 stop_reason = StopReason.NO_AFFORDABLE_REQUEST
                 break
+
+            if self.prepare_requests is not None:
+                requests = self.prepare_requests(requests)
 
             try:
                 generated = tuple(await self._within_budget(self.generator.generate(requests), budget))

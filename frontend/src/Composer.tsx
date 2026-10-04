@@ -40,20 +40,20 @@ export function Composer({ onClose }: { onClose: () => void }) {
   }
   return <dialog className={result ? 'review-dialog' : ''} ref={dialog} onCancel={(e) => { if (busy) e.preventDefault(); else onClose(); }}>
     <form onSubmit={(e) => { e.preventDefault(); void submit(); }}>
-      <div className="dialog-head"><h2>Formalize your problem.</h2>
+      <div className="dialog-head"><h2>Start a new problem.</h2>
         <button type="button" disabled={busy} onClick={onClose} aria-label="Close problem composer">×</button></div>
-      <label className="field">Starting point (optional · defaults to natural language)
+      <label className="field">Starting point
         <select disabled={busy} value={mode} onChange={(e) => { setMode(e.target.value as typeof mode); if (attachmentTarget === 'lean') setAttachmentTarget('problem'); setResult(null); }}>
-          <option value="natural">Describe a problem — generate Lean</option>
-          <option value="formal">I already have a Lean formulation</option>
+          <option value="natural">Question or photo</option>
+          <option value="formal">Existing formal statement</option>
         </select>
       </label>
-      <label className="field">General problem, objective, and constraints (natural language)
+      <label className="field">Your question
         <textarea autoFocus required disabled={busy} rows={5} maxLength={16000} value={problem}
           onChange={(e) => { setProblem(e.target.value); setResult(null); }} />
       </label>
-      <label className="field">Specific instance to solve (natural language)
-        <textarea required disabled={busy} rows={4} maxLength={16000} value={instance}
+      <label className="field">Example or instance (optional)
+        <textarea disabled={busy} rows={4} maxLength={16000} value={instance}
           placeholder="For example: The weights are 3, 4, and 5. The capacity is 7."
           onChange={(e) => { setInstance(e.target.value); setResult(null); }} />
       </label>
@@ -100,26 +100,26 @@ export function Composer({ onClose }: { onClose: () => void }) {
       </label>
       <p className="muted">Photos, PDFs (up to 10 pages), and text files · 10 MB each. Review extracted text; OCR can misread handwriting and mathematical symbols.</p>
       {attachmentStatus && <p role="status">{attachmentStatus}</p>}
-      <p className="muted">We generate Lean for the general problem and JSON inputs for your instance. Review both before preparing research.</p>
-      {busy && !attachmentStatus.startsWith("Reading") && <p role="status">Generating and checking Lean… Hosted models may take a few minutes to start.</p>}
+      <p className="muted">Review the proposed specification and examples before starting research.</p>
+      {busy && !attachmentStatus.startsWith("Reading") && <p role="status">Preparing your problem… This can take a few minutes.</p>}
       {error && <p role="alert" className="notice">{error}</p>}
       {controller.current && <button type="button" onClick={() => controller.current?.abort()}>Stop</button>}
       {!result && progress && <section><p role="status">Attempt {progress.attempt}: {progress.stage}</p>
         {progress.lean && <textarea aria-label="Latest Lean source" readOnly rows={8} value={progress.lean} />}
         {progress.diagnostics && <pre>{progress.diagnostics}</pre>}</section>}
       {result && <section ref={resultSection} aria-label="Formalization result">
-        <h3>{result.status === "checked" ? "Lean checked · fidelity accepted" : result.lean_checked ? "Lean checked · alignment needs review" : "Lean validation failed"}</h3>
-        <p>{result.generator} · {result.attempts} check attempt(s)</p>
+        <h3>{result.status === "checked" ? "Specification checked" : result.lean_checked ? "Specification checked · review needed" : "Lean validation failed"}</h3>
+        <p>{result.attempts} check attempt(s)</p>
         {result.fidelity_error && <p role="alert">{result.fidelity_error}</p>}
-        {result.fidelity && <p>Fidelity score: {result.fidelity.p_faithful === null ? "Unavailable" : `${(result.fidelity.p_faithful * 100).toFixed(1)}%`} · {result.fidelity.reason_code}</p>}
+        {result.fidelity && <p>Alignment estimate: {result.fidelity.p_faithful === null ? "Unavailable" : `${(result.fidelity.p_faithful * 100).toFixed(1)}%`} · {result.fidelity.reason_code}</p>}
         {!result.lean_checked && <label className="field">Lean source<textarea readOnly rows={12} value={result.lean} /></label>}
         {result.diagnostics && <pre style={{ whiteSpace: "pre-wrap" }}>{result.diagnostics}</pre>}
         <p className="notice">Lean checking does not prove natural-language equivalence. Review the Lean and instance JSON below before continuing.</p>
       {result.formalization_id && result.lean_checked && <CustomResearch id={result.formalization_id} result={result} />}
       </section>}
       <div className="dialog-actions"><button type="button" disabled={busy} onClick={onClose}>Close</button>
-        <button className="primary" disabled={busy || !problem.trim() || !instance.trim() || (mode === "formal" && !lean.trim())}>
-          {mode === "formal" ? "Check Lean and generate instance JSON" : "Generate Lean and instance JSON"}</button></div>
+        <button className="primary" disabled={busy || !problem.trim() || (mode === "formal" && !lean.trim())}>
+          {mode === "formal" ? "Check specification" : "Prepare problem"}</button></div>
     </form>
   </dialog>;
 }

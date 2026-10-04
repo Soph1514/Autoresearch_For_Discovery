@@ -9,6 +9,7 @@ export type Status =
 export interface Run {
   id: string;
   title: string;
+  author?: string;
   status: Status;
   startedAt: string;
   endedAt?: string;

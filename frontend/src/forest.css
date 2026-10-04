@@ -1,0 +1,19 @@
+.tree-navigation{display:flex;gap:8px;overflow-x:auto;padding:16px 24px;border-bottom:1px solid var(--line,#e6e4e0)}
+.tree-navigation a{flex:0 0 auto;max-width:240px;padding:10px 14px;border:1px solid var(--line,#e6e4e0);border-radius:8px;text-decoration:none;color:inherit}
+.tree-navigation a[aria-current=page]{background:#eae5dc;border-color:#a99d89}
+.tree-navigation a span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tree-navigation small{display:block;color:#706c64;margin-top:4px}
+.forest-controls{display:flex;gap:24px;flex-wrap:wrap;align-items:center;padding:12px 24px}
+.forest-controls label{display:flex;align-items:center;gap:8px}.forest-controls select{max-width:240px}
+.forest-canvas{overflow:hidden;margin:0 20px;background:radial-gradient(#d9d4cb .6px,transparent .6px);background-size:22px 22px;border:1px solid #e3ded5;border-radius:12px}
+.forest-canvas svg{width:100%;display:block;touch-action:none;cursor:grab}.forest-canvas svg a,.forest-canvas [data-bridge]{cursor:pointer}
+.forest-plane{fill:#f1ede5;fill-opacity:.65;stroke:#c9c0b2;stroke-width:1}
+.forest-canvas text{font:12px system-ui;fill:#514a40}.forest-lineage{stroke:#b5a994;stroke-width:1.3}
+.forest-node{fill:#756650;stroke:#faf7f1;stroke-width:1.5}.forest-node.inactive{fill:#c6c0b7}
+.forest-bridge{fill:none;stroke:#9b7255;stroke-width:2;stroke-dasharray:5 4}.forest-bridge.improved{stroke:#4a7a58;stroke-dasharray:none}.forest-bridge.selected{stroke-width:4}
+.forest-caption,.forest-connections,.collaboration-traces{padding:16px 24px}.forest-connections button{display:block;margin:8px 0;text-align:left;max-width:100%}
+.bridge-detail{padding:16px 20px;margin:12px 0;border-left:3px solid #ac987a;background:#f4f0e9;overflow-wrap:anywhere}.bridge-detail p{margin:8px 0}.bridge-detail small{color:#706c64}
+.collaboration-traces{border-top:1px solid #e3ded5}.collaboration-traces summary{cursor:pointer;font-weight:500}
+@media(max-width:600px){.tree-navigation{padding:12px}.forest-controls{padding:12px;gap:12px}.forest-canvas{margin:0}.forest-controls select{max-width:190px}}
+.idea-connections{display:block;color:#786447;margin-top:5px;font-size:10px}.inspector .collaboration-traces{padding:10px 0}.inspector .bridge-detail{padding:10px;font-size:12px}
+.idea-box:has(.idea-connections){height:132px}
