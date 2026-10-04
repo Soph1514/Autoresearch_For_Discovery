@@ -1,0 +1,107 @@
+{
+  "runs": [
+    {
+      "run_id": "a628bc0e-3fd3-416b-92ec-eb5474add711",
+      "status": "completed",
+      "candidates": 18,
+      "events": 134,
+      "independently_rechecked_witnesses": 48,
+      "best": {
+        "candidate_id": "candidate-000014",
+        "valid": true,
+        "metrics": {
+          "c1": 1.620383413986697
+        },
+        "behavioral_descriptor": [
+          3.0,
+          8.0
+        ],
+        "failure_stage": null,
+        "failure_reasons": [],
+        "passing_cases": 3,
+        "total_cases": 3,
+        "partial_metrics": {},
+        "repairable": false,
+        "informative": false,
+        "unsafe": false
+      },
+      "reported_tokens": 172935
+    },
+    {
+      "run_id": "f79cdcaa-75bd-45b4-9868-558550f94ea9",
+      "status": "failed",
+      "candidates": 13,
+      "events": 104,
+      "independently_rechecked_witnesses": 36,
+      "best": {
+        "candidate_id": "candidate-000012",
+        "valid": true,
+        "metrics": {
+          "c1": 1.6111909774416067
+        },
+        "behavioral_descriptor": [
+          3.0,
+          8.0
+        ],
+        "failure_stage": null,
+        "failure_reasons": [],
+        "passing_cases": 3,
+        "total_cases": 3,
+        "partial_metrics": {},
+        "repairable": false,
+        "informative": false,
+        "unsafe": false
+      },
+      "reported_tokens": 165756
+    },
+    {
+      "run_id": "bfcf0480-45f2-4c00-8643-23ad0692dc8e",
+      "status": "completed",
+      "candidates": 10,
+      "events": 66,
+      "independently_rechecked_witnesses": 24,
+      "best": {
+        "candidate_id": "candidate-000000",
+        "valid": true,
+        "metrics": {
+          "c1": 1.6111909774416067
+        },
+        "behavioral_descriptor": [
+          3.0,
+          8.0
+        ],
+        "failure_stage": null,
+        "failure_reasons": [],
+        "passing_cases": 3,
+        "total_cases": 3,
+        "partial_metrics": {},
+        "repairable": false,
+        "informative": false,
+        "unsafe": false
+      },
+      "reported_tokens": 70802
+    }
+  ],
+  "total_candidates": 41,
+  "saved_events": 304,
+  "rechecked_case_witnesses": 108,
+  "reported_evolution_tokens": 409493,
+  "best_mean_c1": 1.6111909774416067,
+  "baseline_mean_c1": 2,
+  "open_problem_solved": false,
+  "autonomous_formalization_succeeded": false,
+  "formalization": "Reviewed specification checked by hosted Lean 4.19.0; fidelity requested review.",
+  "tests": {
+    "backend_passed": 126,
+    "frontend_passed": 6,
+    "production_build": "passed",
+    "restart_snapshot_equality": true
+  },
+  "limitations": [
+    "No proof of optimal C or of the analytic step-function reduction in Lean.",
+    "Current published bounds were not improved.",
+    "Larger unseen grids showed performance degradation.",
+    "One refinement ended with generation_failed; evidence and better winner were preserved.",
+    "Dollar costs and hosted preparation usage were not measured."
+  ]
+}

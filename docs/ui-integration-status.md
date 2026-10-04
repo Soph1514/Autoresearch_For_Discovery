@@ -84,4 +84,16 @@ it does not bypass the custom UI's provenance requirements. Iteration counts and
 interruption of host arithmetic threads remain limitations.
 
 The merged `assessment_recorded` event is accepted, replayed and shown as advisory
-in the inspector. The CLI can enable the critic; custom UI runs currently leave it off.
+in the inspector. The CLI can enable the critic; custom UI forms now default to three bounded critic calls (the API default remains zero). Generator and critic share the run token budget.
+
+
+## Verified Sidon demo (4 October 2026)
+
+See [the run report](demo-verification.md) for actual preparation, search, exact
+witness rechecks, held-out results and limitations. The checker update was deployed.
+The existing-Lean path passes with the reviewed Sidon specification; automatic
+Qwen formalization still required assistance for this problem. The workbench
+supports saved `?formalization=` links, and the engine supports `?run=` links,
+saved history, exact witness plots and model/token provenance. Completed snapshots
+survive restart unchanged. `scripts/export_run.py` and `scripts/import_run.py`
+provide a replayable evidence bundle without executing archived source.
