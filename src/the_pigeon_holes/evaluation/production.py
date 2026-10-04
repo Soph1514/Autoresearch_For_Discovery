@@ -62,13 +62,12 @@ class AutocorrelationEvaluator:
         validate_contract(problem)
 
         async def evaluate_one(candidate: ProgramCandidate) -> CandidateEvaluation:
-            async with self._semaphore:
-                try:
-                    async with asyncio.timeout(problem.resource_limits.candidate_time_seconds):
-                        return await self._evaluate_one(candidate, problem)
-                except TimeoutError:
-                    return _invalid(candidate, 'timeout', 'candidate-suite wall-clock limit',
-                                    len(problem.evaluation_suite.cases))
+            try:
+                async with asyncio.timeout(problem.resource_limits.candidate_time_seconds):
+                    return await self._evaluate_one(candidate, problem)
+            except TimeoutError:
+                return _invalid(candidate, 'timeout', 'candidate-suite wall-clock limit',
+                                len(problem.evaluation_suite.cases))
 
         tasks = [asyncio.create_task(evaluate_one(candidate)) for candidate in candidates]
         try:
@@ -89,29 +88,46 @@ class AutocorrelationEvaluator:
         if signature_error:
             return _invalid(candidate, "static_validation", signature_error, total)
 
-        values: list[Fraction] = []
-        cells: list[tuple[int, int]] = []
-        for case in problem.evaluation_suite.cases:
+        async def evaluate_case(case):
             args = case.materialize_inputs()
             limits = replace(self.limits,
                 timeout_seconds=min(self.limits.timeout_seconds, problem.resource_limits.case_time_seconds),
                 memory_mb=min(self.limits.memory_mb, problem.resource_limits.memory_mb))
-            result = await run_candidate_async(
-                candidate.source_code, ENTRY_POINT, args, limits, self.image
-            )
+            async with self._semaphore:
+                result = await run_candidate_async(
+                    candidate.source_code, ENTRY_POINT, args, limits, self.image
+                )
             if not result.ok:
-                return _invalid(candidate, result.failure_stage, result.failure_reason, total)
+                return _invalid(candidate, result.failure_stage, result.failure_reason, total), None
             try:
                 output = validate_output(result.output)
                 if len(output) != args["n"]:
                     raise InvalidOutput(
                         f"expected length {args['n']}, got {len(output)}"
                     )
-                value, cell = await asyncio.to_thread(_score, output)
-                values.append(value)
-                cells.append(cell)
+                return None, await asyncio.to_thread(_score, output)
             except InvalidOutput as error:
-                return _invalid(candidate, "invalid_output", str(error), total)
+                return _invalid(candidate, "invalid_output", str(error), total), None
+
+        tasks = [asyncio.create_task(evaluate_case(case))
+                 for case in problem.evaluation_suite.cases]
+        try:
+            results = await asyncio.gather(*tasks)
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+        values: list[Fraction] = []
+        cells: list[tuple[int, int]] = []
+        for failure, scored in results:
+            if failure is not None:
+                return failure
+            assert scored is not None
+            value, cell = scored
+            values.append(value)
+            cells.append(cell)
 
         mean = sum(values, Fraction(0)) / len(values)
         return CandidateEvaluation(
