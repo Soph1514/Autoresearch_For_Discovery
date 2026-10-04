@@ -27,7 +27,8 @@ async def main():
     seed = 'def solve(initial: list[int]) -> list[int]:\n    return list(initial)\n'
     contract = replace(contract_from_dict(prior['contract']),
         natural_language_spec=(
-            'Sidon published-witness refinement: minimize exact C1 = 2*n*max(convolve(q,q))/sum(q)^2. '
+            'Sidon sets: full-resolution published-witness refinement.\n\n'
+            'Minimize exact C1 = 2*n*max(convolve(q,q))/sum(q)^2. '
             'Input initial is the published TTT-Discover 30000-piece witness, quantized to units 2^-40; '
             'its verified score is 1.5028628982558014. Return a nonnegative integer list of the same length. '
             'The input is a public construction, not a hidden answer. Improve it with full-resolution local '
@@ -51,7 +52,14 @@ async def main():
         'generation_usage':TokenUsage(**raw_candidate['generation_usage'])})
     result=(await evaluator.evaluate([candidate],contract))[0]
     assert result.valid, result
-    (data/'sandbox-baseline.json').write_text(json.dumps({'evaluation':encode(result),'numerical':evaluator.evidence[candidate.id]},indent=2))
+    record = evaluator.evidence[candidate.id]
+    witness = record['cases']['published-30000']['fitness_evidence']
+    (data/'sandbox-baseline.json').write_text(json.dumps({
+        'evaluation':encode(result), 'image':record['image'],
+        'fitness_function':record['fitness_function'], 'cells':len(witness['output']),
+        'c1_exact':witness['c1_exact'],
+        'output_sha256':hashlib.sha256(json.dumps(witness['output']).encode()).hexdigest(),
+        'scope':'Identity seed output equals the quantized pinned source; duplicate arrays omitted.'},indent=2)+'\n')
     identity='sidon-published-30000-refinement-v1'
     ArtifactStore(ROOT/'runs/research.sqlite3').put('contract',identity,{'contract':encode(contract),
         'provenance':{**(prior.get('provenance') or {}),'published_baseline':provenance,

@@ -22,3 +22,24 @@ def test_uniform_full_resolution_has_exact_score_two():
 def test_reject_invalid_witnesses(q):
     with pytest.raises(ValueError):
         validate(q)
+
+
+def test_published_witness_reproduces_bound_without_downsampling():
+    import json
+    from decimal import Decimal
+    from pathlib import Path
+    data = json.loads((Path(__file__).parents[1]/'research/published-sidon/ttt_ac1_sequence.json').read_text(), parse_float=Decimal)
+    q = [int(x*2**40+Decimal('.5')) for x in data['sequence']]
+    assert len(q) == 30000
+    score = exact_score(q)
+    assert Fraction('1.5028628') < score < Fraction('1.502863')
+
+
+def test_refinement_rejects_changed_resolution_and_floats():
+    from the_pigeon_holes.models.problem_contract import EvaluationCase
+    from the_pigeon_holes.fitness.sidon_refinement import SidonRefinementFitness
+    case = EvaluationCase('tiny', {'initial':[2**40]*3})
+    fitness = SidonRefinementFitness()
+    assert not fitness.evaluate_case(case,[2**40]*2).valid
+    assert not fitness.evaluate_case(case,[float(2**40)]*3).valid
+    assert fitness.evaluate_case(case,[2**40]*3).metrics['c1'] == 2
