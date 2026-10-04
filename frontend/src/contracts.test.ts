@@ -46,3 +46,13 @@ test("generation failures are upserted without losing usage", () => {
   const final = applyEvent(first, event(2, { type: "generation_failed", payload: revised }));
   assert.deepEqual(final.generationFailures, [revised]);
 });
+
+test("idea status updates preserve arrival order and stable graph lanes", () => {
+  const a = {id: 'a', title: 'a', description: '', parents: [], operation: 'seed' as const, inactive: false};
+  const b = {...a, id: 'b'};
+  let state = applyEvent(snapshot(), event(1, {type: 'idea_created', payload: a}));
+  state = applyEvent(state, event(2, {type: 'idea_created', payload: b}));
+  state = applyEvent(state, event(3, {type: 'idea_created', payload: {...a, inactive: true}}));
+  assert.deepEqual(state.ideas.map(i => i.id), ['a', 'b']);
+  assert.equal(state.ideas[0].inactive, true);
+});

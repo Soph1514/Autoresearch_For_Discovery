@@ -135,7 +135,9 @@ export function applyEvent(s: Snapshot, e: ResearchEvent): Snapshot {
     case "idea_created":
       return {
         ...n,
-        ideas: [...s.ideas.filter((i) => i.id !== e.payload.id), e.payload],
+        ideas: s.ideas.some(i => i.id === e.payload.id)
+          ? s.ideas.map(i => i.id === e.payload.id ? e.payload : i)
+          : [...s.ideas, e.payload],
       };
     case "experiment_updated":
       return {
