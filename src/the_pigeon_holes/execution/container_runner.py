@@ -211,8 +211,3 @@ async def run_candidate_async(
         except asyncio.CancelledError:
             await cleanup
             raise
-
-
-def run_candidate(source, entry_point, args, limits, image=DEFAULT_IMAGE) -> WorkerResult:
-    """Synchronous CLI entry point; async callers use run_candidate_async."""
-    return asyncio.run(run_candidate_async(source, entry_point, args, limits, image))
