@@ -1,0 +1,37 @@
+{
+  "provenance": {
+    "repository": "https://github.com/test-time-training/discover",
+    "commit": "6c40e82dab9d5de7416ac873ad5cd3106084aaed",
+    "path": "results/mathematics/ttt_ac1_sequence.json",
+    "sha256": "ccb00dad316aef984812f538b8ce0a5eac3ccbf379d9265788d6d3c8626715e6",
+    "paper": "https://arxiv.org/abs/2601.16175"
+  },
+  "quantization": "nearest nonnegative integer times 2^-40",
+  "scores": {
+    "32": {
+      "c1": 1.7945681190170664,
+      "exact": "822802862153708323616/458496310858558976205"
+    },
+    "64": {
+      "c1": 1.6653078771806933,
+      "exact": "137436753260717848526464/82529335952816940546129"
+    },
+    "128": {
+      "c1": 1.704803302238311,
+      "exact": "187595045949904023516032/110039114602606803947667"
+    },
+    "1319": {
+      "c1": 1.6637287739713023,
+      "exact": "233281614808735873049103414/140216132856736761318383569"
+    },
+    "4096": {
+      "c1": 1.6250109779448936,
+      "exact": "2197275884332358270506778624/1352160640238376819861927225"
+    },
+    "30000": {
+      "c1": 1.5028628982558014,
+      "exact": "1703296650971819779916381250/1133367955885156657708082401"
+    }
+  },
+  "scope": "Full-resolution independent certificate; projected scores are distinct benchmarks."
+}

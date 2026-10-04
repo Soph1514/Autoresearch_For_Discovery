@@ -63,9 +63,11 @@ class FitnessFunctionRegistry:
 
 def builtin_registry() -> FitnessFunctionRegistry:
     from .autocorrelation import AutocorrelationFitnessFunction
+    from .sidon_refinement import SidonRefinementFitness
 
     registry = FitnessFunctionRegistry()
     registry.register(AutocorrelationFitnessFunction())
+    registry.register(SidonRefinementFitness())
     return registry
 
 

@@ -9,6 +9,7 @@ import urllib.request
 from pathlib import Path
 from fractions import Fraction
 from the_pigeon_holes.fitness.autocorrelation import c1
+from the_pigeon_holes.fitness.sidon_refinement import exact_score as refinement_c1
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('run_id')
@@ -33,8 +34,10 @@ for candidate_id, record in artifact['evidence'].get('numerical', {}).items():
         if 'c1_exact' not in witness:
             continue
         exact = witness['c1_exact']
-        score = c1(witness['output'])
-        assert len(witness['output']) == case['inputs']['n']
+        is_refinement = record.get('fitness_function', {}).get('id') == 'sidon-refinement'
+        score = (refinement_c1 if is_refinement else c1)(witness['output'])
+        expected_n = len(case['inputs']['initial']) if is_refinement else case['inputs']['n']
+        assert len(witness['output']) == expected_n
         assert score == Fraction(int(exact['numerator']), int(exact['denominator']))
         scores.append(score)
         verified += 1
