@@ -116,7 +116,12 @@ class AnthropicProgramGenerator:
                         system=(
                             "You are a semantic variation operator for mathematical "
                             "algorithm search. Follow the fixed problem contract and submit "
-                            "exactly one internally consistent candidate."
+                            "exactly one internally consistent candidate. Keep the implementation "
+                            "compact (aim for fewer than 120 lines): concise comments, no "
+                            "worked derivations, no __main__ block, no demonstration tests, "
+                            "and no unused helper functions. Spend the output budget on "
+                            "the complete solve function and necessary helpers. Copy the "
+                            "required signature exactly, including list[int] annotations."
                         ),
                         messages=[{"role": "user", "content": request.prompt}],
                         tools=[_SUBMIT_CANDIDATE_TOOL],

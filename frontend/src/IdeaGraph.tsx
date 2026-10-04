@@ -12,8 +12,9 @@ import {
   type Node,
   type Edge,
   getViewportForBounds,
+  MarkerType,
 } from "@xyflow/react";
-import dagre from "@dagrejs/dagre";
+import { buildLineage, revealNext } from "./lineage";
 import type { Snapshot } from "./contracts";
 export const operationLabel = (op: string) =>
   op === "merge_mutation"
@@ -31,11 +32,6 @@ type IdeaNode = Node<{
   select: () => void;
 }>;
 function IdeaBox({ data, selected, id }: NodeProps<IdeaNode>) {
-  const updateInternals = useUpdateNodeInternals();
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => updateInternals(id));
-    return () => cancelAnimationFrame(frame);
-  }, [id, updateInternals]);
   return (
     <button
       type="button"
@@ -88,29 +84,39 @@ function Graph({
   onSelect: (id: string) => void;
 }) {
   const [follow, setFollow] = useState(true);
-  // Coalesce arriving candidates into readable reveal beats, without delaying logs.
-  const [visibleIds, setVisibleIds] = useState<string[]>([]);
-  const pendingIdeas = useRef(snapshot.ideas);
-  pendingIdeas.current = snapshot.ideas;
+  const lineage = useMemo(() => buildLineage(snapshot.ideas), [snapshot.ideas]);
+  const [visibleIds, setVisibleIds] = useState<string[]>(() =>
+    ["completed", "stopped", "failed"].includes(snapshot.run.status)
+      ? lineage.ordered.map(i => i.id) : []);
+  const [displayPaused, setDisplayPaused] = useState(false);
+  const [beat, setBeat] = useState(2000);
+  const [replay, setReplay] = useState(0);
+  const pendingIdeas = useRef(lineage.ordered);
+  pendingIdeas.current = lineage.ordered;
   useEffect(() => {
-    setVisibleIds(pendingIdeas.current.map((i) => i.id));
+    if (displayPaused) return;
     const timer = setInterval(() => {
-      const ids = pendingIdeas.current.map((i) => i.id);
-      setVisibleIds((previous) =>
-        previous.join() === ids.join() ? previous : ids,
-      );
-    }, 1000);
+      setVisibleIds(previous => revealNext(pendingIdeas.current, previous));
+    }, beat);
     return () => clearInterval(timer);
-  }, [snapshot.run.id]);
-  const visibleIdeas = snapshot.ideas.filter(
-    (i) => visibleIds.includes(i.id) || i.id === selected,
-  );
+  }, [displayPaused, beat, replay]);
+  // Explicit inspection from the log may jump ahead, but never orphan a child.
+  useEffect(() => {
+    if (!selected) return;
+    setDisplayPaused(true);
+    const index = lineage.ordered.findIndex(i => i.id === selected);
+    if (index >= 0) setVisibleIds(previous => [...new Set([
+      ...previous, ...lineage.ordered.slice(0, index + 1).map(i => i.id),
+    ])]);
+  }, [selected]);
+  const visibleIdeas = lineage.ordered.filter(i => visibleIds.includes(i.id));
+  const queued = lineage.ordered.length - visibleIdeas.length;
   const canvas = useRef<HTMLDivElement>(null);
   const pointerStart = useRef<{ x: number; y: number } | null>(null);
   const flow = useReactFlow();
+  const updateNodeInternals = useUpdateNodeInternals();
   const initialized = useRef(false);
   const [viewportReady, setViewportReady] = useState(false);
-  const previousRun = useRef(snapshot.run.id);
   const inactiveIds = new Set(
     snapshot.ideas
       .filter((i) => {
@@ -133,36 +139,7 @@ function Graph({
   const structuralKey = visibleIdeas
     .map((i) => i.id + ":" + i.parents.join(","))
     .join("|");
-  const positions = useMemo(() => {
-    const g = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
-    g.setGraph({
-      rankdir: "TB",
-      nodesep: 42,
-      ranksep: 55,
-      marginx: 24,
-      marginy: 48,
-    });
-    visibleIdeas.forEach((i) =>
-      g.setNode(i.id, {
-        width: 202,
-        height: 112,
-      }),
-    );
-    visibleIdeas.forEach((i) => i.parents.forEach((p) => g.setEdge(p, i.id)));
-    dagre.layout(g);
-    return Object.fromEntries(
-      visibleIdeas.map((i) => {
-        const p = g.node(i.id);
-        return [
-          i.id,
-          {
-            x: p.x - 101,
-            y: p.y - 56,
-          },
-        ];
-      }),
-    );
-  }, [structuralKey]);
+  const positions = lineage.positions;
   const nodes: IdeaNode[] = visibleIdeas.map((i) => {
     const experiment = snapshot.experiments
       .filter((e) => e.ideaId === i.id)
@@ -177,7 +154,7 @@ function Graph({
       selected: i.id === selected,
       ariaLabel: `Idea ${i.id}: ${i.title}, ${operationLabel(i.operation)}`,
       data: {
-        select: () => onSelect(i.id),
+        select: () => { setDisplayPaused(true); onSelect(i.id); },
         title: i.title,
         operation: i.operation,
         parents: i.parents,
@@ -200,27 +177,18 @@ function Graph({
       source: p,
       target: i.id,
       type: "default",
+      markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color: "#958772" },
       className: inactiveIds.has(i.id) ? "receded-edge" : "",
       style: {
-        stroke: index ? "#918777" : "#b2a99a",
-        strokeWidth: 1.25,
+        stroke: index ? "#776953" : "#958772",
+        strokeWidth: 1.8,
         strokeDasharray: index ? "5 5" : undefined,
       },
     })),
   );
-  const generations = new Map<string, number>();
-  for (const idea of visibleIdeas) {
-    generations.set(
-      idea.id,
-      idea.generation ??
-        (idea.parents.length
-          ? 1 + Math.max(...idea.parents.map((p) => generations.get(p) ?? 0))
-          : 0),
-    );
-  }
-  const waveNodes: Node[] = Array.from(new Set(generations.values())).map(
+  const waveNodes: Node[] = Array.from(new Set(visibleIdeas.map(i => lineage.ranks.get(i.id)!))).map(
     (generation) => {
-      const members = nodes.filter((n) => generations.get(n.id) === generation);
+      const members = nodes.filter((n) => lineage.ranks.get(n.id) === generation);
       return {
         id: `wave-${generation}`,
         type: "wave",
@@ -239,7 +207,7 @@ function Graph({
               `01 / STARTING POINT`,
               `02 / EXPLORE DIRECTIONS`,
               `03 / REFINE & COMBINE`,
-            ][generation] ?? `${generation + 1} / NEXT GENERATION`,
+            ][generation] ?? `${generation + 1} / NEXT LAYER`,
         },
       };
     },
@@ -274,21 +242,27 @@ function Graph({
     void flow
       .setViewport(viewport, {
         duration:
-          !initialized.current || reducedMotion ? 0 : gradual ? 1100 : 450,
+          !initialized.current || reducedMotion ? 0 : gradual ? 650 : 450,
       })
       .then(() => setViewportReady(true));
     initialized.current = true;
   }
   useEffect(() => {
-    if (previousRun.current !== snapshot.run.id) {
-      initialized.current = false;
-      previousRun.current = snapshot.run.id;
-      setFollow(true);
-    }
     if (!follow && initialized.current) return;
     const timer = setTimeout(() => frameGraph(true), 120);
     return () => clearTimeout(timer);
-  }, [structuralKey, snapshot.run.id, follow]);
+  }, [structuralKey, follow]);
+  useEffect(() => {
+    if (!viewportReady) return;
+    const frame = requestAnimationFrame(() => updateNodeInternals(visibleIdeas.map(i => i.id)));
+    return () => cancelAnimationFrame(frame);
+  }, [viewportReady, structuralKey, updateNodeInternals]);
+  useEffect(() => {
+    if (!selected || !positions[selected]) return;
+    setFollow(false);
+    const point = positions[selected];
+    void flow.setCenter(point.x + 101, point.y + 56, {zoom: 0.95, duration: reducedMotion ? 0 : 350});
+  }, [selected]);
   return (
     <section className="graph-panel">
       <div className="graph-toolbar">
@@ -306,6 +280,22 @@ function Graph({
         </label>
         <button onClick={() => frameGraph(false)}>Fit graph</button>
       </div>
+      <div className="reveal-controls" role="group" aria-label="Lineage playback">
+        <span aria-live="polite">{visibleIdeas.length} / {lineage.ordered.length} ideas shown · {queued} queued</span>
+        <button onClick={() => setDisplayPaused(p => !p)}>{displayPaused ? "Play reveals" : "Pause reveals"}</button>
+        <button disabled={!queued} onClick={() => {
+          setDisplayPaused(true);
+          setVisibleIds(previous => revealNext(pendingIdeas.current, previous));
+        }}>Next idea</button>
+        <label>Reveal pace <select aria-label="Reveal pace" value={beat} onChange={e => setBeat(Number(e.target.value))}>
+          <option value={1000}>1 second</option>
+          <option value={2000}>2 seconds</option>
+          <option value={4000}>4 seconds</option>
+        </select></label>
+        <button onClick={() => { setVisibleIds([]); setDisplayPaused(false); setFollow(true); initialized.current = false; setReplay(value => value + 1); }}>Replay tree</button>
+        <button disabled={!queued} onClick={() => setVisibleIds(lineage.ordered.map(i => i.id))}>Show all</button>
+      </div>
+      {lineage.blocked.length > 0 && <p role="alert">{lineage.blocked.length} ideas have missing or cyclic ancestry and cannot yet be drawn.</p>}
       <div
         className="graph-canvas"
         ref={canvas}
@@ -333,8 +323,6 @@ function Graph({
           nodes={[...waveNodes, ...nodes]}
           edges={edges}
           nodeTypes={nodeTypes}
-          onNodeClick={(_, n) => onSelect(n.id)}
-          onNodeDragStart={() => setFollow(false)}
           nodesDraggable={false}
           nodesConnectable={false}
           elementsSelectable
@@ -352,7 +340,7 @@ function Graph({
         </ReactFlow>
       </div>
       <div className="graph-caption">
-        Ideas arrive in waves. Faded branches remain available to inspect.
+        One idea per beat, parents before children. Display controls do not pause research. Replays show saved results, not historical evaluation timing.
       </div>
     </section>
   );

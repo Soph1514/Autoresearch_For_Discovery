@@ -12,6 +12,7 @@ export function mountCustomResearch(host: HTMLElement, formalizationId: string) 
     <p data-status role="status"></p><button type="button" data-action="refresh">Check evaluator availability</button>
     <label class="field">Research time limit (seconds)<input type="number" data-field="seconds" value="300" min="1" max="3600"></label>
     <label class="field">Token budget<input type="number" data-field="tokens" value="32768" min="1" max="1000000"></label>
+    <label class="field">Advisory critic calls<input type="number" data-field="critic" value="3" min="0" max="100"></label>
     <p><button type="button" data-action="start" disabled>Start research</button></p>`;
   const field = (name: string) => host.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[data-field="${name}"]`)!;
   const prepare = host.querySelector<HTMLButtonElement>('[data-action="prepare"]')!;
@@ -29,7 +30,7 @@ export function mountCustomResearch(host: HTMLElement, formalizationId: string) 
   };
   host.oninput = event => {
     const target = event.target as HTMLElement;
-    if (!['seconds', 'tokens'].includes(target.dataset.field || '')) { contractId = null; start.disabled = true; }
+    if (!['seconds', 'tokens', 'critic'].includes(target.dataset.field || '')) { contractId = null; start.disabled = true; }
   };
   async function request(path: string, body?: unknown) {
     const response = await fetch(path, {method: body ? 'POST' : 'GET', signal: controller.signal,
@@ -68,7 +69,7 @@ export function mountCustomResearch(host: HTMLElement, formalizationId: string) 
     lock(true); status.textContent = 'Starting research…';
     try {
       const run = await request('/api/runs', {mode: 'custom', contract_id: contractId,
-        max_tokens: Number(field('tokens').value), max_time_seconds: Number(field('seconds').value)});
+        max_critic_calls: Number(field('critic').value), max_tokens: Number(field('tokens').value), max_time_seconds: Number(field('seconds').value)});
       sessionStorage.setItem('research-run', run.id);
       window.location.assign('/engine.html');
     } catch (error) { status.textContent = error instanceof Error ? error.message : String(error); lock(false); }

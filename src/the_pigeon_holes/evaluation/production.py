@@ -53,6 +53,7 @@ class AutocorrelationEvaluator:
         self.limits = limits
         self.image = image
         self._semaphore = asyncio.Semaphore(max_workers)
+        self.evidence: dict[str, dict] = {}
 
     async def evaluate(
         self,
@@ -130,6 +131,7 @@ class AutocorrelationEvaluator:
             cells.append(cell)
 
         mean = sum(values, Fraction(0)) / len(values)
+        record['mean_c1_exact'] = {'numerator': str(mean.numerator), 'denominator': str(mean.denominator)}
         return CandidateEvaluation(
             candidate_id=candidate.id,
             valid=True,

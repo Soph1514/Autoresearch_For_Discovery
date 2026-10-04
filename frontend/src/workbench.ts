@@ -92,6 +92,20 @@ form.onsubmit = async (event) => {
       }
       if (event.diagnostics) { log(event.diagnostics); detail('Repairing Lean.', event.diagnostics); }
     });
+    renderResult(result);
+    if (result.formalization_id) window.history.replaceState(null, '', `/?formalization=${encodeURIComponent(result.formalization_id)}`);
+  } catch (error) {
+    const stopped = controller?.signal.aborted;
+    const message = stopped ? 'Stopped. Latest Lean source and checker diagnostics are preserved.' : error instanceof Error ? error.message : 'Service unavailable';
+    element('run-state').textContent = stopped ? 'Stopped' : 'Failed';
+    element('validation-status').textContent = stopped ? 'Stopped' : 'Service error';
+    detail(stopped ? 'Stopped.' : 'Could not complete this request.', message); log(message);
+  } finally {
+    clearInterval(clock); busy = false; controller = null; element('stop-formalization').hidden = true; element<HTMLButtonElement>('upload').disabled = false;
+  }
+};
+
+function renderResult(result: Awaited<ReturnType<typeof formalize>>) {
     element('lean-output').textContent = result.lean;
     element('count').textContent = String(result.attempts);
     element('best').textContent = result.fidelity?.p_faithful == null ? '—' : `${(result.fidelity.p_faithful * 100).toFixed(1)}%`;
@@ -106,13 +120,17 @@ form.onsubmit = async (event) => {
       element('details').append(handoff);
       clearHandoff = mountCustomResearch(handoff, result.formalization_id);
     }
-  } catch (error) {
-    const stopped = controller?.signal.aborted;
-    const message = stopped ? 'Stopped. Latest Lean source and checker diagnostics are preserved.' : error instanceof Error ? error.message : 'Service unavailable';
-    element('run-state').textContent = stopped ? 'Stopped' : 'Failed';
-    element('validation-status').textContent = stopped ? 'Stopped' : 'Service error';
-    detail(stopped ? 'Stopped.' : 'Could not complete this request.', message); log(message);
-  } finally {
-    clearInterval(clock); busy = false; controller = null; element('stop-formalization').hidden = true; element<HTMLButtonElement>('upload').disabled = false;
-  }
-};
+}
+const savedId = new URLSearchParams(window.location.search).get('formalization');
+if (savedId) {
+  fetch(`/api/formalizations/${encodeURIComponent(savedId)}`).then(async response => {
+    if (!response.ok) throw Error('Saved formalization unavailable.');
+    return response.json();
+  }).then(artifact => {
+    problem.value = artifact.input.problem;
+    source.value = artifact.result.lean;
+    element('problem-title').textContent = problem.value.split('\n')[0];
+    element('problem-sub').textContent = 'Saved specification · hosted checker provenance retained';
+    renderResult(artifact.result);
+  }).catch(error => { detail('Unable to load specification', String(error)); });
+}

@@ -161,3 +161,36 @@ Set `ANTHROPIC_API_KEY` and select a model first. This CLI is a numerical benchm
 its Lean contract is a placeholder. The custom UI requires real checked Lean with
 provenance. See [current evaluator status](docs/candidate-evaluator-plan.md) and
 [the reconciled TODO list](docs/pipeline-next-steps.md).
+
+## Sidon-set end-to-end demo
+
+Run `scripts/start_lab.sh` to start this checkout on localhost:5173 with its API on
+8000. It refuses occupied ports to avoid accidentally displaying another checkout.
+The compatible default research model is `claude-sonnet-4-6`; set the Anthropic key
+in the launching environment. Docker and the deployed Modal services are required
+for new custom runs. Saved runs remain viewable without fresh model calls.
+
+`problems/autocorrelation/problem.txt` and `Specification.lean` define the open
+problem and finite witness-search contract. The reviewed specification was checked
+with the hosted pinned Lean 4.19 checker. It does not prove the analytic reduction,
+Python correctness, or the optimal constant. Natural-language Qwen generation is
+also available, but can need manual correction; compiler acceptance alone does not
+establish fidelity.
+
+The engine supports direct `/engine.html?run=RUN_ID` links, saved history, live
+lineage, best-candidate inspection, witness plots and exact rational certificates.
+The custom form can enable bounded advisory critic calls sharing the generation
+token budget. Export all events, lineage, best source and independently recheck
+saved integer witnesses with:
+
+```sh
+PYTHONPATH=src .venv/bin/python scripts/export_run.py RUN_ID
+```
+
+See [the demo verification report](docs/demo-verification.md) for run links,
+measured results, limitations and a four-minute presentation outline. Exported
+runs can be imported into a fresh local store without executing their source:
+
+```sh
+PYTHONPATH=src .venv/bin/python scripts/import_run.py path/to/run.json
+```

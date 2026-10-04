@@ -20,21 +20,17 @@ and evaluator branch `origin/eo_loop` at `36fadc0`.
 - Local worker built and real Docker tests run. A scripted smoke run also exercises
   evolution and durable evidence; it is not an LLM benchmark or a Lean proof.
 
-## Required before a credible end-to-end demo
+## Local end-to-end demo completed (4 October 2026)
 
-1. **Deploy the checker update.** Redeploy `research/lean-fidelity/modal_checker.py`
-   so the service returns the source hash, actual versions, dependency manifest,
-   command outcome and diagnostics. Recheck the specification afterward.
-2. **Formalize the actual autocorrelation problem.** The numerical benchmark's
-   `autocorrelation_contract()` deliberately contains a Lean placeholder. The
-   custom UI requires a genuine checked artifact and compatible extracted interface;
-   the placeholder must not be presented as formally verified. Inspect the units
-   (`q_i / 2**40`), constraints, `solve(n: int) -> list[int]`, and mean `c1` objective.
-3. **Run a bounded live search.** Configure an Anthropic model/key and use the
-   merged evaluator. Save commands, versions, input suite, actual token/cost data,
-   failures and best source. Verify the full hosted-preparation → custom UI →
-   Docker path, including rejection, pause/resume, cancellation and restart.
-   Local tests and scripted proposals do not establish live model performance.
+The checker was redeployed, an explicit continuous/finite Sidon specification was
+checked, and the hosted preparation → custom UI → Docker → critic → archive path
+was exercised with live Anthropic generation. The natural-language Qwen attempt
+needed a reviewed replacement; this is disclosed. Exact integer witnesses,
+lineage, rejected attempts and held-out checks are exported. See
+[demo verification](demo-verification.md) for measured results and replay steps.
+
+## Remaining research/submission work
+
 4. **Repair the remaining evidence gaps.** Rerun the disputed Ireland–Rosen Lean
    benchmark result; historical timings are retained but its verdict is unproven.
    Evaluate fidelity on held-out examples—the existing ten-example comparison

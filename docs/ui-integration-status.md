@@ -84,4 +84,36 @@ it does not bypass the custom UI's provenance requirements. Iteration counts and
 interruption of host arithmetic threads remain limitations.
 
 The merged `assessment_recorded` event is accepted, replayed and shown as advisory
-in the inspector. The CLI can enable the critic; custom UI runs currently leave it off.
+in the inspector. The CLI can enable the critic; custom UI forms now default to three bounded critic calls (the API default remains zero). Generator and critic share the run token budget.
+
+
+## Verified Sidon demo (4 October 2026)
+
+See [the run report](demo-verification.md) for actual preparation, search, exact
+witness rechecks, held-out results and limitations. The checker update was deployed.
+The existing-Lean path passes with the reviewed Sidon specification; automatic
+Qwen formalization still required assistance for this problem. The workbench
+supports saved `?formalization=` links, and the engine supports `?run=` links,
+saved history, exact witness plots and model/token provenance. Completed snapshots
+survive restart unchanged. `scripts/export_run.py` and `scripts/import_run.py`
+provide a replayable evidence bundle without executing archived source.
+
+## Human-paced DAG updates
+
+Lineage now uses a parent-first topological order and stable grid positions.
+Every child is below all its parents, including merges whose supplied generation
+matches a parent. Missing or cyclic ancestry is withheld with a visible warning.
+Independent restarts remain disconnected and retain their generation row.
+
+Live arrivals reveal one card every two seconds by default. The viewer can choose
+one/four seconds, pause reveals, advance one idea, replay the saved tree, or show
+all. Selecting an idea pauses reveals for inspection. These controls affect only
+the graph: backend execution, numerical results, counters and logs stay live.
+Saved runs open fully expanded; replay shows current saved evidence rather than
+pretending to replay historical evaluation timings. Existing nodes do not move
+when new candidates arrive; automatic framing can gently pull back.
+
+Validation: ten frontend tests pass, including burst ordering, two-parent merges,
+stable positions, and unresolved/cyclic ancestry. Production build passes.
+Browser QA on the 18-node Sidon run checked two-second arrivals, pause holding the
+node count, one-step advancement, full-tree restoration, and no console errors.

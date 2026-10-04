@@ -625,3 +625,28 @@ dialog::backdrop {
 }
 
 }
+
+.run-history, .run-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 12px 8px; font-size: 12px; border-bottom: 1px solid #e1e5da; }
+.run-history select { flex: 1; min-width: 180px; max-width: 700px; padding: 8px; background: #fffefa; border: 1px solid #dfe4d9; border-radius: 6px; color: inherit; }
+.run-summary button { margin-left: auto; }
+
+.witness { border-bottom: 1px solid #dfe4d9; padding: 6px 0 14px; }
+.witness svg { width: 100%; height: auto; }
+.exact-score { overflow-wrap: anywhere; font-size: 11px; }
+
+.graph-panel + .inspector { max-height: 554px; overflow-y: auto; overscroll-behavior: contain; }
+.activity { margin: 8px 8px 12px; font-size: 12px; color: #655d53; }
+@media(max-width:900px) { .graph-panel + .inspector { max-height: 650px; } }
+/* Generated hypotheses may be paragraphs; keep graph cards within their measured bounds. */
+.idea-box { padding: 9px 10px; }
+.idea-box strong { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; font-size: 11px; line-height: 1.25; height: 42px; }
+.node-meta { margin-bottom: 5px; font-size: 8px; }
+.node-operation { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 8px; margin-top: 4px; }
+.node-score { font-size: 9px; margin-top: 4px; }
+.graph-panel + .inspector h2 { font-size: 19px; line-height: 1.25; }
+
+.reveal-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 16px; border-bottom: 1px solid var(--line); font-size: 12px; }
+.reveal-controls > span { margin-right: auto; font-variant-numeric: tabular-nums; }
+.reveal-controls label { display: flex; align-items: center; gap: 6px; }
+.reveal-controls select { font: inherit; color: inherit; background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 5px; }
+.reveal-controls button { font-size: 12px; }
