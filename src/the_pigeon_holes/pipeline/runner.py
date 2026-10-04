@@ -307,7 +307,8 @@ def prepare_autoresearch(*, problem_name: str, statement: str,
         raise ValueError("a trusted scorer exists: supply its trusted_contract to bind the instance")
     fitness = formalize_and_compile(statement=statement, instance=instance,
                                lean_project=lean_project, artifacts=artifacts, formalizer=formalizer)
-    contract = fitness.contract()
+    from the_pigeon_holes.execution.seed import default_seed
+    contract = fitness.contract(seed_program=default_seed(fitness.interface()))
     fitness.validate_contract(contract)
     active.register(fitness)
     return PreparedResearch(name, contract, fitness, active, True)

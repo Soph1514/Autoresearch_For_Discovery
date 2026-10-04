@@ -5,6 +5,7 @@ import os
 from dataclasses import replace
 from pathlib import Path
 from pydantic import BaseModel, Field
+from the_pigeon_holes.execution.seed import default_seed
 from the_pigeon_holes.fitness.compiler import compile_fitness, load_lean_fitness, VERSION
 from the_pigeon_holes.fitness.synthesis.adapter import (
     SYNTHESIS_VERSION, load_synthesised_fitness,
@@ -95,7 +96,8 @@ async def prepare_contract(body, artifact, *, builder=build_problem_contract, re
                 provenance={'formalization_id': body.formalization_id,
                             'check_artifact': provenance, 'fidelity': result.get('fidelity'),
                             'alignment_reviewed': body.alignment_reviewed})
-            contract = replace(fitness.contract(seed_program=body.seed_program or None, limits=limits),
+            contract = replace(fitness.contract(
+                seed_program=body.seed_program or default_seed(fitness.interface()), limits=limits),
                 evaluation_suite=EvaluationSuite(body.evaluation_suite_id, tuple(
                     EvaluationCase(identity, inputs) for identity, inputs in body.evaluation_cases.items())))
             fitness.validate_contract(contract)
