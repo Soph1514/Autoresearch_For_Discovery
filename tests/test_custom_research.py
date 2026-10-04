@@ -123,7 +123,7 @@ def test_api_persists_formalization_and_fails_closed_when_evaluator_unavailable(
     monkeypatch.setattr(api, 'store', ArtifactStore(tmp_path / 'api.sqlite3'))
     monkeypatch.setattr(api, 'runs', {})
     monkeypatch.setenv('RESEARCH_MODEL', 'test')
-    def unavailable(contract):
+    def unavailable(contract, **kwargs):
         raise RuntimeError('Python evaluator is not connected.')
     monkeypatch.setattr(api, 'make_evaluator', unavailable)
     async def prepared(body, progress=None):
@@ -172,10 +172,10 @@ def test_api_custom_contract_to_completed_run_and_replay(tmp_path, monkeypatch):
     monkeypatch.setattr(api, 'runs', {})
     monkeypatch.setenv('RESEARCH_MODEL', 'test')
     monkeypatch.delenv('RESEARCH_API_PASSWORD', raising=False)
-    async def prepare(body, artifact):
+    async def prepare(body, artifact, **kwargs):
         return demo_contract()
     monkeypatch.setattr(api, 'prepare_contract', prepare)
-    monkeypatch.setattr(api, 'make_evaluator', lambda contract: DemoEvaluator(0))
+    monkeypatch.setattr(api, 'make_evaluator', lambda contract, **kwargs: DemoEvaluator(0))
     monkeypatch.setattr(api, 'AnthropicProgramGenerator', lambda config, **kwargs: DemoGenerator(lambda *args: None, 0))
     api.store.put('formalization', 'checked', {'result': {'check_artifact': {'test': True}}})
     with TestClient(api.app) as client:
@@ -217,8 +217,10 @@ def test_saved_preparation_and_numerical_witness_routes(tmp_path, monkeypatch):
         assert client.get('/api/formalizations/saved').json() == artifact
         assert client.get('/api/formalizations/missing').status_code == 404
         run = LabRun(store=api.store)
-        run.evidence['numerical'] = {'candidate': {'cases': {'n-2': {'output':[2**40, 2**40],
-            'c1_exact': {'numerator':'2','denominator':'1'}}}}}
+        run.evidence['numerical'] = {'candidate': {'cases': {'n-2': {'inputs': {'n': 2}, 'ok': True,
+            'fitness_evidence': {'output': [2**40, 2**40],
+                'c1_exact': {'numerator': '2', 'denominator': '1'}}}},
+            'aggregate_metrics_exact': {'c1': {'numerator': '2', 'denominator': '1'}}}}
         api.runs[run.id] = run
         assert client.get(f'/api/runs/{run.id}/numerical/candidate').json() == run.evidence['numerical']['candidate']
         assert client.get(f'/api/runs/{run.id}/numerical/missing').status_code == 404

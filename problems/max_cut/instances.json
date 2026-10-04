@@ -1,0 +1,191 @@
+[
+  {
+    "id": "weighted-triangle",
+    "inputs": {
+      "n": 3,
+      "edges": [
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          1,
+          2,
+          3
+        ],
+        [
+          0,
+          2,
+          5
+        ]
+      ]
+    },
+    "target": {
+      "value": 8,
+      "kind": "optimal",
+      "justification": "Exhaustive enumeration of all feasible constructions; independently rechecked in tests/test_construction_fitness.py."
+    },
+    "optimal_witness": [
+      1,
+      1,
+      0
+    ]
+  },
+  {
+    "id": "weighted-5",
+    "inputs": {
+      "n": 5,
+      "edges": [
+        [
+          0,
+          1,
+          7
+        ],
+        [
+          0,
+          2,
+          2
+        ],
+        [
+          0,
+          4,
+          4
+        ],
+        [
+          1,
+          2,
+          8
+        ],
+        [
+          1,
+          3,
+          3
+        ],
+        [
+          2,
+          3,
+          6
+        ],
+        [
+          2,
+          4,
+          1
+        ],
+        [
+          3,
+          4,
+          5
+        ]
+      ]
+    },
+    "target": {
+      "value": 28,
+      "kind": "optimal",
+      "justification": "Exhaustive enumeration of all feasible constructions; independently rechecked in tests/test_construction_fitness.py."
+    },
+    "optimal_witness": [
+      1,
+      0,
+      1,
+      1,
+      0
+    ]
+  },
+  {
+    "id": "clique-6",
+    "inputs": {
+      "n": 6,
+      "edges": [
+        [
+          0,
+          1,
+          1
+        ],
+        [
+          0,
+          2,
+          1
+        ],
+        [
+          0,
+          3,
+          1
+        ],
+        [
+          0,
+          4,
+          1
+        ],
+        [
+          0,
+          5,
+          1
+        ],
+        [
+          1,
+          2,
+          1
+        ],
+        [
+          1,
+          3,
+          1
+        ],
+        [
+          1,
+          4,
+          1
+        ],
+        [
+          1,
+          5,
+          1
+        ],
+        [
+          2,
+          3,
+          1
+        ],
+        [
+          2,
+          4,
+          1
+        ],
+        [
+          2,
+          5,
+          1
+        ],
+        [
+          3,
+          4,
+          1
+        ],
+        [
+          3,
+          5,
+          1
+        ],
+        [
+          4,
+          5,
+          1
+        ]
+      ]
+    },
+    "target": {
+      "value": 9,
+      "kind": "optimal",
+      "justification": "Exhaustive enumeration of all feasible constructions; independently rechecked in tests/test_construction_fitness.py."
+    },
+    "optimal_witness": [
+      1,
+      1,
+      1,
+      0,
+      0,
+      0
+    ]
+  }
+]

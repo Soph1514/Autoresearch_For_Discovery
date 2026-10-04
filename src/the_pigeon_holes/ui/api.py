@@ -19,6 +19,7 @@ from .contracts import InvalidControlTransition, TERMINAL_STATUSES
 
 from .storage import ArtifactStore, contract_from_dict
 from .preparation import ContractInput, prepare_contract, make_evaluator
+from the_pigeon_holes.fitness.compiler import LeanFitnessError
 from the_pigeon_holes.evolution.models import EvolutionConfig, EvolutionLimits
 from the_pigeon_holes.llm import AnthropicGeneratorConfig, AnthropicProgramGenerator
 
@@ -101,7 +102,7 @@ async def start_run(body: StartInput):
         model = body.reasoning_model
         try:
             contract = contract_from_dict(artifact['contract'])
-            evaluator = await asyncio.to_thread(make_evaluator, contract)
+            evaluator = await asyncio.to_thread(make_evaluator, contract, store=store)
             from the_pigeon_holes.llm.budget import ProviderTokenBudget
             budget = ProviderTokenBudget(body.max_tokens, max_cost_usd=body.max_cost_usd)
             generator = AnthropicProgramGenerator(AnthropicGeneratorConfig(
@@ -286,7 +287,9 @@ def run_artifact(run_id: str):
 async def create_contract(body: ContractInput):
     artifact = store.get('formalization', body.formalization_id)
     try:
-        contract = await prepare_contract(body, artifact)
+        contract = await prepare_contract(body, artifact, store=store)
+    except LeanFitnessError as error:
+        raise HTTPException(422, {'stage': error.stage, 'message': error.reason}) from error
     except ValueError as error:
         raise HTTPException(422, str(error)) from error
     except RuntimeError as error:
@@ -296,17 +299,35 @@ async def create_contract(body: ContractInput):
         logging.getLogger(__name__).exception('Contract extraction failed')
         raise HTTPException(503, 'Interface extraction unavailable. Check the research model and backend credentials.') from error
     identity = str(uuid4())
-    provenance = {'formalization_id': body.formalization_id,
+    provenance = {'formalization_id': body.formalization_id, 'contract_id': identity,
         'check_artifact': artifact['result']['check_artifact'],
         'fidelity': artifact['result'].get('fidelity'), 'alignment_reviewed': body.alignment_reviewed}
+    compiled = store.get('fitness', contract.fitness_function.id)
+    compiler = None
+    if compiled:
+        compiler = {'status': 'compiled', 'fitness_id': contract.fitness_function.id,
+                    'validation': compiled['manifest']['validation'], 'english_fidelity': 'not_proven'}
+        provenance['compiler'] = compiler
     store.put('contract', identity, {'contract': contract, 'provenance': provenance})
-    return {'id': identity, 'signature': contract.solve_signature,
+    return {'id': identity, 'signature': contract.solve_signature, 'compiler': compiler,
         'metric': contract.optimisation_goal.primary.name,
         'direction': contract.optimisation_goal.primary.direction,
         'fitness_function': {'id': contract.fitness_function.id,
             'version': contract.fitness_function.version,
             'implementation_sha256': contract.fitness_function.implementation_sha256},
-        'seed_status': 'structurally_valid; behavioral evaluation required at run start'}
+        'seed_status': ('evaluated at run start; infeasible seed can be repaired' if compiler else
+                        'structurally_valid; behavioral evaluation required at run start')}
+
+
+@app.get('/api/contracts/{identity}/compiler')
+def compiled_evaluator(identity: str):
+    artifact = store.get('contract', identity)
+    if artifact is None or not artifact.get('provenance', {}).get('compiler'):
+        raise HTTPException(404, 'No compiled evaluator for this contract.')
+    saved = store.get('fitness', artifact['contract']['fitness_function']['id'])
+    if saved is None:
+        raise HTTPException(404, 'Compiled evaluator not found.')
+    return saved['manifest']
 
 
 @app.get('/api/formalizations/{identity}')
@@ -336,6 +357,8 @@ def run_summary(run_id: str):
     evaluation = encode(outcome.get('best_evaluation') or run.evidence.get('evaluations', {}).get(winner_id)) or {}
     return {'formalization_id': (run.provenance or {}).get('formalization_id'),
         'published_baseline': (run.provenance or {}).get('published_baseline'),
+        'contract_id': (run.provenance or {}).get('contract_id'),
+        'compiler': (run.provenance or {}).get('compiler'),
         'model': generation.get('model'), 'reported_tokens': outcome.get('tokens_used'),
         'generations': outcome.get('generations_completed'), 'stop_reason': outcome.get('stop_reason'),
         'active_seconds': outcome.get('elapsed_seconds'),

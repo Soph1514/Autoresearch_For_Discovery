@@ -5,6 +5,11 @@ and evaluator branch `origin/eo_loop` at `36fadc0`.
 
 ## Done
 
+- Hand-written known construction scorers and runnable suites for knapsack,
+  symmetric TSP, weighted max cut and identical-machine makespan, alongside
+  autocorrelation and bin packing. Sources, variants and qualification are in
+  [known-problems.md](known-problems.md). Fitness-function synthesis remains deferred.
+
 - Lean generation/checking/repair, fidelity review, server-recorded check provenance,
   immutable contract preparation, and both custom-run UI entry points.
 - Generic `sandbox-fitness-v1` evaluator plus the built-in `autocorrelation`
@@ -42,9 +47,9 @@ lineage, rejected attempts and held-out checks are exported. See
 
 ## Follow-up limitations to resolve or disclose
 
-- The built-in registry contains only the autocorrelation fitness function, not
-  arbitrary uploaded problems. Other families need their own trusted, versioned,
-  content-addressed fitness functions.
+- The built-in registry contains six supported families listed in
+  [known-problems.md](known-problems.md). Arbitrary uploaded problems still need
+  their own trusted, versioned, content-addressed fitness functions.
 - `ResourceLimits.max_iterations` is not independently enforced by this worker.
   Wall-clock and memory limits are enforced; do not claim an instruction/iteration cap.
 - Exact rational scores become floats at the evolution interface. The CLI rechecks

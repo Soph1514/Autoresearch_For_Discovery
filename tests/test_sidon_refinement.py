@@ -2,7 +2,7 @@ import random
 from fractions import Fraction
 import pytest
 from the_pigeon_holes.fitness.sidon_refinement import convolution, exact_score, validate
-from the_pigeon_holes.fitness.autocorrelation import c1
+from problems.autocorrelation.fitness import c1
 
 
 def test_packed_coefficients_match_independent_direct_convolution():

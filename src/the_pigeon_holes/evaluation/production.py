@@ -139,7 +139,7 @@ class SandboxCandidateEvaluator:
                 raise RuntimeError(
                     f"fitness function omitted configured metric {goal.name!r}"
                 ) from exc
-            aggregated[goal.name] = _aggregate(
+            aggregated[goal.name] = aggregate_metric(
                 values, problem.optimisation_goal.aggregation, goal
             )
 
@@ -158,8 +158,9 @@ class SandboxCandidateEvaluator:
         )
 
 
-def _aggregate(values: Sequence[FitnessNumber], aggregation: str,
-               goal: MetricGoal) -> FitnessNumber:
+def aggregate_metric(values: Sequence[FitnessNumber], aggregation: str,
+                     goal: MetricGoal) -> FitnessNumber:
+    """Combine per-case metric values. Shared so recheck tooling cannot drift."""
     if aggregation == "sum":
         return sum(values)
     if aggregation == "mean":

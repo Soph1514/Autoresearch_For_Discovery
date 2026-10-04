@@ -1,0 +1,81 @@
+[
+  {
+    "id": "two-machines-5",
+    "inputs": {
+      "machines": 2,
+      "durations": [
+        3,
+        3,
+        2,
+        2,
+        2
+      ]
+    },
+    "target": {
+      "value": 6,
+      "kind": "optimal",
+      "justification": "Exhaustive enumeration of all feasible constructions; independently rechecked in tests/test_construction_fitness.py."
+    },
+    "optimal_witness": [
+      0,
+      0,
+      1,
+      1,
+      1
+    ]
+  },
+  {
+    "id": "three-machines-7",
+    "inputs": {
+      "machines": 3,
+      "durations": [
+        5,
+        5,
+        4,
+        4,
+        3,
+        3,
+        3
+      ]
+    },
+    "target": {
+      "value": 9,
+      "kind": "optimal",
+      "justification": "Exhaustive enumeration of all feasible constructions; independently rechecked in tests/test_construction_fitness.py."
+    },
+    "optimal_witness": [
+      0,
+      1,
+      0,
+      1,
+      2,
+      2,
+      2
+    ]
+  },
+  {
+    "id": "two-machines-mixed",
+    "inputs": {
+      "machines": 2,
+      "durations": [
+        8,
+        7,
+        6,
+        5,
+        4
+      ]
+    },
+    "target": {
+      "value": 15,
+      "kind": "optimal",
+      "justification": "Exhaustive enumeration of all feasible constructions; independently rechecked in tests/test_construction_fitness.py."
+    },
+    "optimal_witness": [
+      0,
+      0,
+      1,
+      1,
+      1
+    ]
+  }
+]

@@ -5,12 +5,12 @@ from fractions import Fraction
 
 import pytest
 
-from the_pigeon_holes.fitness.autocorrelation import (
+from problems.autocorrelation.fitness import (
     AUTOCORRELATION_FITNESS_REF,
     AutocorrelationFitnessFunction,
 )
 from the_pigeon_holes.fitness.registry import FitnessFunctionRegistry, builtin_registry
-from the_pigeon_holes.evaluation.production import _aggregate
+from the_pigeon_holes.evaluation.production import aggregate_metric
 from the_pigeon_holes.execution.signature_extractor import MetricGoal
 from the_pigeon_holes.models.problem_contract import FitnessFunctionRef
 from the_pigeon_holes.problems.autocorrelation import autocorrelation_contract
@@ -60,7 +60,7 @@ def test_fitness_function_validates_contract_and_expected_output_length():
 def test_generic_aggregation_respects_goal_direction(
     aggregation, direction, expected
 ):
-    assert _aggregate(
+    assert aggregate_metric(
         [Fraction(1), Fraction(2), Fraction(3)],
         aggregation,
         MetricGoal("score", direction),

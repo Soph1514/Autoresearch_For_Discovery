@@ -50,7 +50,7 @@ def contract_from_dict(data):
         # replayable, but their synthetic reference cannot resolve for a new run.
         legacy = data.pop('evaluator_version')
         if legacy == 'autocorrelation-exact-v1':
-            from the_pigeon_holes.fitness.autocorrelation import AUTOCORRELATION_FITNESS_REF
+            from problems.autocorrelation.fitness import AUTOCORRELATION_FITNESS_REF
             fitness_data = encode(AUTOCORRELATION_FITNESS_REF)
         else:
             fitness_data = {
