@@ -53,7 +53,7 @@ class ActiveRunClock:
 
 
 class LabRun:
-    def __init__(self, delay=.8, *, contract=None, generator=None, evaluator=None, limits=None, config=None, store=None, provenance=None, critic=None):
+    def __init__(self, delay=.8, *, contract=None, generator=None, evaluator=None, limits=None, config=None, store=None, provenance=None, critic=None, literature_review=False):
         self.delay = delay
         self.contract = contract or demo_contract()
         self.custom = contract is not None
@@ -67,6 +67,10 @@ class LabRun:
         self.store = store
         self.provenance = provenance
         self.outcome = None
+        self.literature = None
+        self.literature_review = literature_review
+        self.saved_budget = None
+        self.budget = getattr(generator, 'budget', None)
         self.evidence = {'candidates': {}, 'evaluations': {}, 'generation_failures': {}}
         self.generation_config = getattr(generator, 'config', None)
         fitness = getattr(evaluator, 'fitness_function', None)
@@ -111,14 +115,20 @@ class LabRun:
                     'formalVerification': ('Lean specification checked; Python validity evaluated per candidate'
                         if provenance and provenance.get('check_artifact') else 'Not performed; numerical evaluation only'),
                     'maxTokens': self.limits.max_tokens, 'maxTimeSeconds': self.limits.max_time_seconds})
+        if self.budget is not None:
+            self.budget.on_change = self.persist
         self.persist()
+
+    def budget_summary(self):
+        return self.budget.summary() if self.budget is not None else self.saved_budget
 
     def persist(self):
         if self.store:
             self.store.put('run', self.id, {'snapshot': self.snapshot, 'events': self.events,
                 'contract': self.contract, 'provenance': self.provenance, 'outcome': self.outcome,
                 'config': self.config, 'limits': self.limits, 'evidence': self.evidence,
-                'generation_config': self.generation_config, 'evaluator_config': self.evaluator_config})
+                'generation_config': self.generation_config, 'evaluator_config': self.evaluator_config,
+                'budget': self.budget_summary(), 'literature': self.literature})
 
     @classmethod
     def restore(cls, artifact, store):
@@ -130,6 +140,9 @@ class LabRun:
         run.snapshot.setdefault('assessments', [])
         run.provenance, run.outcome = artifact.get('provenance'), artifact.get('outcome')
         run.evidence = artifact.get('evidence', {})
+        run.budget = None
+        run.saved_budget = artifact.get('budget')
+        run.literature = artifact.get('literature')
         run.generation_config = artifact.get('generation_config')
         run.evaluator_config = artifact.get('evaluator_config')
         run.config, run.limits = artifact.get('config'), artifact.get('limits')
@@ -328,6 +341,13 @@ class LabRun:
         try:
             self.log("start", "Custom evolution; seed must pass the configured evaluator before generation." if self.custom else
                      "Real evolution engine; deterministic demo generator and analytic demo evaluator. No LLM calls.")
+            if self.literature_review:
+                from the_pigeon_holes.llm.literature import review_literature, research_context
+                self.log('literature', 'Searching prior work before evolution; sources and costs will be saved.')
+                self.literature = await review_literature(self.generator.client, self.budget, self.contract.natural_language_spec)
+                self.generator.literature_context = research_context(self.literature)
+                self.log('literature', f"Review complete: {len(self.literature['sources'])} sources, {len(self.literature['queries'])} searches. Evolution keeps independent restarts.")
+                await self.checkpoint()
             loop = EvolutionLoop(config=self.config, limits=self.limits,
                 generator=self.generator if self.custom else DemoGenerator(self.log, self.delay),
                 evaluator=self.evaluator if self.custom else DemoEvaluator(self.delay), observer=self,
@@ -335,9 +355,12 @@ class LabRun:
             outcome = await loop.run(self.contract)
             from .storage import encode
             self.outcome = encode(outcome)
+            if self.budget is not None and self.budget.exhausted:
+                self.outcome['stop_reason'] = 'provider_budget'
+            reason = self.outcome['stop_reason']
             self.cancel_pending('Run budget reached before this batch completed.')
-            self.log("complete", f"Stopped: {outcome.stop_reason.value}; {outcome.tokens_used} reported tokens, {outcome.generations_completed} generations.")
-            self.emit("run_status_changed", {"status": "failed" if outcome.stop_reason.value in ('invalid_seed', 'generation_failed') else "completed", "endedAt": now()})
+            self.log("complete", f"Stopped: {reason}; {outcome.tokens_used} reported tokens, {outcome.generations_completed} generations.")
+            self.emit("run_status_changed", {"status": "failed" if reason in ('invalid_seed', 'generation_failed') else "completed", "endedAt": now()})
         except asyncio.CancelledError:
             self.cancel_pending("Run stopped.")
             self.emit("run_status_changed", {"status": "stopped", "endedAt": now()})

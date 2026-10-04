@@ -25,6 +25,7 @@ type IdeaNode = Node<{
   operation: string;
   status: string;
   elite: boolean;
+  winner: boolean;
   inactive: boolean;
   score?: number;
   metric: string;
@@ -38,13 +39,13 @@ function IdeaBox({ data, selected, id }: NodeProps<IdeaNode>) {
       onClick={data.select}
       aria-label={`Inspect idea ${id}: ${data.title}`}
       aria-pressed={selected}
-      className={`idea-box ${data.elite ? "elite" : ""} ${data.inactive ? "inactive" : ""} ${selected ? "selected" : ""}`}
+      className={`idea-box ${data.winner ? "winner" : ""} ${data.elite ? "elite" : ""} ${data.inactive ? "inactive" : ""} ${selected ? "selected" : ""}`}
     >
       <Handle type="target" position={Position.Top} />
       <div className="node-meta">
         IDEA {id.replace("candidate-", "")}
         <span>
-          {data.elite
+          {data.winner ? "★ BEST" : data.elite
             ? "★ ELITE"
             : data.status === "running"
               ? "● RUNNING"
@@ -78,8 +79,10 @@ function Graph({
   snapshot,
   selected,
   onSelect,
+  winnerId,
 }: {
   snapshot: Snapshot;
+  winnerId?: string;
   selected: string | null;
   onSelect: (id: string) => void;
 }) {
@@ -160,6 +163,7 @@ function Graph({
         parents: i.parents,
         status: experiment?.status ?? "proposed",
         elite,
+        winner: i.id === winnerId,
         inactive: inactiveIds.has(i.id),
         score: experiment?.valid
           ? experiment.metrics[snapshot.run.metricName ?? "poa"]

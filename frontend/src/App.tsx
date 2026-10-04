@@ -4,16 +4,25 @@ import { IdeaGraph, operationLabel } from "./IdeaGraph";
 import { Composer } from "./Composer";
 import type { Run, Snapshot } from "./contracts";
 function RunProvenance({runId, status}: {runId: string; status: string}) {
-  const [summary, setSummary] = useState<{formalization_id?: string; model?: string; reported_tokens?: number; generations?: number; stop_reason?: string} | null>(null);
+  const [summary, setSummary] = useState<{formalization_id?: string; model?: string; reported_tokens?: number; generations?: number; stop_reason?: string;
+    budget?: {max_cost_usd: number; estimated_cost_usd: number; committed_cost_usd: number};
+    literature?: {text: string; sources: {url: string; title: string}[]; queries: string[]}} | null>(null);
   useEffect(() => {
     const controller = new AbortController();
-    fetch(`/api/runs/${runId}/summary`, {signal: controller.signal}).then(r => r.ok ? r.json() : null)
+    const refresh = () => fetch(`/api/runs/${runId}/summary`, {signal: controller.signal}).then(r => r.ok ? r.json() : null)
       .then(setSummary).catch(() => {});
-    return () => controller.abort();
+    void refresh();
+    const timer = ["completed", "failed", "stopped"].includes(status) ? undefined : setInterval(refresh, 5000);
+    return () => { controller.abort(); clearInterval(timer); };
   }, [runId, status]);
   if (!summary) return null;
   return <div className="run-summary">
     {summary.formalization_id && <a href={`/?formalization=${summary.formalization_id}`}>Checked specification & alignment review ↗</a>}
+    {summary.budget && <span>API estimate ${summary.budget.estimated_cost_usd.toFixed(2)} / ${summary.budget.max_cost_usd.toFixed(2)} cap · ${summary.budget.committed_cost_usd.toFixed(2)} including reservations</span>}
+    {summary.literature && <details className="literature-review"><summary>Opening literature review · {summary.literature.sources.length} sources</summary>
+      <p style={{whiteSpace: 'pre-wrap'}}>{summary.literature.text}</p>
+      <ul>{summary.literature.sources.filter(s => /^https?:\/\//.test(s.url)).map(s => <li key={s.url}><a href={s.url} target="_blank" rel="noreferrer">{s.title}</a></li>)}</ul>
+      <p>Source claims guide exploration; only the fixed evaluator decides validity and scores.</p></details>}
     {summary.model && <span>Model: {summary.model}</span>}
     {summary.reported_tokens != null && <span>{summary.reported_tokens.toLocaleString()} reported evolution tokens · {summary.generations} generations · {summary.stop_reason?.replaceAll('_', ' ')}</span>}
   </div>;
@@ -260,6 +269,10 @@ export default function App() {
       ? Math.min(...values)
       : Math.max(...values)
     : null;
+  const winner = snapshot?.experiments.find(e => e.valid && e.metrics[metric] === best);
+  useEffect(() => {
+    if (status && ['completed', 'stopped', 'failed'].includes(status) && winner) setSelected(winner.ideaId);
+  }, [snapshot?.run.id, status]);
   const baseline = snapshot?.experiments.find(e => e.ideaId === 'candidate-000000' && e.valid)?.metrics[metric];
   const improvement = best !== null && baseline && baseline !== 0 ?
     100 * (snapshot?.run.direction === 'minimize' ? baseline-best : best-baseline) / Math.abs(baseline) : null;
@@ -374,12 +387,14 @@ export default function App() {
           <span><strong>{snapshot.experiments.filter(e => e.valid === false).length}</strong> rejected attempts</span>
           <span><strong>{new Set(snapshot.elites.filter(e => e.current).map(e => e.ideaId)).size}</strong> current elites</span>
           <span><strong>{snapshot.generationFailures.length}</strong> generation failures</span>
-          <button onClick={() => { const winner = snapshot.experiments.find(e => e.valid && e.metrics[metric] === best); if (winner) setSelected(winner.ideaId); }}>Inspect best candidate ↗</button>
+          {!active && <strong>Final best in this run: {best.toFixed(6)} · {winner?.ideaId}</strong>}
+          <button onClick={() => { if (winner) setSelected(winner.ideaId); }}>Inspect best candidate ↗</button>
         </div>}
         {snapshot ? (
           <>
             <div className="workspace">
               <IdeaGraph
+                winnerId={winner?.ideaId}
                 snapshot={snapshot}
                 selected={selected}
                 onSelect={setSelected}

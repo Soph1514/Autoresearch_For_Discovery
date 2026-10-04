@@ -100,7 +100,7 @@ class AnthropicCritic:
     async def _create(self, **kwargs):
         if self.budget is None:
             return await self.client.messages.create(**kwargs)
-        return await self.budget.create(self.client, **kwargs)
+        return await self.budget.create(self.client, stage="critic", **kwargs)
 
     async def aclose(self):
         await self.client.close()

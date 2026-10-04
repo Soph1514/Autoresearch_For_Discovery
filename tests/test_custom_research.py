@@ -176,7 +176,7 @@ def test_api_custom_contract_to_completed_run_and_replay(tmp_path, monkeypatch):
         return demo_contract()
     monkeypatch.setattr(api, 'prepare_contract', prepare)
     monkeypatch.setattr(api, 'make_evaluator', lambda contract: DemoEvaluator(0))
-    monkeypatch.setattr(api, 'AnthropicProgramGenerator', lambda config: DemoGenerator(lambda *args: None, 0))
+    monkeypatch.setattr(api, 'AnthropicProgramGenerator', lambda config, **kwargs: DemoGenerator(lambda *args: None, 0))
     api.store.put('formalization', 'checked', {'result': {'check_artifact': {'test': True}}})
     with TestClient(api.app) as client:
         prepared = client.post('/api/contracts', json={'formalization_id': 'checked',
@@ -185,7 +185,7 @@ def test_api_custom_contract_to_completed_run_and_replay(tmp_path, monkeypatch):
             'fitness_function_version': 'analytic-v1'})
         assert prepared.status_code == 201
         response = client.post('/api/runs', json={'mode': 'custom',
-            'contract_id': prepared.json()['id'], 'max_tokens': 8192})
+            'contract_id': prepared.json()['id'], 'max_tokens': 8192, 'literature_review': False})
         assert response.status_code == 201
         identity = response.json()['id']
         for _ in range(100):

@@ -650,3 +650,7 @@ dialog::backdrop {
 .reveal-controls label { display: flex; align-items: center; gap: 6px; }
 .reveal-controls select { font: inherit; color: inherit; background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 5px; }
 .reveal-controls button { font-size: 12px; }
+.idea-box.winner { border: 2px solid #a57922; box-shadow: 0 0 0 3px #d4b66a55; background: #fff6d9; }
+.idea-box.winner .node-meta span { color: #795408; font-weight: 700; }
+.literature-review { width: 100%; padding: 12px; border: 1px solid #ddd5c6; }
+.literature-review[open] { max-height: 420px; overflow: auto; }

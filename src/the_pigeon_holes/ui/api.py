@@ -71,7 +71,10 @@ class StartInput(BaseModel):
     mode: Literal['demo', 'custom']
     contract_id: str | None = None
     max_critic_calls: int = Field(default=0, ge=0, le=100)
-    max_tokens: int = Field(default=32768, gt=0, le=1000000)
+    max_tokens: int = Field(default=5000000, gt=0, le=20000000)
+    max_cost_usd: float = Field(default=50, gt=0, le=1000, allow_inf_nan=False)
+    literature_review: bool = True
+    reasoning_model: Literal['claude-opus-5-5', 'claude-opus-4-6', 'claude-sonnet-4-6'] = 'claude-opus-5-5'
     max_time_seconds: float = Field(default=300, gt=0, le=3600, allow_inf_nan=False)
 
 
@@ -95,13 +98,15 @@ async def start_run(body: StartInput):
         artifact = store.get('contract', body.contract_id or '')
         if artifact is None:
             raise HTTPException(422, 'Prepare a problem contract first.')
-        model = os.environ.get('RESEARCH_MODEL')
-        if not model:
-            raise HTTPException(503, 'Configure RESEARCH_MODEL before starting custom research.')
+        model = body.reasoning_model
         try:
             contract = contract_from_dict(artifact['contract'])
             evaluator = await asyncio.to_thread(make_evaluator, contract)
-            generator = AnthropicProgramGenerator(AnthropicGeneratorConfig(model=model, max_attempts=1, token_budget=body.max_tokens))
+            from the_pigeon_holes.llm.budget import ProviderTokenBudget
+            budget = ProviderTokenBudget(body.max_tokens, max_cost_usd=body.max_cost_usd)
+            generator = AnthropicProgramGenerator(AnthropicGeneratorConfig(
+                model=model, reasoning_effort='high', max_output_tokens=12000,
+                timeout_seconds=240, max_attempts=1, token_budget=body.max_tokens), budget=budget)
         except (RuntimeError, ImportError, AttributeError) as error:
             raise HTTPException(503, str(error)) from error
         except ValueError as error:
@@ -110,10 +115,10 @@ async def start_run(body: StartInput):
             await generator.aclose()
             raise HTTPException(409, 'Stop the active local run before starting another.')
         from the_pigeon_holes.llm.critic import AnthropicCritic, CriticConfig
-        critic = AnthropicCritic(CriticConfig(model=model), budget=generator.budget) if body.max_critic_calls else None
+        critic = AnthropicCritic(CriticConfig(model='claude-sonnet-4-6'), budget=generator.budget) if body.max_critic_calls else None
         run = LabRun(contract=contract, generator=generator, evaluator=evaluator, critic=critic,
             config=EvolutionConfig(), limits=EvolutionLimits(max_tokens=body.max_tokens, max_time_seconds=body.max_time_seconds, max_critic_calls=body.max_critic_calls),
-            store=store, provenance=artifact['provenance'])
+            store=store, provenance=artifact['provenance'], literature_review=body.literature_review)
     else:
         run = LabRun(store=store)
     runs[run.id] = run
@@ -330,4 +335,7 @@ def run_summary(run_id: str):
         'model': generation.get('model'), 'reported_tokens': outcome.get('tokens_used'),
         'generations': outcome.get('generations_completed'), 'stop_reason': outcome.get('stop_reason'),
         'active_seconds': outcome.get('elapsed_seconds'),
+        'budget': run.budget_summary(), 'literature': run.literature,
+        'best_candidate_id': (outcome.get('best_candidate') or {}).get('id'),
+        'best_metrics': (outcome.get('best_evaluation') or {}).get('metrics'),
         'scope': 'Reported evolution tokens exclude preparation and unknown in-flight billing.'}
