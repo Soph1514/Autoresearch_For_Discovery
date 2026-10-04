@@ -300,6 +300,17 @@ function Graph({
         <button disabled={!queued} onClick={() => setVisibleIds(lineage.ordered.map(i => i.id))}>Show all</button>
       </div>
       {lineage.blocked.length > 0 && <p role="alert">{lineage.blocked.length} ideas have missing or cyclic ancestry and cannot yet be drawn.</p>}
+      <div className="graph-stage">
+      {visibleIdeas.length === 0 && <div className="graph-empty" role="status">
+        <strong>{queued ? "Ideas are ready to display" : "No candidate ideas yet"}</strong>
+        <p>{queued
+          ? displayPaused ? "Tree playback is paused. Choose Play reveals or Show all." : "The first idea will appear on the next reveal. Choose Show all to skip playback."
+          : lineage.blocked.length ? "Waiting for the missing ancestry reported above."
+          : ["completed", "stopped", "failed"].includes(snapshot.run.status)
+            ? "This run ended before producing a candidate. See the research log below."
+            : snapshot.run.status === "paused" ? "Research is paused. Resume the lab to continue."
+            : "The lab is preparing the first candidate. Literature review and model calls can take a few minutes; progress is recorded below."}</p>
+      </div>}
       <div
         className="graph-canvas"
         ref={canvas}
@@ -342,6 +353,7 @@ function Graph({
             onFitView={() => setFollow(false)}
           />
         </ReactFlow>
+      </div>
       </div>
       <div className="graph-caption">
         One idea per beat, parents before children. Display controls do not pause research. Replays show saved results, not historical evaluation timing.
