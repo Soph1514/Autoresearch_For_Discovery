@@ -2,7 +2,46 @@ import { useEffect, useRef, useState } from "react";
 import { useResearch } from "./research";
 import { IdeaGraph, operationLabel } from "./IdeaGraph";
 import { Composer } from "./Composer";
-import type { Snapshot } from "./contracts";
+import type { Run, Snapshot } from "./contracts";
+function RunProvenance({runId, status}: {runId: string; status: string}) {
+  const [summary, setSummary] = useState<{formalization_id?: string; model?: string; reported_tokens?: number; generations?: number; stop_reason?: string} | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(`/api/runs/${runId}/summary`, {signal: controller.signal}).then(r => r.ok ? r.json() : null)
+      .then(setSummary).catch(() => {});
+    return () => controller.abort();
+  }, [runId, status]);
+  if (!summary) return null;
+  return <div className="run-summary">
+    {summary.formalization_id && <a href={`/?formalization=${summary.formalization_id}`}>Checked specification & alignment review ↗</a>}
+    {summary.model && <span>Model: {summary.model}</span>}
+    {summary.reported_tokens != null && <span>{summary.reported_tokens.toLocaleString()} reported evolution tokens · {summary.generations} generations · {summary.stop_reason?.replaceAll('_', ' ')}</span>}
+  </div>;
+}
+function Witness({runId, candidateId}: {runId: string; candidateId: string}) {
+  const [record, setRecord] = useState<{cases: Record<string, {output?: number[]; c1_exact?: {numerator: string; denominator: string}}> } | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    setRecord(null);
+    fetch(`/api/runs/${runId}/numerical/${candidateId}`, {signal: controller.signal})
+      .then(r => r.ok ? r.json() : null).then(setRecord).catch(() => {});
+    return () => controller.abort();
+  }, [runId, candidateId]);
+  if (!record) return null;
+  return <section><h3>Constructed witnesses</h3>{Object.entries(record.cases).map(([id, c]) => {
+    if (!c.output || !c.c1_exact) return null;
+    const q = c.output, peak = Math.max(...q), n = q.length;
+    const path = q.map((x,i) => `${i ? 'L' : 'M'} ${10 + 280*i/n} ${90-75*x/peak} H ${10+280*(i+1)/n}`).join(' ');
+    return <div key={id} className="witness">
+      <p>{id} · {n} cells · c1 ≈ {(Number(c.c1_exact.numerator)/Number(c.c1_exact.denominator)).toFixed(8)}</p>
+      <svg viewBox="0 0 300 112" role="img" aria-label={`Step function witness for ${id}, heights normalized for display`}>
+        <path d="M10 90H290" stroke="#bcb5a9"/><path d={path} fill="none" stroke="#655d52" strokeWidth="1.5"/>
+        <text x="10" y="108" fontSize="10">−1/4</text><text x="267" y="108" fontSize="10">1/4</text>
+      </svg>
+      <details><summary>Exact rational certificate</summary><p className="exact-score">{c.c1_exact.numerator} / {c.c1_exact.denominator}</p><p className="muted">Computed independently with integer arithmetic. Full integer heights are included in the evidence download.</p></details>
+    </div>;
+  })}</section>;
+}
 function Inspector({
   snapshot,
   selected,
@@ -36,6 +75,9 @@ function Inspector({
           {e.current ? "★ Elite" : "Former elite"} · {e.niche}
         </span>
       ))}
+      {snapshot.run.backend === "python" && <Witness runId={snapshot.run.id} candidateId={idea.id} />}
+      <h3>Candidate hypothesis</h3>
+      <p className="muted">Proposed by the generator. Only the recorded test cases were evaluated.</p>
       <ul className="idea-points">{idea.description.split(/(?<=\.)\s+(?=[A-Z])/).map((point, i) => <li key={i}>{point}</li>)}</ul>
       <h3>How it was formed</h3>
       <div className="parent-links">
@@ -199,6 +241,11 @@ export default function App() {
     return () => clearInterval(t);
   }, []);
   useEffect(() => setSelected(null), [snapshot?.run.id]);
+  const [history, setHistory] = useState<Run[]>([]);
+  useEffect(() => {
+    fetch('/api/runs').then(r => { if (!r.ok) throw Error('History unavailable'); return r.json(); })
+      .then(setHistory).catch(() => setHistory([]));
+  }, [snapshot?.run.id, snapshot?.run.status]);
   const custom = snapshot?.run.backend === "python";
   const status = snapshot?.run.status;
   const active =
@@ -213,6 +260,9 @@ export default function App() {
       ? Math.min(...values)
       : Math.max(...values)
     : null;
+  const baseline = snapshot?.experiments.find(e => e.ideaId === 'candidate-000000' && e.valid)?.metrics[metric];
+  const improvement = best !== null && baseline && baseline !== 0 ?
+    100 * (snapshot?.run.direction === 'minimize' ? baseline-best : best-baseline) / Math.abs(baseline) : null;
   const elapsed = snapshot
     ? Math.max(
         0,
@@ -262,7 +312,7 @@ export default function App() {
             disabled={busy}
             onClick={() => void command("start")}
           >
-            {snapshot ? "Run demo again" : "Run routing demo"}
+            {snapshot && !custom ? "Run demo again" : "Run routing demo"}
           </button>
         )}
       </header>
@@ -272,10 +322,19 @@ export default function App() {
         </p>
       )}
       <main>
+        {history.length > 0 && <nav className="run-history" aria-label="Saved runs">
+          <label htmlFor="run-history">Saved runs</label>
+          <select id="run-history" value={snapshot?.run.id || ''} onChange={e => window.location.assign(`/engine.html?run=${encodeURIComponent(e.target.value)}`)}>
+            <option value="" disabled>Select a research run</option>
+            {[...history].reverse().map(run => <option key={run.id} value={run.id}>{run.title} · {run.status} · {new Date(run.startedAt).toLocaleString('en-GB')}</option>)}
+          </select>
+          {snapshot && <span className="badge">{snapshot.run.status} · {snapshot.sequence} saved events</span>}
+        </nav>}
         <section className="intro">
           <div>
             <div className="eyebrow">{custom ? "ALGORITHM RESEARCH" : "ROUTING GAMES / LOWER-BOUND SEARCH"}</div>
             <h1>{snapshot?.run.title ?? "A space for branching ideas."}</h1>
+            {custom && <p className="muted">Exact numerical evaluation · lower c1 is better. A checked specification is not a proof of the optimal constant.</p>}
             {!custom && <><p className="muted">
               Pigou network · unit demand · route delays ℓ₁(x) = x and ℓ₂(x) = c
             </p>
@@ -300,7 +359,7 @@ export default function App() {
               <strong>{best != null ? best.toFixed(4) : "—"}</strong>
             </div>
             <div>
-              <span>Elapsed</span>
+              <span>Wall time</span>
               <strong>
                 {String(Math.floor(elapsed / 60)).padStart(2, "0")}:
                 {String(elapsed % 60).padStart(2, "0")}
@@ -308,6 +367,15 @@ export default function App() {
             </div>
           </div>
         </section>
+        {active && snapshot && <p className="activity" role="status">{status === 'paused' ? 'Paused between batches. Resume to continue.' : status === 'pausing' ? 'Finishing the active batch before pausing…' : status === 'stopping' ? 'Cancelling active work…' : snapshot.experiments.some(e => e.status === 'running') ? 'Evaluating candidate programs in the isolated worker…' : 'Research engine active · generating and reviewing the next batch. Model calls can take a few minutes.'}</p>}
+        {snapshot && best !== null && <div className="run-summary">
+          {improvement !== null && <span><strong>{improvement.toFixed(1)}%</strong> improvement over this run’s seed</span>}
+          <span><strong>{snapshot.experiments.filter(e => e.valid).length}</strong> valid candidates</span>
+          <span><strong>{snapshot.experiments.filter(e => e.valid === false).length}</strong> rejected attempts</span>
+          <span><strong>{new Set(snapshot.elites.filter(e => e.current).map(e => e.ideaId)).size}</strong> current elites</span>
+          <span><strong>{snapshot.generationFailures.length}</strong> generation failures</span>
+          <button onClick={() => { const winner = snapshot.experiments.find(e => e.valid && e.metrics[metric] === best); if (winner) setSelected(winner.ideaId); }}>Inspect best candidate ↗</button>
+        </div>}
         {snapshot ? (
           <>
             <div className="workspace">
@@ -347,6 +415,7 @@ export default function App() {
             </p>
           </section>
         )}
+        {snapshot && <RunProvenance runId={snapshot.run.id} status={snapshot.run.status} />}
         {snapshot && <p><a href={`/api/runs/${snapshot.run.id}/artifact`} download="research-run.json">Download run evidence</a></p>}
         {snapshot?.run.contract && (
           <details className="contract">

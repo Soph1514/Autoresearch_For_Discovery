@@ -47,11 +47,20 @@ function useResearchState(client: ResearchClient) {
   const disconnect = useRef<() => void>(() => {});
   const epoch = useRef(0);
   useEffect(() => {
-    const saved = sessionStorage.getItem("research-run");
+    const saved = new URLSearchParams(window.location.search).get("run") || sessionStorage.getItem("research-run");
     if (saved)
-      void connect(saved).catch(() => {
+      void connect(saved).catch((error) => {
+        dispatch({ type: "error", error: String(error) });
         sessionStorage.removeItem("research-run");
       });
+    else {
+      const token = epoch.current;
+      fetch('/api/runs').then(r => r.ok ? r.json() : []).then(runs => {
+        if (token !== epoch.current) return;
+        const latest = runs.at(-1);
+        if (latest) return connect(latest.id);
+      }).catch(error => dispatch({type: 'error', error: String(error)}));
+    }
     return () => {
       epoch.current++;
       disconnect.current();
@@ -63,6 +72,10 @@ function useResearchState(client: ResearchClient) {
     const snapshot = await client.getSnapshot(id);
     if (token !== epoch.current) return;
     dispatch({ type: "snapshot", snapshot });
+    dispatch({ type: "error", error: null });
+    sessionStorage.setItem("research-run", id);
+    window.history.replaceState(null, "", `/engine.html?run=${encodeURIComponent(id)}`);
+    if (["completed", "stopped", "failed"].includes(snapshot.run.status)) return;
     let sequence = snapshot.sequence;
     let recovering = false;
     const unsubscribe = client.subscribe(

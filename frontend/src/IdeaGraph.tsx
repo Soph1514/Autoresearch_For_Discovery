@@ -108,6 +108,7 @@ function Graph({
   const canvas = useRef<HTMLDivElement>(null);
   const pointerStart = useRef<{ x: number; y: number } | null>(null);
   const flow = useReactFlow();
+  const updateNodeInternals = useUpdateNodeInternals();
   const initialized = useRef(false);
   const [viewportReady, setViewportReady] = useState(false);
   const previousRun = useRef(snapshot.run.id);
@@ -150,18 +151,18 @@ function Graph({
     );
     visibleIdeas.forEach((i) => i.parents.forEach((p) => g.setEdge(p, i.id)));
     dagre.layout(g);
-    return Object.fromEntries(
-      visibleIdeas.map((i) => {
-        const p = g.node(i.id);
-        return [
-          i.id,
-          {
-            x: p.x - 101,
-            y: p.y - 56,
-          },
-        ];
-      }),
-    );
+    // Independent restarts still belong to their chronological generation.
+    // Dagre supplies horizontal ordering; explicit rows keep wave labels honest.
+    const groups = new Map<number, typeof visibleIdeas>();
+    for (const idea of visibleIdeas) {
+      const generation = idea.generation ?? 0;
+      groups.set(generation, [...(groups.get(generation) || []), idea]);
+    }
+    const maxColumns = Math.max(1, ...Array.from(groups.values(), row => row.length));
+    return Object.fromEntries(Array.from(groups.entries()).flatMap(([generation, row]) =>
+      row.sort((a,b) => g.node(a.id).x - g.node(b.id).x).map((idea, index) =>
+        [idea.id, {x: 24 + ((maxColumns-row.length)/2 + index)*244, y: 48 + generation*192}])));
+
   }, [structuralKey]);
   const nodes: IdeaNode[] = visibleIdeas.map((i) => {
     const experiment = snapshot.experiments
@@ -202,8 +203,8 @@ function Graph({
       type: "default",
       className: inactiveIds.has(i.id) ? "receded-edge" : "",
       style: {
-        stroke: index ? "#918777" : "#b2a99a",
-        strokeWidth: 1.25,
+        stroke: index ? "#776953" : "#958772",
+        strokeWidth: 1.8,
         strokeDasharray: index ? "5 5" : undefined,
       },
     })),
@@ -289,6 +290,17 @@ function Graph({
     const timer = setTimeout(() => frameGraph(true), 120);
     return () => clearTimeout(timer);
   }, [structuralKey, snapshot.run.id, follow]);
+  useEffect(() => {
+    if (!viewportReady) return;
+    const frame = requestAnimationFrame(() => updateNodeInternals(visibleIdeas.map(i => i.id)));
+    return () => cancelAnimationFrame(frame);
+  }, [viewportReady, structuralKey, updateNodeInternals]);
+  useEffect(() => {
+    if (!selected || !positions[selected]) return;
+    setFollow(false);
+    const point = positions[selected];
+    void flow.setCenter(point.x + 101, point.y + 56, {zoom: 0.95, duration: reducedMotion ? 0 : 350});
+  }, [selected]);
   return (
     <section className="graph-panel">
       <div className="graph-toolbar">
