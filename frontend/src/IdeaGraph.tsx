@@ -95,6 +95,7 @@ function Graph({
       ? lineage.ordered.map(i => i.id) : []);
   const [displayPaused, setDisplayPaused] = useState(false);
   const [beat, setBeat] = useState(2000);
+  const [replay, setReplay] = useState(0);
   const pendingIdeas = useRef(lineage.ordered);
   pendingIdeas.current = lineage.ordered;
   useEffect(() => {
@@ -103,10 +104,11 @@ function Graph({
       setVisibleIds(previous => revealNext(pendingIdeas.current, previous));
     }, beat);
     return () => clearInterval(timer);
-  }, [displayPaused, beat]);
+  }, [displayPaused, beat, replay]);
   // Explicit inspection from the log may jump ahead, but never orphan a child.
   useEffect(() => {
     if (!selected) return;
+    setDisplayPaused(true);
     const index = lineage.ordered.findIndex(i => i.id === selected);
     if (index >= 0) setVisibleIds(previous => [...new Set([
       ...previous, ...lineage.ordered.slice(0, index + 1).map(i => i.id),
@@ -158,7 +160,7 @@ function Graph({
       selected: i.id === selected,
       ariaLabel: `Idea ${i.id}: ${i.title}, ${operationLabel(i.operation)}`,
       data: {
-        select: () => onSelect(i.id),
+        select: () => { setDisplayPaused(true); onSelect(i.id); },
         title: i.title,
         operation: i.operation,
         parents: i.parents,
@@ -247,7 +249,7 @@ function Graph({
     void flow
       .setViewport(viewport, {
         duration:
-          !initialized.current || reducedMotion ? 0 : gradual ? 1100 : 450,
+          !initialized.current || reducedMotion ? 0 : gradual ? 650 : 450,
       })
       .then(() => setViewportReady(true));
     initialized.current = true;
@@ -302,7 +304,7 @@ function Graph({
           <option value={2000}>2 seconds</option>
           <option value={4000}>4 seconds</option>
         </select></label>
-        <button onClick={() => { setVisibleIds([]); setDisplayPaused(false); setFollow(true); }}>Replay tree</button>
+        <button onClick={() => { setVisibleIds([]); setDisplayPaused(false); setFollow(true); initialized.current = false; setReplay(value => value + 1); }}>Replay tree</button>
         <button disabled={!queued} onClick={() => setVisibleIds(lineage.ordered.map(i => i.id))}>Show all</button>
       </div>
       {lineage.blocked.length > 0 && <p role="alert">{lineage.blocked.length} ideas have missing or cyclic ancestry and cannot yet be drawn.</p>}
@@ -333,7 +335,7 @@ function Graph({
           nodes={[...waveNodes, ...nodes]}
           edges={edges}
           nodeTypes={nodeTypes}
-          onNodeClick={(_, n) => onSelect(n.id)}
+          onNodeClick={(_, n) => { if (n.type === "idea") { setDisplayPaused(true); onSelect(n.id); } }}
           onNodeDragStart={() => setFollow(false)}
           nodesDraggable={false}
           nodesConnectable={false}
