@@ -12,7 +12,7 @@ from uuid import uuid4
 from typing import Literal
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import Response, StreamingResponse, JSONResponse
 from pydantic import BaseModel, Field
 from .bridge import LabRun, now
 from .formalization import FormalizationInput, prepare
@@ -20,12 +20,17 @@ from .contracts import InvalidControlTransition, TERMINAL_STATUSES
 
 from .storage import ArtifactStore, contract_from_dict
 from .preparation import ContractInput, prepare_contract, make_evaluator
+from .synthesis import (
+    ReviewInput, SynthesisConflict, SynthesisInput, apply_review, create_session,
+    restore_sessions, run_round, session_view,
+)
 from the_pigeon_holes.fitness.compiler import LeanFitnessError
 from the_pigeon_holes.evolution.models import EvolutionConfig, EvolutionLimits
 from the_pigeon_holes.llm import AnthropicGeneratorConfig, AnthropicProgramGenerator
 
 store = ArtifactStore(os.environ.get('RESEARCH_STORE', 'runs/research.sqlite3'))
 runs: dict[str, LabRun] = {}
+syntheses: dict[str, asyncio.Task] = {}
 
 async def prepare_and_save(body, progress=None):
     result = await prepare(body, progress=progress)
@@ -40,8 +45,11 @@ async def lifespan(app):
     for artifact in store.all('run'):
         restored = LabRun.restore(artifact, store)
         runs[restored.id] = restored
+    # A synthesis round cannot outlive its process; mark interrupted ones failed.
+    restore_sessions(store)
     yield
     tasks = [r.task for r in runs.values() if r.task and not r.task.done()]
+    tasks += [t for t in syntheses.values() if not t.done()]
     for task in tasks:
         task.cancel()
     await asyncio.gather(*tasks, return_exceptions=True)
@@ -207,7 +215,7 @@ async def formalize_problem(body: FormalizationInput, request: Request, stream: 
             except Exception:
                 import logging
                 logging.getLogger(__name__).exception('Hosted formalization failed')
-                yield json.dumps({'type': 'error', 'message': 'Hosted Lean/Qwen service unavailable. The latest source and diagnostics are preserved.'}) + '\n'
+                yield json.dumps({'type': 'error', 'message': 'Formalization unavailable. Check model credentials and Lean setup. The latest source and diagnostics are preserved.'}) + '\n'
             finally:
                 task.cancel()
                 with anyio.CancelScope(shield=True):
@@ -230,7 +238,7 @@ async def formalize_problem(body: FormalizationInput, request: Request, stream: 
     except Exception:
         import logging
         logging.getLogger(__name__).exception('Hosted formalization failed')
-        raise HTTPException(503, 'Hosted Lean/Qwen service unavailable. Check backend Modal authentication and deployments.')
+        raise HTTPException(503, 'Formalization unavailable. Check model credentials and Lean checker setup.')
     finally:
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
@@ -297,6 +305,11 @@ async def create_contract(body: ContractInput):
     try:
         contract = await prepare_contract(body, artifact, store=store)
     except LeanFitnessError as error:
+        if error.stage == 'unsupported_formalization':
+            # Not a user mistake: the compiler's accepted language is small, and
+            # human-reviewed synthesis is the documented fallback.
+            raise HTTPException(409, {'synthesis_required': True, 'stage': error.stage,
+                                      'message': error.reason}) from error
         raise HTTPException(422, {'stage': error.stage, 'message': error.reason}) from error
     except ValueError as error:
         raise HTTPException(422, str(error)) from error
@@ -309,22 +322,65 @@ async def create_contract(body: ContractInput):
     identity = str(uuid4())
     provenance = {'formalization_id': body.formalization_id, 'contract_id': identity,
         'check_artifact': artifact['result']['check_artifact'],
-        'fidelity': artifact['result'].get('fidelity'), 'alignment_reviewed': body.alignment_reviewed}
-    compiled = store.get('fitness', contract.fitness_function.id)
-    compiler = None
-    if compiled:
+        'fidelity': artifact['result'].get('fidelity'), 'alignment_reviewed': body.alignment_reviewed,
+        'instance_description': artifact.get('input', {}).get('instance'), 'instance_reviewed': body.instance_reviewed}
+    saved = store.get('fitness', contract.fitness_function.id)
+    compiler = synthesis = None
+    # The tier records what the SCORING is backed by, so synthesised results are
+    # never reported beside kernel-checked ones.
+    evidence_tier = 'trusted_handwritten'
+    if saved and saved.get('evidence_tier') == 'lean_checked_synthesised':
+        evidence_tier = 'lean_checked_synthesised'
+        manifest = saved['manifest']
+        synthesis = {'status': 'human_accepted', 'fitness_id': contract.fitness_function.id,
+                     'synthesis_id': body.synthesis_id,
+                     'accepted_round': manifest['review'].get('accepted_round'),
+                     'accepted_slot': manifest['review'].get('accepted_slot'),
+                     'validation': manifest.get('validation'),
+                     'english_fidelity': 'not_proven', 'correctness': 'not_proven'}
+        provenance['synthesis'] = synthesis
+    elif saved:
+        evidence_tier = 'lean_compiled'
         compiler = {'status': 'compiled', 'fitness_id': contract.fitness_function.id,
-                    'validation': compiled['manifest']['validation'], 'english_fidelity': 'not_proven'}
+                    'validation': saved['manifest']['validation'], 'english_fidelity': 'not_proven'}
         provenance['compiler'] = compiler
+    provenance['evidence_tier'] = evidence_tier
+    provenance['cases_generated'] = body.evaluation_cases is None
     store.put('contract', identity, {'contract': contract, 'provenance': provenance})
-    return {'id': identity, 'signature': contract.solve_signature, 'compiler': compiler,
+    return contract_view(identity, contract, provenance)
+
+
+def contract_view(identity, contract, provenance):
+    """Review the frozen inputs and actual compiler expression, without regenerating."""
+    saved = store.get('fitness', contract.fitness_function.id)
+    representation = (saved or {}).get('manifest', {}).get('representation', {})
+    objective = None
+    if provenance.get('compiler') and representation:
+        function_type = ' → '.join([p['type'] for p in representation['parameters']] +
+            [representation['candidate_type'], representation['objective_type']])
+        objective = {'lean': f"def frozenFitnessObjective : {function_type} :=\n  {representation['objective']}",
+                     'feasible': representation['feasible']}
+    return {'id': identity, 'formalization_id': provenance.get('formalization_id'),
+        'signature': contract.solve_signature, 'compiler': provenance.get('compiler'), 'objective': objective,
+        'evaluation_suite_id': contract.evaluation_suite.id,
+        'evaluation_cases': {case.id: case.materialize_inputs() for case in contract.evaluation_suite.cases},
+        'cases_generated': provenance.get('cases_generated', False),
+        'synthesis': provenance.get('synthesis'), 'evidence_tier': provenance.get('evidence_tier'),
         'metric': contract.optimisation_goal.primary.name,
         'direction': contract.optimisation_goal.primary.direction,
         'fitness_function': {'id': contract.fitness_function.id,
             'version': contract.fitness_function.version,
             'implementation_sha256': contract.fitness_function.implementation_sha256},
-        'seed_status': ('evaluated at run start; infeasible seed can be repaired' if compiler else
+        'seed_status': ('evaluated at run start; infeasible seed can be repaired' if provenance.get('compiler') else
                         'structurally_valid; behavioral evaluation required at run start')}
+
+
+@app.get('/api/contracts/{identity}')
+def saved_contract(identity: str):
+    artifact = store.get('contract', identity)
+    if artifact is None:
+        raise HTTPException(404, 'Prepared contract not found.')
+    return contract_view(identity, contract_from_dict(artifact['contract']), artifact.get('provenance', {}))
 
 
 @app.get('/api/contracts/{identity}/compiler')
@@ -343,6 +399,12 @@ def saved_formalization(identity: str):
     artifact = store.get('formalization', identity)
     if artifact is None:
         raise HTTPException(404, 'Formalization not found.')
+    for prepared in reversed(store.all('contract')):
+        provenance = prepared.get('provenance', {})
+        if provenance.get('formalization_id') == identity and provenance.get('contract_id'):
+            artifact['prepared_contract'] = contract_view(provenance['contract_id'],
+                contract_from_dict(prepared['contract']), provenance)
+            break
     return artifact
 
 
@@ -375,3 +437,75 @@ def run_summary(run_id: str):
         'literature_reused_from': (run.provenance or {}).get('reused_literature_run'),
         'best_candidate_id': winner_id, 'best_metrics': evaluation.get('metrics'),
         'scope': 'Reported evolution tokens exclude preparation and unknown in-flight billing.'}
+
+
+def _synthesis_or_404(session_id: str) -> dict:
+    session = store.get('synthesis', session_id)
+    if session is None:
+        raise HTTPException(404, 'Synthesis session not found.')
+    return session
+
+
+def _start_round(session_id: str) -> None:
+    """Run one round in the background; it ends by writing awaiting_review.
+
+    Must be called from the event loop, so its callers are async routes.
+    """
+    live = syntheses.get(session_id)
+    if live is not None and not live.done():
+        raise HTTPException(409, 'This synthesis is already running a round.')
+    if any(not task.done() for task in syntheses.values()):
+        raise HTTPException(409, 'Another synthesis is running; wait for it to finish.')
+    syntheses[session_id] = asyncio.create_task(run_round(session_id, store=store))
+
+
+@app.post('/api/syntheses', status_code=201)
+async def start_synthesis(body: SynthesisInput):
+    artifact = store.get('formalization', body.formalization_id)
+    try:
+        session = create_session(body, artifact, store=store)
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error
+    _start_round(session['id'])
+    return session_view(store.get('synthesis', session['id']))
+
+
+@app.get('/api/syntheses/{session_id}')
+def read_synthesis(session_id: str):
+    return session_view(_synthesis_or_404(session_id))
+
+
+@app.post('/api/syntheses/{session_id}/review')
+async def review_synthesis(session_id: str, body: ReviewInput):
+    _synthesis_or_404(session_id)
+    try:
+        # Accepting freezes the scorer, which probes it in a container; that must
+        # not run on the event loop, where the adapter cannot start its own.
+        session = await asyncio.to_thread(apply_review, session_id, body, store=store)
+    except SynthesisConflict as error:
+        raise HTTPException(409, str(error)) from error
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error
+    except Exception as error:
+        import logging
+        logging.getLogger(__name__).exception('Freezing the accepted scorer failed')
+        raise HTTPException(503, f'Could not freeze the accepted scorer: {error}') from error
+    if session['state'] == 'generating':
+        _start_round(session_id)
+        session = store.get('synthesis', session_id)
+    return session_view(session)
+
+
+@app.get('/api/syntheses/{session_id}/scorer/{slot}')
+def synthesis_scorer(session_id: str, slot: str):
+    """Serve a synthesised module as an attachment; it is never rendered inline."""
+    session = _synthesis_or_404(session_id)
+    if not session['rounds']:
+        raise HTTPException(404, 'This synthesis has produced no module yet.')
+    candidates = session['rounds'][-1]['candidates']
+    if slot not in candidates:
+        raise HTTPException(404, 'Unknown scorer slot.')
+    return Response(
+        content=candidates[slot]['source_code'], media_type='text/plain; charset=utf-8',
+        headers={'Content-Disposition': f'attachment; filename="scorer-{slot}.py"',
+                 'X-Content-Type-Options': 'nosniff'})

@@ -139,3 +139,25 @@ contracts, provenance, generation configuration, evidence, events and available
 outcomes. Evaluation inputs use tagged scalar/list/tuple/mapping nodes to preserve
 Python types across storage. This export includes hidden suite data and generation
 prompts and belongs to the trusted operator, not the candidate sandbox.
+
+## Synthesis sessions
+
+Human-reviewed fitness synthesis adds **no** version-1 run event types. The run
+event contract above is unchanged, because a synthesis session happens before a
+run exists: there is no run ID, no snapshot and no SSE stream at that point.
+Progress is read by polling `GET /api/syntheses/{id}`.
+
+| Route | Purpose |
+| --- | --- |
+| `POST /api/syntheses` | Open a session against a checked formalization and start round 1. 201. |
+| `GET /api/syntheses/{id}` | The session projection: state, round, budget, every round's candidates, critic and decision. |
+| `POST /api/syntheses/{id}/review` | `{decision, feedback?, round_index}`. Feedback is required (20 characters) on `reject` and forbidden on `accept`. 409 when the session is not `awaiting_review` or the round index is stale. |
+| `GET /api/syntheses/{id}/scorer/{slot}` | The module as `text/plain`, always an attachment with `nosniff`. It is untrusted model output and is never rendered inline. |
+
+`POST /api/contracts` gains `synthesis_id`, mutually exclusive with
+`fitness_function_id`, and answers **409** with `{"synthesis_required": true}`
+when the Lean compiler reports `unsupported_formalization`. Every other compiler
+stage keeps its 422. Successful preparation now returns `evidence_tier` and, for
+this path, a `synthesis` block instead of `compiler`.
+
+Details and limitations: [fitness-synthesis.md](fitness-synthesis.md).

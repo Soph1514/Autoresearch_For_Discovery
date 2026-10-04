@@ -18,6 +18,8 @@ PROMPT_VERSION = "critic-v1"
 
 _ASSESS_TOOL = {
     "name": "submit_assessment",
+    # Strict mode replaces the forced tool_choice current models reject.
+    "strict": True,
     "description": (
         "Submit an advisory assessment of one valid candidate. The measured score is "
         "already known and is not reconsidered here."
@@ -88,7 +90,7 @@ class AnthropicCritic:
                     system=_SYSTEM_PROMPT,
                     messages=[{"role": "user", "content": _render(candidate, evaluation, problem)}],
                     tools=[_ASSESS_TOOL],
-                    tool_choice={"type": "tool", "name": "submit_assessment", "disable_parallel_tool_use": True},
+                    tool_choice={"type": "auto", "disable_parallel_tool_use": True},
                 )
             except (anthropic.APIError, TokenBudgetExceeded):
                 return None

@@ -68,6 +68,33 @@ def test_invalid_trusted_instance_does_not_fallback(tmp_path):
             artifacts=tmp_path, lean_project=PROJECT, formalizer=lambda *_: pytest.fail("fallback"))
 
 
+@pytest.mark.parametrize('source,expected', [
+    ('def opt (chosen : Nat) : Prop := chosen ≤ 7 ∧ ∀ other : Nat, other ≤ 7 → other ≤ chosen', [{}]),
+    ('def feasible (floor chosen : Int) : Prop := floor < 0 ∧ floor ≤ chosen\n'
+     'def opt (floor chosen : Int) : Prop := feasible floor chosen ∧ '
+     '∀ other, feasible floor other → chosen ≤ other', None),
+])
+def test_generated_cases_are_feasible_for_parameterless_and_signed_problems(tmp_path, project, source, expected):
+    fitness = compiler.compile_fitness(statement='Optimize.', lean_source=source,
+        lean_project=project, artifacts=tmp_path)
+    cases = list(fitness.manifest['generated_cases'].values())
+    if expected is not None:
+        assert cases == expected
+    else:
+        assert cases and all(case['floor'] < 0 for case in cases)
+    assert 'GeneratedCases.lean' in fitness.manifest['files']
+    fitness._integrity()
+
+
+def test_case_generation_does_not_admit_infeasible_instances(tmp_path, project):
+    source = ('def opt (capacity chosen : Nat) : Prop := '
+              '(False ∧ chosen ≤ capacity) ∧ ∀ other : Nat, '
+              '(False ∧ other ≤ capacity) → other ≤ chosen')
+    with pytest.raises(compiler.LeanFitnessError, match='test_case_generation_failed'):
+        compiler.compile_fitness(statement='No feasible inputs.', lean_source=source,
+            lean_project=project, artifacts=tmp_path)
+
+
 def test_missing_scorer_formalizes_once_then_no_llm(tmp_path, project):
     calls = []
     def formalize(statement, output):

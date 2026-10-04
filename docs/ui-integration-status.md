@@ -53,8 +53,14 @@ Use the [frontend setup](../frontend/README.md) to run locally and the
 in `arin06`. Credentials stay on the backend. For a classifier in another workspace,
 configure `FIDELITY_ENDPOINT`, `FIDELITY_TOKEN_ID` and `FIDELITY_TOKEN_SECRET` there.
 
-After Lean preparation, both composers offer a problem-family selector, fixed
-case inputs and an optional seed. Known families use their registered scorer;
+Both composers accept a general problem and a specific instance in separate
+natural-language fields. The general problem produces Lean; the instance is converted
+to JSON against the checked Lean's parameters. Both require user review before
+contract preparation, even if fidelity scoring accepts the Lean. JSON remains editable;
+edits clear its review acknowledgement. Conversion failure preserves the checked Lean
+and asks for corrected inputs, without substituting generated starter cases.
+After review, both composers offer a problem-family selector and an optional seed.
+Known families use their registered scorer;
 **New problem — Lean compiler** compiles the saved checked Lean through
 `ui/preparation.py` and `POST /api/contracts`, without another model call.
 The UI shows compiler progress, failures and a link to the saved compiler result.

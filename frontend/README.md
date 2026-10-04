@@ -17,8 +17,14 @@ npm run dev
 
 Open the URL Vite prints (normally http://127.0.0.1:5173).
 The workbench accepts natural-language or existing Lean problems, with optional
-attachments. Hosted preparation requires Modal access to `arin06` and its
-[deployed services](../research/lean-fidelity/README.md).
+attachments. Hosted preparation uses Modal access to `arin06` and its
+[deployed services](../research/lean-fidelity/README.md). If Qwen is unavailable,
+generation and repairs fall back to Claude using `ANTHROPIC_API_KEY` (default
+`claude-sonnet-4-6`; override with `FORMALIZATION_FALLBACK_MODEL`). If the hosted
+checker is unavailable, local Lean checks ordinary definitions and term proofs
+after the compiler's source-admission gate; tactics are unsupported on this path.
+An unavailable fidelity model leaves the checked formulation for manual alignment
+review. The actual generator and fallback are recorded with the formalization.
 **Open demo page** opens `/engine.html`; its **Run routing demo** needs no model
 credentials. The original scripted demo remains at `/api/demo`.
 
@@ -44,8 +50,15 @@ repository root. No factory environment variable is needed for this family;
 see [setup and remaining work](../docs/pipeline-next-steps.md) for custom adapters. Redeploy the updated
 `research/lean-fidelity/modal_checker.py` so successful checks include provenance.
 
-After formalization, choose the problem family, enter fixed case inputs, and click
-**Prepare research**. A known family reuses its scorer; **New problem — compile
+In **Add problem**, describe the general problem in the first field and the specific
+instance in the second, both in natural language. Only the general description goes
+to Lean generation. After Lean passes, Claude converts the instance into JSON inputs
+using the checked specification's parameter names. Review the Lean and editable JSON,
+then acknowledge both. Missing or ambiguous instance data is reported for correction;
+it is never replaced with starter cases. Saved formalizations retain both descriptions
+and the generated JSON. JSON edits require another instance review.
+
+Choose the problem family and click **Prepare research**. A known family reuses its scorer; **New problem — compile
 Lean scorer** compiles the saved checked source without further model calls.
 The seed is optional: known families supply a baseline, while the compiler
 supplies a typed initial candidate that can be repaired if infeasible.
