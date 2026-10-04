@@ -1,7 +1,8 @@
 # UI integration
 
-The AntiAI workbench prepares Lean; the separate routing demo runs the evolution
-engine. Custom formalizations do not yet start autonomous evolution.
+The AntiAI workbench prepares Lean and can bind it to a custom research contract.
+The engine page displays either the explicit routing demo or a custom run. Custom
+execution requires the incoming protected evaluator to be configured.
 
 ## Problem preparation
 
@@ -39,9 +40,9 @@ it. It does not call an LLM or check Lean. Backend events drive lineage, metrics
 elites, failures and controls; the UI never substitutes mock results on API failure.
 
 Pause drains the active batch; resume continues scheduling; stop cancels the task.
-SSE supports ordered replay and snapshot recovery. History survives browser refresh,
-but not a backend restart. The local server retains at most 20 runs and permits one
-active evolution run. See the [wire contract](api-events.md) for details.
+SSE supports ordered replay and snapshot recovery. History and events are stored in SQLite and survive backend restart. Interrupted
+runs are marked stopped; work is never silently resumed. The local server permits
+one active evolution run. See the [wire contract](api-events.md) for details.
 
 ## Setup and remaining work
 
@@ -50,6 +51,25 @@ Use the [frontend setup](../frontend/README.md) to run locally and the
 in `arin06`. Credentials stay on the backend. For a classifier in another workspace,
 configure `FIDELITY_ENDPOINT`, `FIDELITY_TOKEN_ID` and `FIDELITY_TOKEN_SECRET` there.
 
-The API is a localhost development service without authentication or durable storage.
-Custom contract/seed preparation, a protected evaluator and production orchestration
-remain unconnected; see [remaining work](pipeline-next-steps.md).
+After Lean preparation, both composers offer seed Python, evaluation suite ID,
+case inputs, evaluator version, and an alignment-review acknowledgement. Contract
+preparation validates the interface and case shapes without executing generated
+Python. Its saved ID can be used to start custom evolution; the seed must pass the
+evaluator before candidate generation. The UI reports missing evaluator configuration.
+The engine labels custom runs separately and offers a run-evidence download.
+
+`RESEARCH_MODEL` selects the Anthropic model for extraction and generation.
+`RESEARCH_EVALUATOR_FACTORY=module:factory` connects the trusted evaluator adapter;
+see [handoff requirements](pipeline-next-steps.md). The checker must be redeployed
+with its provenance response before preparing custom contracts.
+
+`RESEARCH_STORE` defaults to `runs/research.sqlite3`. Contracts, formalizations,
+source, evidence, events, settings and completed outcomes are durable. Event writes
+are transactional with their snapshot. On restart, active attempts become
+interrupted/stopped and remain inspectable. This is single-process orchestration:
+run one Uvicorn worker. Storage retention and backups are operator responsibilities.
+
+The default server is localhost-only. Set `RESEARCH_API_PASSWORD` (and optionally
+`RESEARCH_API_USER`, default `research`) to require HTTP Basic authentication on
+all API routes. Use HTTPS through a reverse proxy for a shared deployment. This
+is a shared-password lab service, without per-user isolation or multi-worker scheduling.

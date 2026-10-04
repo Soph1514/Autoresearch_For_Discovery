@@ -36,6 +36,7 @@ class IslandStatus(StrEnum):
 
 
 class StopReason(StrEnum):
+    INVALID_SEED = "invalid_seed"
     TIME_LIMIT = "time_limit"
     TOKEN_LIMIT = "token_limit"
     TIME_AND_TOKEN_LIMIT = "time_and_token_limit"

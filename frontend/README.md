@@ -34,3 +34,21 @@ fixture. Auto overview yields to manual pan/zoom; faded candidates stay inspecta
 npm test
 npm run build
 ```
+
+## Custom research
+
+Set `RESEARCH_MODEL` and `ANTHROPIC_API_KEY` on the backend. Once the protected
+Python evaluator arrives, set `RESEARCH_EVALUATOR_FACTORY=module:create_evaluator`
+as described in [the handoff](../docs/pipeline-next-steps.md). Redeploy the updated
+`research/lean-fidelity/modal_checker.py` so successful checks include provenance.
+
+After formalization, fill the seed, suite and evaluator fields and prepare the
+contract. Review its extracted signature and objective before starting research.
+The seed is evaluated first; a failed seed stops generation. Missing evaluator
+configuration is shown explicitly, and **Check evaluator availability** refreshes
+readiness without repeating extraction.
+
+Run history is stored in `runs/research.sqlite3` (override with `RESEARCH_STORE`).
+Use a single backend worker. Download evidence from the engine page. For optional
+shared authentication, set `RESEARCH_API_PASSWORD` and open `/api/health` to sign
+in through the browser's authentication prompt; the default username is `research`.

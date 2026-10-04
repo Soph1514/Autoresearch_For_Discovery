@@ -1,3 +1,4 @@
+import { mountCustomResearch } from './customResearch';
 import { formalize } from './formalizationClient';
 import { readAttachment } from './attachments';
 const element = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -6,6 +7,7 @@ const form = element<HTMLFormElement>('upload-form');
 const mode = element<HTMLSelectElement>('mode');
 const problem = element<HTMLTextAreaElement>('problem-text');
 const source = element<HTMLTextAreaElement>('lean-input');
+let clearHandoff: (() => void) | undefined;
 let busy = false;
 let controller: AbortController | null = null;
 element('stop-formalization').onclick = () => controller?.abort();
@@ -60,6 +62,7 @@ function detail(title: string, text: string) {
 form.onsubmit = async (event) => {
   event.preventDefault();
   if (busy || !problem.value.trim()) return;
+  clearHandoff?.();
   busy = true; dialog.hidden = true;
   controller = new AbortController();
   element('stop-formalization').hidden = false;
@@ -98,6 +101,11 @@ form.onsubmit = async (event) => {
     detail(status, result.fidelity_error || (result.fidelity ? 'Fidelity: ' + result.fidelity.reason_code : result.diagnostics));
     if (result.diagnostics) log(result.diagnostics);
     log(status);
+    if (result.formalization_id && result.lean_checked) {
+      const handoff = document.createElement('section');
+      element('details').append(handoff);
+      clearHandoff = mountCustomResearch(handoff, result.formalization_id);
+    }
   } catch (error) {
     const stopped = controller?.signal.aborted;
     const message = stopped ? 'Stopped. Latest Lean source and checker diagnostics are preserved.' : error instanceof Error ? error.message : 'Service unavailable';

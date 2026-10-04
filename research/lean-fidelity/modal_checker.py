@@ -13,6 +13,7 @@ lean_image = (modal.Image.debian_slim(python_version='3.11')
 
 @app.function(image=lean_image, cpu=4, memory=8192, timeout=300, min_containers=0, max_containers=2, scaledown_window=120)
 def check(source: str) -> dict:
+    import hashlib
     import subprocess
     import tempfile
     import re
@@ -29,4 +30,11 @@ def check(source: str) -> dict:
                                     capture_output=True, text=True, timeout=240)
         except subprocess.TimeoutExpired:
             return {'valid': False, 'diagnostics': 'Lean check exceeded 240 seconds.'}
-        return {'valid': result.returncode == 0, 'diagnostics': (result.stdout + result.stderr)[-12000:]}
+        return {'valid': result.returncode == 0, 'diagnostics': (result.stdout + result.stderr)[-12000:],
+                'check_artifact': {'source_sha256': hashlib.sha256(source.encode()).hexdigest(),
+                    'toolchain': Path('/opt/mathlib/lean-toolchain').read_text().strip(),
+                    'lean_version': subprocess.check_output(['lake', 'env', 'lean', '--version'], cwd='/opt/mathlib', text=True).strip(),
+                    'dependencies': {'mathlib': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd='/opt/mathlib', text=True).strip(),
+                                     'lake_manifest': Path('/opt/mathlib/lake-manifest.json').read_text()},
+                    'command': ['lake', 'env', 'lean', 'Generated.lean'], 'exit_code': result.returncode,
+                    'diagnostics': (result.stdout + result.stderr)[-12000:]}}

@@ -21,7 +21,7 @@ export interface Run {
   endedAt?: string;
   metricName?: string;
   direction?: "maximize" | "minimize";
-  backend?: "python-demo";
+  backend?: "python-demo" | "python";
   contract?: Record<string, string | number>;
 }
 export interface Idea {

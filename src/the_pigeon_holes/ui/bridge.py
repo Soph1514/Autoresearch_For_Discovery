@@ -52,8 +52,21 @@ class ActiveRunClock:
 
 
 class LabRun:
-    def __init__(self, delay=.8):
+    def __init__(self, delay=.8, *, contract=None, generator=None, evaluator=None, limits=None, config=None, store=None, provenance=None):
         self.delay = delay
+        self.contract = contract or demo_contract()
+        self.custom = contract is not None
+        if self.custom and (generator is None or evaluator is None):
+            raise ValueError("Custom runs require a generator and evaluator.")
+        self.generator = generator
+        self.evaluator = evaluator
+        self.limits = limits or EvolutionLimits(max_tokens=160, max_time_seconds=60)
+        self.config = config or EvolutionConfig(min_islands=2, max_islands=4, max_batch_size=8, max_tokens_per_request=10)
+        self.store = store
+        self.provenance = provenance
+        self.outcome = None
+        self.evidence = {'candidates': {}, 'evaluations': {}, 'generation_failures': {}}
+        self.generation_config = getattr(generator, 'config', None)
         self.wake = asyncio.Event()
         self.gate = asyncio.Event()
         self.gate.set()
@@ -70,6 +83,49 @@ class LabRun:
                 "maxTokens": 160, "maxTimeSeconds": 60,
             }}, "ideas": [], "experiments": [], "elites": [], "logs": [],
             "generationFailures": [], "schemaVersion": SCHEMA_VERSION, "sequence": 0}
+
+        if self.custom:
+            self.snapshot['run'].update(title=contract.natural_language_spec.splitlines()[0][:120],
+                backend='python', metricName=contract.optimisation_goal.primary.name,
+                direction=contract.optimisation_goal.primary.direction,
+                contract={'evaluationSuiteId': contract.evaluation_suite.id,
+                    'evaluatorVersion': contract.evaluator_version, 'signature': contract.solve_signature,
+                    'formalVerification': 'Lean specification checked; Python validity evaluated per candidate',
+                    'maxTokens': self.limits.max_tokens, 'maxTimeSeconds': self.limits.max_time_seconds})
+        self.persist()
+
+    def persist(self):
+        if self.store:
+            self.store.put('run', self.id, {'snapshot': self.snapshot, 'events': self.events,
+                'contract': self.contract, 'provenance': self.provenance, 'outcome': self.outcome,
+                'config': self.config, 'limits': self.limits, 'evidence': self.evidence,
+                'generation_config': self.generation_config})
+
+    @classmethod
+    def restore(cls, artifact, store):
+        run = cls.__new__(cls)
+        run.store = store
+        from .storage import contract_from_dict
+        run.contract = contract_from_dict(artifact['contract'])
+        run.snapshot, run.events = artifact['snapshot'], artifact['events']
+        run.provenance, run.outcome = artifact.get('provenance'), artifact.get('outcome')
+        run.evidence = artifact.get('evidence', {})
+        run.generation_config = artifact.get('generation_config')
+        run.config, run.limits = artifact.get('config'), artifact.get('limits')
+        run.custom = run.snapshot['run']['backend'] != 'python-demo'
+        run.wake, run.gate = asyncio.Event(), asyncio.Event()
+        run.gate.set()
+        run.active_clock, run.task = ActiveRunClock(), None
+        if run.snapshot['run']['status'] not in TERMINAL_STATUSES:
+            run.cancel_pending('Backend restarted; this attempt was interrupted.')
+            run.log('recovery', 'Backend restarted. Evidence retained; start a new run to continue research.')
+            run.emit('run_status_changed', {'status': 'stopped', 'endedAt': now()})
+        return run
+
+    def cancel_pending(self, reason):
+        for experiment in list(self.snapshot['experiments']):
+            if experiment['status'] == 'running':
+                self.emit('experiment_updated', {**experiment, 'status': 'cancelled', 'feedback': reason})
 
     @property
     def id(self):
@@ -100,6 +156,7 @@ class LabRun:
             else:
                 records[index] = payload
         self.events.append(event)
+        self.persist()
         self.wake.set()
 
     def log(self, category, message, idea_id=None):
@@ -107,6 +164,7 @@ class LabRun:
                                 "message": message, "ideaId": idea_id})
 
     def candidate(self, candidate: ProgramCandidate):
+        self.evidence['candidates'][candidate.id] = candidate
         if any(i["id"] == candidate.id for i in self.snapshot["ideas"]):
             return
         operation = {"mutate": "mutation", "crossover": "merge", "repair": "repair",
@@ -124,10 +182,11 @@ class LabRun:
         self.log("candidate", f"{candidate.operator.value}: {candidate.hypothesis}", candidate.id)
 
     def evaluation(self, result: CandidateEvaluation):
+        self.evidence['evaluations'][result.candidate_id] = result
         record = {"id": "eval-"+result.candidate_id, "ideaId": result.candidate_id,
             "status": "completed" if result.valid else "failed", "valid": result.valid,
             "metrics": dict(result.metrics), "feedback": "; ".join(result.failure_reasons) if not result.valid
-            else "Analytic Pigou formula checked; no Python execution or Lean proof.",
+            else ("Passed the configured evaluator on every suite case." if self.custom else "Analytic Pigou formula checked; no Python execution or Lean proof."),
             "passingCases": result.passing_cases, "totalCases": result.total_cases}
         existing = next((e for e in self.snapshot["experiments"] if e["id"] == record["id"]), None)
         if existing == record:
@@ -145,6 +204,7 @@ class LabRun:
         self.evaluation(evaluation)
 
     def generation_failed(self, failure: GenerationFailure) -> None:
+        self.evidence['generation_failures'][failure.request_id] = failure
         self.emit("generation_failed", {
             "requestId": failure.request_id,
             "generation": failure.generation,
@@ -230,21 +290,29 @@ class LabRun:
 
     async def run(self):
         try:
-            self.log("start", "Real evolution engine; deterministic demo generator and analytic demo evaluator. No LLM calls.")
-            config = EvolutionConfig(min_islands=2, max_islands=4, max_batch_size=8, max_tokens_per_request=10)
-            loop = EvolutionLoop(config=config, limits=EvolutionLimits(max_tokens=160, max_time_seconds=60),
-                generator=DemoGenerator(self.log, self.delay),
-                evaluator=DemoEvaluator(self.delay), observer=self,
-                checkpoint=self.checkpoint,
-                clock=self.active_clock)
-            outcome = await loop.run(demo_contract())
-            self.log("complete", f"Stopped: {outcome.stop_reason.value}; {outcome.tokens_used} demo tokens, {outcome.generations_completed} generations.")
-            self.emit("run_status_changed", {"status": "completed", "endedAt": now()})
+            self.log("start", "Custom evolution; seed must pass the configured evaluator before generation." if self.custom else
+                     "Real evolution engine; deterministic demo generator and analytic demo evaluator. No LLM calls.")
+            loop = EvolutionLoop(config=self.config, limits=self.limits,
+                generator=self.generator if self.custom else DemoGenerator(self.log, self.delay),
+                evaluator=self.evaluator if self.custom else DemoEvaluator(self.delay), observer=self,
+                checkpoint=self.checkpoint, clock=self.active_clock, require_valid_seed=self.custom)
+            outcome = await loop.run(self.contract)
+            from .storage import encode
+            self.outcome = encode(outcome)
+            self.cancel_pending('Run budget reached before this batch completed.')
+            self.log("complete", f"Stopped: {outcome.stop_reason.value}; {outcome.tokens_used} reported tokens, {outcome.generations_completed} generations.")
+            self.emit("run_status_changed", {"status": "failed" if outcome.stop_reason.value in ('invalid_seed', 'generation_failed') else "completed", "endedAt": now()})
         except asyncio.CancelledError:
             for experiment in list(self.snapshot["experiments"]):
                 if experiment["status"] == "running":
                     self.emit("experiment_updated", {**experiment, "status": "cancelled", "feedback": "Run stopped."})
             self.emit("run_status_changed", {"status": "stopped", "endedAt": now()})
         except Exception as error:
+            self.cancel_pending("Run failed before evaluation completed.")
             self.log("error", str(error))
             self.emit("run_status_changed", {"status": "failed", "endedAt": now()})
+        finally:
+            if self.custom:
+                close = getattr(self.generator, 'aclose', None)
+                if close:
+                    await close()

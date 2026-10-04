@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import math
 import time
 from collections.abc import Callable, Sequence
@@ -26,6 +27,10 @@ from .models import (
 )
 from .novelty import source_fingerprint
 from .ports import CandidateEvaluator, EvolutionObserver, ProgramGenerator, RunCheckpoint
+
+
+class _RunDeadlineReached(Exception):
+    pass
 
 
 class _NullObserver:
@@ -112,7 +117,9 @@ class EvolutionLoop:
         observer: EvolutionObserver | None = None,
         checkpoint: RunCheckpoint = _open_checkpoint,
         clock: Callable[[], float] = time.monotonic,
+        require_valid_seed: bool = False,
     ) -> None:
+        self.require_valid_seed = require_valid_seed
         self.config = config
         self.limits = limits
         self.generator = generator
@@ -151,10 +158,17 @@ class EvolutionLoop:
             seed_evaluation = self._static_failure(seed, seed_static_error)
         else:
             self.observer.evaluation_started(seed)
-            seed_evaluation = (await self._evaluate((seed,), problem))[0]
+            try:
+                seed_evaluation = (await self._within_budget(self._evaluate((seed,), problem), budget))[0]
+            except _RunDeadlineReached:
+                seed_evaluation = CandidateEvaluation(seed.id, False, failure_stage="timeout",
+                    failure_reasons=("Run deadline reached during seed evaluation.",))
         self.observer.evaluation_completed(seed_evaluation)
         state = self.engine.initialise(seed, seed_evaluation)
         self.observer.state_committed(state)
+
+        if self.require_valid_seed and not seed_evaluation.valid:
+            return self._outcome(state, budget, budget.stop_reason() or StopReason.INVALID_SEED)
 
         stop_reason: StopReason | None = None
         while stop_reason is None:
@@ -183,7 +197,11 @@ class EvolutionLoop:
                 stop_reason = StopReason.NO_AFFORDABLE_REQUEST
                 break
 
-            generated = tuple(await self.generator.generate(requests))
+            try:
+                generated = tuple(await self._within_budget(self.generator.generate(requests), budget))
+            except _RunDeadlineReached:
+                stop_reason = StopReason.TIME_LIMIT
+                break
             self._validate_generation_results(requests, generated)
             budget.record([result.usage for result in generated])
 
@@ -207,11 +225,14 @@ class EvolutionLoop:
             )
             for candidate in external_candidates:
                 self.observer.evaluation_started(candidate)
-            external_evaluations = (
-                await self._evaluate(external_candidates, problem)
-                if external_candidates
-                else ()
-            )
+            try:
+                external_evaluations = (
+                    await self._within_budget(self._evaluate(external_candidates, problem), budget)
+                    if external_candidates else ()
+                )
+            except _RunDeadlineReached:
+                stop_reason = StopReason.TIME_LIMIT
+                break
             for evaluation in external_evaluations:
                 self.observer.evaluation_completed(evaluation)
             evaluations = tuple(local_evaluations.values()) + tuple(external_evaluations)
@@ -225,6 +246,19 @@ class EvolutionLoop:
 
         assert stop_reason is not None
         return self._outcome(state, budget, stop_reason)
+
+    @staticmethod
+    async def _within_budget(work, budget):
+        remaining = (None if budget.limits.max_time_seconds is None else
+                     max(0, budget.limits.max_time_seconds - budget.elapsed_seconds))
+        timeout = asyncio.timeout(remaining)
+        try:
+            async with timeout:
+                return await work
+        except TimeoutError as error:
+            if timeout.expired():
+                raise _RunDeadlineReached() from error
+            raise
 
     def _materialize_generation(
         self,

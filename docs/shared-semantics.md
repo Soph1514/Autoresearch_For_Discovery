@@ -49,8 +49,9 @@ evaluator must request an isolated materialized copy before sandbox execution.
 Pause stops new scheduling at a batch boundary and retains completed evidence.
 Stop requests cancel in-flight adapter work; a partially completed batch is not
 committed. Adapters must propagate cancellation rather than convert it into a
-valid result. Concrete production enforcement remains part of adapter and API
-work, while the development bridge already uses an active-time clock.
+valid result. The loop enforces active-time deadlines around generation and evaluation awaits.
+Adapters must honor cancellation to terminate actual worker execution. The bridge
+uses an active-time clock.
 
 ## Meaning of checked Lean
 

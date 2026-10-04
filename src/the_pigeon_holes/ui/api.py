@@ -6,19 +6,38 @@ import asyncio
 import anyio
 import copy
 import json
+import os
+from uuid import uuid4
+from typing import Literal
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
-from .bridge import LabRun
+from fastapi.responses import StreamingResponse, JSONResponse
+from pydantic import BaseModel, Field
+from .bridge import LabRun, now
 from .formalization import FormalizationInput, prepare
 from .contracts import InvalidControlTransition, TERMINAL_STATUSES
 
+from .storage import ArtifactStore, contract_from_dict
+from .preparation import ContractInput, prepare_contract, make_evaluator
+from the_pigeon_holes.evolution.models import EvolutionConfig, EvolutionLimits
+from the_pigeon_holes.llm import AnthropicGeneratorConfig, AnthropicProgramGenerator
+
+store = ArtifactStore(os.environ.get('RESEARCH_STORE', 'runs/research.sqlite3'))
 runs: dict[str, LabRun] = {}
+
+async def prepare_and_save(body, progress=None):
+    result = await prepare(body, progress=progress)
+    identity = str(uuid4())
+    result['formalization_id'] = identity
+    store.put('formalization', identity, {'input': body.model_dump(), 'result': result})
+    return result
 
 
 @asynccontextmanager
 async def lifespan(app):
+    for artifact in store.all('run'):
+        restored = LabRun.restore(artifact, store)
+        runs[restored.id] = restored
     yield
     tasks = [r.task for r in runs.values() if r.task and not r.task.done()]
     for task in tasks:
@@ -29,32 +48,75 @@ async def lifespan(app):
 app = FastAPI(title="Research lab development bridge", lifespan=lifespan)
 
 
+@app.middleware('http')
+async def optional_auth(request, call_next):
+    # Leave localhost setup frictionless; a shared server may require HTTP Basic auth.
+    password = os.environ.get('RESEARCH_API_PASSWORD')
+    if password:
+        import base64
+        import secrets
+        expected = os.environ.get('RESEARCH_API_USER', 'research') + ':' + password
+        try:
+            scheme, encoded = request.headers.get('authorization', '').split(' ', 1)
+            supplied = base64.b64decode(encoded, validate=True).decode() if scheme.lower() == 'basic' else ''
+        except (ValueError, UnicodeError):
+            supplied = ''
+        if not secrets.compare_digest(supplied.encode(), expected.encode()):
+            return JSONResponse({'detail': 'Authentication required.'}, status_code=401,
+                headers={'WWW-Authenticate': 'Basic realm="Research lab", charset="UTF-8"'})
+    return await call_next(request)
+
+
 class StartInput(BaseModel):
-    mode: str
+    mode: Literal['demo', 'custom']
+    contract_id: str | None = None
+    max_tokens: int = Field(default=32768, gt=0, le=1000000)
+    max_time_seconds: float = Field(default=300, gt=0, le=3600, allow_inf_nan=False)
 
 
 def get_run(run_id):
     if run_id not in runs:
-        raise HTTPException(404, "Run not found; development history resets when the server restarts.")
+        raise HTTPException(404, "Run not found in this server history.")
     return runs[run_id]
 
 
 @app.get('/api/health')
 def health():
-    return {"mode": "python-demo", "engine": "EvolutionLoop", "generator": "demo", "evaluator": "analytic-demo"}
+    return {'mode': 'research-bridge', 'engine': 'EvolutionLoop', 'demo_available': True,
+            'custom_evaluator_configured': bool(os.environ.get('RESEARCH_EVALUATOR_FACTORY'))}
 
 
 @app.post('/api/runs', status_code=201)
 async def start_run(body: StartInput):
-    if body.mode != 'demo':
-        raise HTTPException(422, "Only the explicit demo is connected. Uploaded problems are not executed.")
     if any(r.task and not r.task.done() for r in runs.values()):
         raise HTTPException(409, "Stop the active local run before starting another.")
-    if len(runs) >= 20:
-        raise HTTPException(409, "Local history limit reached; restart the development API to clear it.")
-    run = LabRun()
+    if body.mode == 'custom':
+        artifact = store.get('contract', body.contract_id or '')
+        if artifact is None:
+            raise HTTPException(422, 'Prepare a problem contract first.')
+        model = os.environ.get('RESEARCH_MODEL')
+        if not model:
+            raise HTTPException(503, 'Configure RESEARCH_MODEL before starting custom research.')
+        try:
+            contract = contract_from_dict(artifact['contract'])
+            evaluator = make_evaluator(contract)
+            generator = AnthropicProgramGenerator(AnthropicGeneratorConfig(model=model, max_attempts=1, token_budget=body.max_tokens))
+        except (RuntimeError, ImportError, AttributeError) as error:
+            raise HTTPException(503, str(error)) from error
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
+        run = LabRun(contract=contract, generator=generator, evaluator=evaluator,
+            config=EvolutionConfig(), limits=EvolutionLimits(max_tokens=body.max_tokens, max_time_seconds=body.max_time_seconds),
+            store=store, provenance=artifact['provenance'])
+    else:
+        run = LabRun(store=store)
     runs[run.id] = run
     run.task = asyncio.create_task(run.run())
+    def finished(task):
+        if task.cancelled() and run.snapshot['run']['status'] not in TERMINAL_STATUSES:
+            run.cancel_pending('Run stopped before work began.')
+            run.emit('run_status_changed', {'status': 'stopped', 'endedAt': now()})
+    run.task.add_done_callback(finished)
     return copy.deepcopy(run.snapshot['run'])
 
 
@@ -113,7 +175,7 @@ async def formalize_problem(body: FormalizationInput, request: Request, stream: 
     if stream:
         async def events():
             queue = asyncio.Queue()
-            task = asyncio.create_task(prepare(body, progress=queue.put))
+            task = asyncio.create_task(prepare_and_save(body, progress=queue.put))
             try:
                 while not task.done() or not queue.empty():
                     try:
@@ -135,7 +197,7 @@ async def formalize_problem(body: FormalizationInput, request: Request, stream: 
                         formalization_lock.release()
         return StreamingResponse(events(), media_type='application/x-ndjson',
                                  headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
-    task = asyncio.create_task(prepare(body))
+    task = asyncio.create_task(prepare_and_save(body))
     try:
         while not task.done():
             if await request.is_disconnected():
@@ -170,3 +232,44 @@ def paper_theme():
     from pathlib import Path
     from fastapi.responses import FileResponse
     return FileResponse(Path(__file__).resolve().parents[3] / 'frontend/src/paper-theme.css', media_type='text/css')
+
+
+@app.get('/api/capabilities')
+def capabilities():
+    return {'custom_evaluator_configured': bool(os.environ.get('RESEARCH_EVALUATOR_FACTORY')),
+            'model_configured': bool(os.environ.get('RESEARCH_MODEL')), 'persistent_history': True}
+
+
+@app.get('/api/runs')
+def history():
+    return [copy.deepcopy(run.snapshot['run']) for run in runs.values()]
+
+
+@app.get('/api/runs/{run_id}/artifact')
+def run_artifact(run_id: str):
+    get_run(run_id)
+    return store.get('run', run_id)
+
+
+@app.post('/api/contracts', status_code=201)
+async def create_contract(body: ContractInput):
+    artifact = store.get('formalization', body.formalization_id)
+    try:
+        contract = await prepare_contract(body, artifact)
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(503, str(error)) from error
+    except Exception as error:
+        import logging
+        logging.getLogger(__name__).exception('Contract extraction failed')
+        raise HTTPException(503, 'Interface extraction unavailable. Check the research model and backend credentials.') from error
+    identity = str(uuid4())
+    provenance = {'formalization_id': body.formalization_id,
+        'check_artifact': artifact['result']['check_artifact'],
+        'fidelity': artifact['result'].get('fidelity'), 'alignment_reviewed': body.alignment_reviewed}
+    store.put('contract', identity, {'contract': contract, 'provenance': provenance})
+    return {'id': identity, 'signature': contract.solve_signature,
+        'metric': contract.optimisation_goal.primary.name,
+        'direction': contract.optimisation_goal.primary.direction,
+        'seed_status': 'structurally_valid; behavioral evaluation required at run start'}

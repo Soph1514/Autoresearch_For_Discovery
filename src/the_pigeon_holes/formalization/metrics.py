@@ -20,8 +20,16 @@ FIELDS = [
 def read_metrics(path: Path) -> dict[str, dict[str, str]]:
     if not path.is_file():
         return {}
+    text = path.read_text()
+    if any(line.startswith(('<<<<<<<', '=======', '>>>>>>>')) for line in text.splitlines()):
+        raise ValueError(f"Unresolved merge conflict in {path}; reconcile results before updating metrics")
     with path.open(newline="") as file:
-        return {row["problem_id"]: row for row in csv.DictReader(file)}
+        rows = list(csv.DictReader(file))
+    if any(None in row or any(value is None for value in row.values()) for row in rows):
+        raise ValueError(f"Malformed metrics CSV: {path}")
+    if len({row['problem_id'] for row in rows}) != len(rows):
+        raise ValueError(f"Duplicate problem IDs in {path}")
+    return {row['problem_id']: row for row in rows}
 
 
 def update_metrics(path: Path, problem_id: str, **values) -> None:
@@ -39,7 +47,7 @@ def update_metrics(path: Path, problem_id: str, **values) -> None:
     rows[problem_id] = row
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="") as file:
-        writer = csv.DictWriter(file, fieldnames=FIELDS)
+        writer = csv.DictWriter(file, fieldnames=FIELDS, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows.values())
 

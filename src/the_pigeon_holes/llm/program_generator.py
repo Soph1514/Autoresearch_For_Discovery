@@ -54,6 +54,7 @@ _SUBMIT_CANDIDATE_TOOL = {
 @dataclass(frozen=True)
 class AnthropicGeneratorConfig:
     model: str
+    token_budget: int | None = None
     max_output_tokens: int = 4_096
     max_concurrency: int = 4
     timeout_seconds: float = 90.0
@@ -63,6 +64,8 @@ class AnthropicGeneratorConfig:
     def __post_init__(self) -> None:
         if not isinstance(self.model, str) or not self.model.strip():
             raise ValueError("model cannot be empty")
+        if self.token_budget is not None and (type(self.token_budget) is not int or self.token_budget <= 0):
+            raise ValueError("token_budget must be a positive integer")
         for name in ("max_output_tokens", "max_concurrency", "max_attempts"):
             if type(getattr(self, name)) is not int or getattr(self, name) <= 0:
                 raise ValueError(f"{name} must be a positive integer")
@@ -73,6 +76,10 @@ class AnthropicGeneratorConfig:
             or self.retry_backoff_seconds < 0
         ):
             raise ValueError("retry_backoff_seconds must be finite and nonnegative")
+
+
+class _TokenBudgetExceeded(Exception):
+    pass
 
 
 class AnthropicProgramGenerator:
@@ -88,6 +95,7 @@ class AnthropicProgramGenerator:
         self.config = config
         self.client = client or anthropic.AsyncAnthropic(max_retries=0)
         self._sleep = sleep
+        self._reserved_tokens = 0
         self._semaphore = asyncio.Semaphore(config.max_concurrency)
 
     async def generate(
@@ -103,7 +111,7 @@ class AnthropicProgramGenerator:
         async with self._semaphore:
             for attempt in range(1, self.config.max_attempts + 1):
                 try:
-                    response = await self.client.messages.create(
+                    response = await self._create(
                         model=self.config.model,
                         max_tokens=self.config.max_output_tokens,
                         timeout=self.config.timeout_seconds,
@@ -120,6 +128,9 @@ class AnthropicProgramGenerator:
                             "disable_parallel_tool_use": True,
                         },
                     )
+                except _TokenBudgetExceeded:
+                    last_error = "remaining token budget cannot cover the counted prompt and maximum output"
+                    break
                 except anthropic.APIError as exc:
                     last_error = self._provider_error(exc)
                     if attempt == self.config.max_attempts or not self._retryable(exc):
@@ -142,6 +153,25 @@ class AnthropicProgramGenerator:
                 )
 
         return GenerationResult(request_id=request.id, usage=usage, error=last_error)
+
+    async def aclose(self):
+        await self.client.close()
+
+    async def _create(self, **kwargs):
+        if self.config.token_budget is None:
+            return await self.client.messages.create(**kwargs)
+        counted = await self.client.messages.count_tokens(**{
+            key: value for key, value in kwargs.items() if key != 'max_tokens'})
+        reservation = counted.input_tokens + kwargs['max_tokens']
+        # No await between admission and reservation: concurrent calls share one budget.
+        if self._reserved_tokens + reservation > self.config.token_budget:
+            raise _TokenBudgetExceeded()
+        self._reserved_tokens += reservation
+        # Keep the reservation on ambiguous failure/cancellation; usage may have accrued.
+        response = await self.client.messages.create(**kwargs)
+        usage = self._add_usage(TokenUsage(), response)
+        self._reserved_tokens += usage.total_tokens - reservation
+        return response
 
     @staticmethod
     def _parse_candidate(response: Any) -> CandidateDraft:
