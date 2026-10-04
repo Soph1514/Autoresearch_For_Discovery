@@ -438,7 +438,7 @@ export default function App() {
             {Object.entries(snapshot.run.contract).map(([key, value]) => (
               <div className="metric" key={key}>
                 <span>{key}</span>
-                <strong>{value}</strong>
+                <strong>{typeof value === "object" ? JSON.stringify(value) : String(value)}</strong>
               </div>
             ))}
           </details>
