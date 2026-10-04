@@ -2,7 +2,26 @@ import { useEffect, useRef, useState } from "react";
 import { useResearch } from "./research";
 import { IdeaGraph, operationLabel } from "./IdeaGraph";
 import { Composer } from "./Composer";
+import type { PreparedReview } from './customResearch';
 import type { Run, Snapshot } from "./contracts";
+
+function PreparedDetails({id}: {id: string}) {
+  const [prepared, setPrepared] = useState<PreparedReview | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    setPrepared(null);
+    fetch(`/api/contracts/${encodeURIComponent(id)}`, {signal: controller.signal})
+      .then(response => response.ok ? response.json() : null).then(setPrepared).catch(() => {});
+    return () => controller.abort();
+  }, [id]);
+  if (!prepared) return null;
+  return <div className="formulation-review prepared-details">
+    <section><h3>Instance JSON</h3><pre>{JSON.stringify(prepared.evaluation_cases, null, 2)}</pre></section>
+    <section><h3>Objective function</h3><p>{prepared.direction} {prepared.metric}</p>
+      <pre>{prepared.objective?.lean || 'The selected scorer supplies this metric.'}</pre></section>
+  </div>;
+}
+
 function RunProvenance({runId, status}: {runId: string; status: string}) {
   const [summary, setSummary] = useState<{formalization_id?: string; contract_id?: string; compiler?: {status: string}; model?: string; reported_tokens?: number; generations?: number; stop_reason?: string;
     published_baseline?: {agent?: string; c1?: number; cells?: number; source?: string; repository?: string};
@@ -19,12 +38,13 @@ function RunProvenance({runId, status}: {runId: string; status: string}) {
   }, [runId, status]);
   if (!summary) return null;
   return <div className="run-summary">
-    {summary.formalization_id && <a href={`/?formalization=${summary.formalization_id}`}>Checked specification & alignment review ↗</a>}
+    {summary.formalization_id && <a href={`/?formalization=${summary.formalization_id}${summary.contract_id ? `&contract=${encodeURIComponent(summary.contract_id)}` : ''}`}>Lean, instance JSON & objective ↗</a>}
     {summary.published_baseline && <span>Imported published baseline: {summary.published_baseline.agent ?? 'TTT-Discover'}
       {summary.published_baseline.c1 != null && <> · c1 {summary.published_baseline.c1.toFixed(12)}</>}
       {summary.published_baseline.cells && <> · {summary.published_baseline.cells.toLocaleString()} cells</>}
       {' · credit belongs to the source construction; improvements are measured from this seed.'}</span>}
     {summary.compiler && summary.contract_id && <a href={`/api/contracts/${encodeURIComponent(summary.contract_id)}/compiler`} target="_blank" rel="noopener">Compiled scorer & verification ↗</a>}
+    {summary.contract_id && <PreparedDetails id={summary.contract_id} />}
     {summary.budget && <span>API estimate ${summary.budget.estimated_cost_usd.toFixed(2)} / ${summary.budget.max_cost_usd.toFixed(2)} cap · ${summary.budget.committed_cost_usd.toFixed(2)} including reservations</span>}
     {summary.literature && <details className="literature-review"><summary>{summary.literature_reused_from ? 'Reused literature review' : 'Opening literature review'} · {summary.literature.sources.length} sources</summary>
       <p style={{whiteSpace: 'pre-wrap'}}>{summary.literature.text}</p>

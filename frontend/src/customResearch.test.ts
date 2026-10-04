@@ -34,3 +34,12 @@ test('compiler rejection displays its stage and reason; invalid case JSON stops 
     'unsupported_formalization: No objective comparison');
   assert.throws(() => contractInput('saved', {seed: '', suite: 'test', cases: '{', reviewed: true, fitness: null}));
 });
+
+test('instance review and edited JSON are submitted with Lean review', () => {
+  const body = contractInput('saved', {seed: '', suite: 'instance',
+    cases: '{"instance":{"weights":[3,4,5],"capacity":4}}', reviewed: true,
+    instanceReviewed: true, fitness: null});
+  assert.equal(body.instance_reviewed, true);
+  assert.equal(body.alignment_reviewed, true);
+  assert.equal(body.evaluation_cases.instance.capacity, 4);
+});

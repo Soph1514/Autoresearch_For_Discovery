@@ -1,7 +1,7 @@
 export interface Progress {
   type: string; stage?: string; attempt?: number; lean?: string; diagnostics?: string; valid?: boolean;
 }
-export async function formalize(input: {mode: string; problem: string; lean: string}, signal: AbortSignal,
+export async function formalize(input: {mode: string; problem: string; instance: string; lean: string}, signal: AbortSignal,
   progress: (event: Progress) => void) {
   const response = await fetch('/api/formalizations?stream=true', {method: 'POST',
     headers: {'Content-Type': 'application/json'}, body: JSON.stringify(input), signal});

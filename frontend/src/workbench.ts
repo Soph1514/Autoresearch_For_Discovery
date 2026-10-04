@@ -7,6 +7,7 @@ const dialog = element('dialog');
 const form = element<HTMLFormElement>('upload-form');
 const mode = element<HTMLSelectElement>('mode');
 const problem = element<HTMLTextAreaElement>('problem-text');
+const instance = element<HTMLTextAreaElement>('instance-text');
 const source = element<HTMLTextAreaElement>('lean-input');
 let clearHandoff: (() => void) | undefined;
 let busy = false;
@@ -17,8 +18,11 @@ element('cancel').onclick = () => { dialog.hidden = true; };
 mode.onchange = () => {
   element('formal-input').hidden = mode.value !== 'formal';
   source.required = mode.value === 'formal';
-  element('attachment-target-label').hidden = mode.value !== 'formal';
-  form.querySelector('button.primary')!.textContent = mode.value === 'formal' ? 'Validate Lean' : 'Generate and validate';
+  const leanTarget = element<HTMLOptionElement>('attachment-lean');
+  leanTarget.hidden = mode.value !== 'formal';
+  leanTarget.disabled = mode.value !== 'formal';
+  if (mode.value !== 'formal' && leanTarget.selected) element<HTMLSelectElement>('attachment-target').value = 'problem';
+  form.querySelector('button.primary')!.textContent = mode.value === 'formal' ? 'Check Lean and generate instance JSON' : 'Generate Lean and instance JSON';
 };
 element<HTMLInputElement>('lean-file').onchange = async (event) => {
   const file = (event.target as HTMLInputElement).files?.[0];
@@ -34,7 +38,8 @@ element<HTMLInputElement>('attachment-file').onchange = async (event) => {
   const submit = form.querySelector<HTMLButtonElement>('button.primary')!;
   submit.disabled = true;
   element('form-error').textContent = '';
-  const target = mode.value === 'formal' && element<HTMLSelectElement>('attachment-target').value === 'lean' ? source : problem;
+  const selected = element<HTMLSelectElement>('attachment-target').value;
+  const target = mode.value === 'formal' && selected === 'lean' ? source : selected === 'instance' ? instance : problem;
   try {
     for (const file of files) {
       element('attachment-status').textContent = 'Reading ' + file.name + '…';
@@ -62,8 +67,10 @@ function detail(title: string, text: string) {
 }
 form.onsubmit = async (event) => {
   event.preventDefault();
-  if (busy || !problem.value.trim()) return;
+  if (busy || !problem.value.trim() || !instance.value.trim()) return;
   clearHandoff?.();
+  element('review-panel').hidden = true;
+  document.querySelector<HTMLElement>('.workspace')!.hidden = false;
   busy = true; dialog.hidden = true;
   controller = new AbortController();
   element('stop-formalization').hidden = false;
@@ -83,7 +90,7 @@ form.onsubmit = async (event) => {
     element('elapsed').textContent = `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
   }, 1000);
   try {
-    const result = await formalize({mode: mode.value, problem: problem.value, lean: source.value}, controller.signal, (event) => {
+    const result = await formalize({mode: mode.value, problem: problem.value, instance: instance.value, lean: source.value}, controller.signal, (event) => {
       if (event.lean !== undefined) element('lean-output').textContent = event.lean;
       if (event.attempt) element('count').textContent = String(event.attempt);
       if (event.stage) {
@@ -119,8 +126,12 @@ function renderResult(result: Awaited<ReturnType<typeof formalize>>) {
     log(status);
     if (result.formalization_id && result.lean_checked) {
       const handoff = document.createElement('section');
-      element('details').append(handoff);
-      clearHandoff = mountCustomResearch(handoff, result.formalization_id);
+      const notice = document.createElement('p');
+      notice.textContent = result.fidelity_error || 'Review the general Lean specification and concrete instance JSON before preparing research.';
+      element('review-panel').replaceChildren(notice, handoff);
+      element('review-panel').hidden = false;
+      document.querySelector<HTMLElement>('.workspace')!.hidden = true;
+      clearHandoff = mountCustomResearch(handoff, result.formalization_id, result);
     }
 }
 // A session awaiting review outlives the page and the backend, so it must be
@@ -136,11 +147,21 @@ if (savedId) {
   fetch(`/api/formalizations/${encodeURIComponent(savedId)}`).then(async response => {
     if (!response.ok) throw Error('Saved formalization unavailable.');
     return response.json();
-  }).then(artifact => {
+  }).then(async artifact => {
+    const contractId = new URLSearchParams(window.location.search).get('contract');
+    if (contractId) {
+      const response = await fetch(`/api/contracts/${encodeURIComponent(contractId)}`);
+      if (!response.ok) throw Error('Saved contract unavailable.');
+      const prepared = await response.json();
+      if (prepared.formalization_id !== savedId) throw Error('Contract belongs to a different specification.');
+      artifact.prepared_contract = prepared;
+    }
     problem.value = artifact.input.problem;
+    instance.value = artifact.input.instance || '';
     source.value = artifact.result.lean;
     element('problem-title').textContent = problem.value.split('\n')[0];
     element('problem-sub').textContent = 'Saved specification · hosted checker provenance retained';
-    renderResult(artifact.result);
+    renderResult({...artifact.result, formalization_id: savedId, instance: artifact.input.instance,
+      prepared_contract: artifact.prepared_contract});
   }).catch(error => { detail('Unable to load specification', String(error)); });
 }

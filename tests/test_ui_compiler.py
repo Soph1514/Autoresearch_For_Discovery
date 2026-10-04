@@ -209,3 +209,64 @@ def test_review_and_source_binding_still_gate_compilation(client, monkeypatch):
     api.store.put('formalization', 'changed', artifact)
     response = client.post('/api/contracts', json=request_body('changed'))
     assert response.status_code == 422 and 'matching Lean check' in response.json()['detail']
+
+
+def test_natural_language_instance_review_to_compiled_scorer(compiled, client, monkeypatch):
+    """Model boundaries are stubbed; persistence, review gates and Lean compiler are real."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from the_pigeon_holes.ui import formalization as f, instance
+    from the_pigeon_holes.fitness.compiler import load_lean_fitness
+
+    source = (ROOT / 'problems/subset_sum/Generated.lean').read_text()
+    description = 'Weights are 3, 4, and 5. Capacity is 7.'
+    tools = SimpleNamespace(generate=AsyncMock(return_value=source),
+        check=AsyncMock(return_value={'valid': True, 'diagnostics': '',
+            'check_artifact': formalization(source)['result']['check_artifact']}),
+        score=AsyncMock(return_value={'fidelity_decision': 'accept'}))
+    monkeypatch.setattr(f, 'default_tools', lambda: tools)
+    monkeypatch.setattr(instance, 'generate_instance', AsyncMock(return_value={
+        'evaluation_cases': {'instance': {'weights': [3, 4, 5], 'capacity': 7}}, 'instance_error': None}))
+    response = client.post('/api/formalizations', json={
+        'problem': 'General subset sum', 'instance': description})
+    assert response.status_code == 200, response.text
+    result = response.json()
+    saved = client.get('/api/formalizations/' + result['formalization_id']).json()
+    assert saved['input']['instance'] == description
+    assert saved['result']['evaluation_cases'] == result['evaluation_cases']
+    body = {'formalization_id': result['formalization_id'], 'evaluation_suite_id': 'instance',
+            'evaluation_cases': result['evaluation_cases']}
+    response = client.post('/api/contracts', json=body)
+    assert response.status_code == 422 and 'Review the Lean' in response.text
+    body['alignment_reviewed'] = True
+    response = client.post('/api/contracts', json=body)
+    assert response.status_code == 422 and 'instance JSON' in response.text
+    body['instance_reviewed'] = True
+    response = client.post('/api/contracts', json={**body, 'evaluation_cases': None})
+    assert response.status_code == 422 and 'instance JSON' in response.text
+    # Editing the generated JSON changes the actual inputs used by the scorer.
+    body['evaluation_cases']['instance']['capacity'] = 4
+    response = client.post('/api/contracts', json=body)
+    assert response.status_code == 201, response.text
+    prepared = response.json()
+    assert prepared['evaluation_cases'] == body['evaluation_cases']
+    assert 'def frozenFitnessObjective' in prepared['objective']['lean']
+    assert prepared['direction'] == 'maximize'
+    reloaded = client.get('/api/contracts/' + prepared['id'])
+    assert reloaded.status_code == 200
+    assert reloaded.json() == prepared
+    reopened = client.get('/api/formalizations/' + result['formalization_id']).json()
+    assert reopened['prepared_contract']['evaluation_cases']['instance']['capacity'] == 4
+    assert reopened['prepared_contract']['objective'] == prepared['objective']
+    assert not prepared['cases_generated']
+    record = api.store.get('contract', prepared['id'])
+    assert record['provenance']['instance_description'] == description
+    assert record['provenance']['instance_reviewed']
+    contract = contract_from_dict(record['contract'])
+    artifact = api.store.get('fitness', contract.fitness_function.id)
+    scorer = load_lean_fitness(Path(artifact['artifact']), contract.fitness_function)
+    # The displayed expression is the compiler's exact frozen objective.
+    assert scorer.manifest['representation']['objective'] in prepared['objective']['lean']
+    case, = contract.evaluation_suite.cases
+    assert scorer.evaluate_case(case, [0, 1, 0]).metrics == {'objective': 4}
+    assert not scorer.evaluate_case(case, [1, 1, 0]).valid

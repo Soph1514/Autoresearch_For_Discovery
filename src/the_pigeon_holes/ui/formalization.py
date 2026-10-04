@@ -12,6 +12,8 @@ from pydantic import BaseModel, Field, model_validator
 class FormalizationInput(BaseModel):
     mode: Literal['natural', 'formal'] = 'natural'
     problem: str = Field(min_length=1, max_length=16000)
+    # Optional for existing API clients and saved general specifications; required by the UI.
+    instance: str = Field(default='', max_length=16000)
     lean: str = Field(default='', max_length=32000)
 
     @model_validator(mode='after')
@@ -181,7 +183,7 @@ def default_tools():
     return LocalTools() if os.environ.get('RESEARCH_LOCAL_LEAN') else HostedTools()
 
 
-async def prepare(body: FormalizationInput, tools=None, progress=None):
+async def prepare(body: FormalizationInput, tools=None, progress=None, instance_generator=None):
     tools = tools or default_tools()
     generated_by_model = body.mode == "natural"
     async def emit(**event):
@@ -215,6 +217,16 @@ async def prepare(body: FormalizationInput, tools=None, progress=None):
             feedback += '\nOriginal user formulation (preserve its statement):\n' + body.lean
         source = await tools.generate(body.problem, feedback)
         generated_by_model = True
+    instance_result = {}
+    if body.instance.strip():
+        from .instance import generate_instance
+        await emit(stage='converting_instance', attempt=attempts, lean=source)
+        try:
+            instance_result = await (instance_generator or generate_instance)(body.problem, source, body.instance)
+        except Exception:
+            logging.getLogger(__name__).exception('Instance conversion failed')
+            instance_result = {'evaluation_cases': None, 'instance_error':
+                'Instance conversion failed. Your Lean is saved. Retry generation or enter the instance JSON below.'}
     await emit(stage='scoring', attempt=attempts, lean=source)
     fidelity = None
     fidelity_error = None
@@ -223,7 +235,8 @@ async def prepare(body: FormalizationInput, tools=None, progress=None):
             fidelity = await tools.score(body.problem, source)
         except Exception:
             fidelity_error = 'Fidelity service unavailable; Lean output is preserved for review.'
-    return {'check_artifact': checked.get('check_artifact'), 'lean': source, 'lean_checked': checked['valid'], 'diagnostics': checked['diagnostics'],
+    return {'instance': body.instance, **instance_result,
+            'check_artifact': checked.get('check_artifact'), 'lean': source, 'lean_checked': checked['valid'], 'diagnostics': checked['diagnostics'],
             'attempts': attempts, 'fidelity': fidelity, 'fidelity_error': fidelity_error,
             'status': ('checked' if fidelity and fidelity['fidelity_decision'] == 'accept'
                        else 'review' if checked['valid'] else 'invalid'),

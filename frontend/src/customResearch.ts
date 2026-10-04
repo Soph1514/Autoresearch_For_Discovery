@@ -4,6 +4,7 @@ import { mountScorerReview, type SynthesisView } from './scorerReview';
 type FitnessReference = { id: string; version: string };
 export type PreparationFields = {
   seed: string; suite: string; cases: string; reviewed: boolean;
+  instanceReviewed?: boolean;
   fitness: FitnessReference | null;
 };
 
@@ -16,6 +17,7 @@ export function contractInput(formalizationId: string, fields: PreparationFields
     fitness_function_id: fields.fitness?.id ?? null,
     fitness_function_version: fields.fitness?.version ?? null,
     alignment_reviewed: fields.reviewed,
+    instance_reviewed: fields.instanceReviewed ?? false,
   };
 }
 
@@ -37,17 +39,47 @@ export function preparationError(detail: unknown): string {
   return 'Check the input fields and try again.';
 }
 
-export function mountCustomResearch(host: HTMLElement, formalizationId: string) {
+export type InstanceReview = {
+  lean?: string;
+  instance?: string;
+  evaluation_cases?: Record<string, Record<string, unknown>> | null;
+  instance_error?: string | null;
+  prepared_contract?: PreparedReview;
+};
+
+export type PreparedReview = {
+  id: string; evaluation_cases: Record<string, Record<string, unknown>>;
+  metric: string; direction: string;
+  objective?: {lean: string; feasible: string} | null;
+};
+
+export function mountCustomResearch(host: HTMLElement, formalizationId: string, generated: InstanceReview = {}) {
+  const hasInstance = Boolean(generated.instance?.trim());
   const controller = new AbortController();
-  host.innerHTML = `<h3>Prepare algorithm research</h3>
+  host.innerHTML = `<h3>Review Lean and instance JSON</h3>
+    <div class="formulation-review">
+    <section ${generated.lean ? '' : 'hidden'}>
+      <label class="field">General problem — Lean<textarea data-field="lean-review" rows="14" readonly aria-label="Checked Lean source"></textarea></label>
+      <label><input type="checkbox" data-field="reviewed"> I reviewed the Lean statement against my problem.</label>
+    </section>
+    <section>
+    <label class="field">Instance JSON (editable)<textarea data-field="cases" rows="14" aria-label="Instance JSON"></textarea></label>
+    <p data-instance-error role="alert" hidden></p>
+    <p>${hasInstance ? 'Review the JSON against your instance description. These are the actual inputs research will solve. You can edit them before continuing.' : 'Cases are the concrete inputs used to compare algorithms. Leave this empty to generate small feasible starter cases for a compiled Lean problem.'}</p>
+    <label ${hasInstance ? '' : 'hidden'}><input type="checkbox" data-field="instance-reviewed"> I reviewed the JSON inputs against my instance description.</label>
+    <details ${hasInstance ? '' : 'hidden'}><summary>Your instance description</summary><p data-description></p></details>
+    </section></div>
+    <section data-objective class="objective-review" aria-label="Compiled objective" hidden>
+      <h3>Objective function</h3><p data-objective-goal></p>
+      <pre data-objective-source aria-label="Objective function Lean source"></pre>
+      <details data-feasibility><summary>Feasibility predicate</summary><pre data-feasibility-source></pre></details>
+    </section>
+    <h3>Prepare algorithm research</h3>
     <p>Select an existing problem family to reuse its scorer. For a new problem, the compiler builds a scorer from the checked Lean. Compilation does not prove that Lean matches your description.</p>
     <label class="field">Problem family<select data-field="fitness" aria-label="Problem family"><option value="">New problem — Lean compiler</option></select></label>
     <label class="field">Evaluation suite ID<input data-field="suite" aria-label="Evaluation suite ID" value="instance"></label>
-    <label class="field">Evaluation cases (editable)<textarea data-field="cases" rows="6" aria-label="Case inputs" placeholder="Generated when you prepare a new Lean problem. You can also enter your own cases."></textarea></label>
-    <p>Cases are the concrete inputs used to compare algorithms. For compiled Lean problems, leave this empty to generate small feasible cases. Review or edit them, then prepare again after edits. These starter cases do not prove correctness on every input.</p>
     <label class="field">Seed Python (optional)<textarea data-field="seed" rows="6" aria-label="Seed Python"></textarea></label>
     <p>Leave the seed empty to use the family baseline or the compiler’s initial candidate. The compiler’s candidate can be repaired during search.</p>
-    <label><input type="checkbox" data-field="reviewed"> I reviewed the Lean statement against my problem.</label>
     <p><button type="button" data-action="prepare">Prepare research</button></p>
     <p data-status role="status"></p>
     <section data-review hidden></section>
@@ -64,11 +96,32 @@ export function mountCustomResearch(host: HTMLElement, formalizationId: string) 
     <label class="field">Advisory critic calls<input type="number" data-field="critic" value="3" min="0" max="100"></label>
     <p><button type="button" data-action="start" disabled>Start research</button></p>`;
   const field = (name: string) => host.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(`[data-field="${name}"]`)!;
+  host.querySelector<HTMLElement>('[data-description]')!.textContent = generated.instance || '';
+  field('lean-review').value = generated.lean || '';
+  const cases = generated.prepared_contract?.evaluation_cases ?? generated.evaluation_cases;
+  field('cases').value = cases ? JSON.stringify(cases, null, 2) : '';
+  field('cases').setAttribute('placeholder', hasInstance ? 'Instance JSON unavailable. See the conversion error below.' : 'No instance JSON saved with this specification. Enter inputs or prepare to generate starter cases.');
+  const instanceError = host.querySelector<HTMLElement>('[data-instance-error]')!;
+  instanceError.textContent = generated.instance_error || '';
+  instanceError.hidden = !generated.instance_error;
   const prepare = host.querySelector<HTMLButtonElement>('[data-action="prepare"]')!;
   const refresh = host.querySelector<HTMLButtonElement>('[data-action="refresh"]')!;
   const start = host.querySelector<HTMLButtonElement>('[data-action="start"]')!;
   const status = host.querySelector<HTMLElement>('[data-status]')!;
   const compilerLink = host.querySelector<HTMLAnchorElement>('[data-compiler]')!;
+  const objective = host.querySelector<HTMLElement>('[data-objective]')!;
+  function showObjective(result: PreparedReview) {
+    objective.hidden = false;
+    host.querySelector<HTMLElement>('[data-objective-goal]')!.textContent = `${result.direction} ${result.metric}`;
+    host.querySelector<HTMLElement>('[data-objective-source]')!.textContent = result.objective?.lean || 'The selected scorer supplies this metric.';
+    host.querySelector<HTMLElement>('[data-feasibility-source]')!.textContent = result.objective?.feasible || '';
+    host.querySelector<HTMLElement>('[data-feasibility]')!.hidden = !result.objective?.feasible;
+  }
+  if (generated.prepared_contract) {
+    showObjective(generated.prepared_contract);
+    compilerLink.hidden = !generated.prepared_contract.objective;
+    compilerLink.href = `/api/contracts/${encodeURIComponent(generated.prepared_contract.id)}/compiler`;
+  }
   const reviewHost = host.querySelector<HTMLElement>('[data-review]')!;
   let disposeReview: (() => void) | null = null;
   const family = field('fitness') as HTMLSelectElement;
@@ -76,15 +129,21 @@ export function mountCustomResearch(host: HTMLElement, formalizationId: string) 
   let evaluatorConfigured = false;
   let working = false;
   const inputs = Array.from(host.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('input, textarea, select'));
+  const reviewed = () => !hasInstance || (
+    (field('reviewed') as HTMLInputElement).checked &&
+    (field('instance-reviewed') as HTMLInputElement).checked && Boolean(field('cases').value.trim()));
   const lock = (busy: boolean) => {
-    working = busy; prepare.disabled = busy; refresh.disabled = busy;
+    working = busy; prepare.disabled = busy || !reviewed(); refresh.disabled = busy;
     inputs.forEach(input => { input.disabled = busy; });
     start.disabled = busy || !contractId || !evaluatorConfigured;
   };
   host.oninput = event => {
     const target = event.target as HTMLElement;
+    if (target.dataset.field === 'cases') (field('instance-reviewed') as HTMLInputElement).checked = false;
+    prepare.disabled = working || !reviewed();
     if (!['seconds', 'tokens', 'critic', 'dollars', 'model', 'literature', 'output', 'execution'].includes(target.dataset.field || '')) {
       contractId = null; start.disabled = true; compilerLink.hidden = true;
+      if (target.dataset.field === 'fitness') objective.hidden = true;
     }
   };
   async function request(path: string, body?: unknown) {
@@ -115,7 +174,7 @@ export function mountCustomResearch(host: HTMLElement, formalizationId: string) 
   }
   refresh.onclick = refreshAvailability;
   prepare.onclick = async () => {
-    if (working) return;
+    if (working || !reviewed()) return;
     const useCompiler = !family.value;
     lock(true); contractId = null; compilerLink.hidden = true;
     status.textContent = useCompiler ? 'Compiling and checking the Lean scorer…' : 'Preparing research with the registered scorer…';
@@ -124,9 +183,12 @@ export function mountCustomResearch(host: HTMLElement, formalizationId: string) 
         seed: field('seed').value, suite: field('suite').value, cases: field('cases').value,
         fitness: family.value ? JSON.parse(family.value) : null,
         reviewed: (field('reviewed') as HTMLInputElement).checked,
+        instanceReviewed: (field('instance-reviewed') as HTMLInputElement).checked,
       }));
       contractId = result.id;
       field('cases').value = JSON.stringify(result.evaluation_cases, null, 2);
+      showObjective(result);
+      objective.scrollIntoView({block: 'center'});
       compilerLink.hidden = !result.compiler;
       compilerLink.href = `/api/contracts/${encodeURIComponent(result.id)}/compiler`;
       const compiled = result.compiler ? 'Lean scorer compiled, verified and frozen. ' : 'Using the registered scorer. ';
@@ -172,6 +234,7 @@ export function mountCustomResearch(host: HTMLElement, formalizationId: string) 
           evaluation_cases: JSON.parse(field('cases').value),
           seed_program: field('seed').value.trim() ? field('seed').value : null,
           alignment_reviewed: (field('reviewed') as HTMLInputElement).checked,
+          instance_reviewed: (field('instance-reviewed') as HTMLInputElement).checked,
         });
         disposeReview?.();
         disposeReview = mountScorerReview(reviewHost, session.id, {
@@ -191,10 +254,13 @@ export function mountCustomResearch(host: HTMLElement, formalizationId: string) 
         ...contractInput(formalizationId, {
           seed: field('seed').value, suite: field('suite').value, cases: field('cases').value,
           fitness: null, reviewed: (field('reviewed') as HTMLInputElement).checked,
+          instanceReviewed: (field('instance-reviewed') as HTMLInputElement).checked,
         }),
         synthesis_id: view.id,
       });
       contractId = result.id;
+      showObjective(result);
+      objective.scrollIntoView({block: 'center'});
       status.textContent = `Contract frozen around the scorer you accepted. ${result.signature} · `
         + `${result.direction} ${result.metric}. Evidence tier: ${view.evidence_tier}.`;
       await capabilities();

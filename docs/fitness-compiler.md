@@ -167,12 +167,20 @@ The local wheel build includes the compiler and example data without warnings.
 After formalization/checking, choose a **Problem family** in either composer.
 Existing families use the registered scorer (and its baseline if no seed is
 provided). **New problem — Lean compiler** sends the saved formalization
-ID and optional case inputs to `POST /api/contracts`. This route compiles that exact
+ID and reviewed instance inputs to `POST /api/contracts`. This route compiles that exact
 checked source; it never repeats a model call. All existing source-hash and
 alignment-review gates still apply.
 
-Leave **Evaluation cases** empty to generate up to five starter instances during
-preparation. A deterministic, bounded search proposes small inputs from the Lean
+The new-problem form takes the general problem and a specific instance in natural
+language. After Lean checking, Claude converts that instance to JSON; users review
+the Lean and JSON before compilation. These are the actual research inputs. If the
+conversion fails or inputs are missing, preparation requires corrected JSON rather
+than substituting starter cases. The compiler validates the reviewed inputs against
+its extracted interface. This does not establish that the JSON matches the English.
+
+For older saved general specifications without an instance description, or API
+clients that omit it, leaving **Evaluation cases** empty still generates up to five
+starter instances during preparation. A deterministic, bounded search proposes small inputs from the Lean
 parameter types. Only instances with a Lean-certified feasible witness are kept;
 the certificates are saved in `GeneratedCases.lean`. No model call is used. The
 returned cases populate the editable form. Edits invalidate the prepared contract;

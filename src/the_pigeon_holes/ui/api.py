@@ -321,7 +321,8 @@ async def create_contract(body: ContractInput):
     identity = str(uuid4())
     provenance = {'formalization_id': body.formalization_id, 'contract_id': identity,
         'check_artifact': artifact['result']['check_artifact'],
-        'fidelity': artifact['result'].get('fidelity'), 'alignment_reviewed': body.alignment_reviewed}
+        'fidelity': artifact['result'].get('fidelity'), 'alignment_reviewed': body.alignment_reviewed,
+        'instance_description': artifact.get('input', {}).get('instance'), 'instance_reviewed': body.instance_reviewed}
     saved = store.get('fitness', contract.fitness_function.id)
     compiler = synthesis = None
     # The tier records what the SCORING is backed by, so synthesised results are
@@ -343,18 +344,42 @@ async def create_contract(body: ContractInput):
                     'validation': saved['manifest']['validation'], 'english_fidelity': 'not_proven'}
         provenance['compiler'] = compiler
     provenance['evidence_tier'] = evidence_tier
+    provenance['cases_generated'] = body.evaluation_cases is None
     store.put('contract', identity, {'contract': contract, 'provenance': provenance})
-    return {'id': identity, 'signature': contract.solve_signature, 'compiler': compiler,
+    return contract_view(identity, contract, provenance)
+
+
+def contract_view(identity, contract, provenance):
+    """Review the frozen inputs and actual compiler expression, without regenerating."""
+    saved = store.get('fitness', contract.fitness_function.id)
+    representation = (saved or {}).get('manifest', {}).get('representation', {})
+    objective = None
+    if provenance.get('compiler') and representation:
+        function_type = ' → '.join([p['type'] for p in representation['parameters']] +
+            [representation['candidate_type'], representation['objective_type']])
+        objective = {'lean': f"def frozenFitnessObjective : {function_type} :=\n  {representation['objective']}",
+                     'feasible': representation['feasible']}
+    return {'id': identity, 'formalization_id': provenance.get('formalization_id'),
+        'signature': contract.solve_signature, 'compiler': provenance.get('compiler'), 'objective': objective,
+        'evaluation_suite_id': contract.evaluation_suite.id,
         'evaluation_cases': {case.id: case.materialize_inputs() for case in contract.evaluation_suite.cases},
-        'cases_generated': body.evaluation_cases is None,
-        'synthesis': synthesis, 'evidence_tier': evidence_tier,
+        'cases_generated': provenance.get('cases_generated', False),
+        'synthesis': provenance.get('synthesis'), 'evidence_tier': provenance.get('evidence_tier'),
         'metric': contract.optimisation_goal.primary.name,
         'direction': contract.optimisation_goal.primary.direction,
         'fitness_function': {'id': contract.fitness_function.id,
             'version': contract.fitness_function.version,
             'implementation_sha256': contract.fitness_function.implementation_sha256},
-        'seed_status': ('evaluated at run start; infeasible seed can be repaired' if compiler else
+        'seed_status': ('evaluated at run start; infeasible seed can be repaired' if provenance.get('compiler') else
                         'structurally_valid; behavioral evaluation required at run start')}
+
+
+@app.get('/api/contracts/{identity}')
+def saved_contract(identity: str):
+    artifact = store.get('contract', identity)
+    if artifact is None:
+        raise HTTPException(404, 'Prepared contract not found.')
+    return contract_view(identity, contract_from_dict(artifact['contract']), artifact.get('provenance', {}))
 
 
 @app.get('/api/contracts/{identity}/compiler')
@@ -373,6 +398,12 @@ def saved_formalization(identity: str):
     artifact = store.get('formalization', identity)
     if artifact is None:
         raise HTTPException(404, 'Formalization not found.')
+    for prepared in reversed(store.all('contract')):
+        provenance = prepared.get('provenance', {})
+        if provenance.get('formalization_id') == identity and provenance.get('contract_id'):
+            artifact['prepared_contract'] = contract_view(provenance['contract_id'],
+                contract_from_dict(prepared['contract']), provenance)
+            break
     return artifact
 
 

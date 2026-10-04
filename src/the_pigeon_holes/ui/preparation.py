@@ -24,6 +24,7 @@ class ContractInput(BaseModel):
     fitness_function_version: str | None = Field(default=None, min_length=1, max_length=200)
     synthesis_id: str | None = Field(default=None, min_length=1, max_length=200)
     alignment_reviewed: bool = False
+    instance_reviewed: bool = False
     case_time_seconds: float = Field(default=5, gt=0, le=300, allow_inf_nan=False)
     candidate_time_seconds: float = Field(default=60, gt=0, le=3600, allow_inf_nan=False)
     memory_mb: int = Field(default=512, gt=0, le=32768)
@@ -73,8 +74,11 @@ async def prepare_contract(body, artifact, *, builder=build_problem_contract, re
         raise ValueError('A matching Lean check artifact is required. Redeploy the checker and check again.')
     if provenance.get('exit_code') != 0 or not all(provenance.get(k) for k in ('toolchain', 'dependencies', 'command', 'lean_version')):
         raise ValueError('Lean check provenance is incomplete.')
-    if result['status'] != 'checked' and not body.alignment_reviewed:
+    has_instance = bool(artifact['input'].get('instance', '').strip())
+    if (has_instance or result['status'] != 'checked') and not body.alignment_reviewed:
         raise ValueError('Review the Lean statement against the problem and acknowledge its alignment before continuing.')
+    if has_instance and (not body.instance_reviewed or body.evaluation_cases is None):
+        raise ValueError('Review the instance JSON against your description and submit the reviewed inputs before continuing.')
     limits = ResourceLimits(body.case_time_seconds, body.candidate_time_seconds, body.memory_mb, body.max_iterations)
     active_registry = registry if registry is not None else configured_registry()
     if bool(body.fitness_function_id) != bool(body.fitness_function_version):
@@ -97,7 +101,9 @@ async def prepare_contract(body, artifact, *, builder=build_problem_contract, re
                 lean_project=project, artifacts=store.path.parent / 'fitness',
                 provenance={'formalization_id': body.formalization_id,
                             'check_artifact': provenance, 'fidelity': result.get('fidelity'),
-                            'alignment_reviewed': body.alignment_reviewed})
+                            'alignment_reviewed': body.alignment_reviewed,
+                            'instance_description': artifact['input'].get('instance'),
+                            'instance_reviewed': body.instance_reviewed})
             cases = body.evaluation_cases if body.evaluation_cases is not None else fitness.manifest['generated_cases']
             contract = replace(fitness.contract(seed_program=body.seed_program or None, limits=limits),
                 evaluation_suite=EvaluationSuite(body.evaluation_suite_id, tuple(

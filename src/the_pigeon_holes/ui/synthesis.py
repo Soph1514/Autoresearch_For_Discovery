@@ -55,6 +55,7 @@ class SynthesisInput(BaseModel):
     evaluation_cases: dict[str, dict] = Field(min_length=1, max_length=1000)
     seed_program: str | None = Field(default=None, max_length=64000)
     alignment_reviewed: bool = False
+    instance_reviewed: bool = False
     max_tokens: int = Field(default=400_000, gt=0, le=5_000_000)
 
 
@@ -136,10 +137,13 @@ def create_session(body: SynthesisInput, artifact: Mapping | None, *, store,
     result = artifact["result"]
     if not result["lean_checked"]:
         raise ValueError("Lean must pass checking before scorer synthesis.")
-    if result["status"] != "checked" and not body.alignment_reviewed:
+    has_instance = bool(artifact['input'].get('instance', '').strip())
+    if (has_instance or result["status"] != "checked") and not body.alignment_reviewed:
         raise ValueError(
             "Review the Lean statement against the problem and acknowledge its "
             "alignment before continuing.")
+    if has_instance and not body.instance_reviewed:
+        raise ValueError('Review the instance JSON against your description before scorer synthesis.')
     from uuid import uuid4
 
     identity = str(uuid4())
