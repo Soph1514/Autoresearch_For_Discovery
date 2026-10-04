@@ -644,3 +644,9 @@ dialog::backdrop {
 .node-operation { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 8px; margin-top: 4px; }
 .node-score { font-size: 9px; margin-top: 4px; }
 .graph-panel + .inspector h2 { font-size: 19px; line-height: 1.25; }
+
+.reveal-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 16px; border-bottom: 1px solid var(--line); font-size: 12px; }
+.reveal-controls > span { margin-right: auto; font-variant-numeric: tabular-nums; }
+.reveal-controls label { display: flex; align-items: center; gap: 6px; }
+.reveal-controls select { font: inherit; color: inherit; background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 5px; }
+.reveal-controls button { font-size: 12px; }
