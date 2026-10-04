@@ -34,6 +34,7 @@ def test_real_engine_publishes_lineage_evidence_and_ordered_events():
         assert all(set(i['inspirations']) <= ids for i in snapshot['ideas'])
         invalid = {e['ideaId'] for e in snapshot['experiments'] if not e['valid']}
         assert invalid
+        assert max(e["metrics"]["poa"] for e in snapshot["experiments"] if e["valid"]) == pytest.approx(4 / 3)
         assert all(e['ideaId'] not in invalid for e in snapshot['elites'] if e['current'])
         assert [e['sequence'] for e in run.events] == list(range(1, snapshot['sequence']+1))
         assert any(e['niche'] == 'Global best' for e in snapshot['elites'])

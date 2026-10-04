@@ -6,13 +6,6 @@ export type Status =
   | "stopped"
   | "completed"
   | "failed";
-export interface ProblemInput {
-  text: string;
-  attachments: File[];
-  initialResults: string;
-  resultFiles: File[];
-  mode: "demo";
-}
 export interface Run {
   id: string;
   title: string;
@@ -120,7 +113,7 @@ export interface Snapshot {
   sequence: number;
 }
 export interface ResearchClient {
-  startRun(input: ProblemInput): Promise<Run>;
+  startDemo(): Promise<Run>;
   getSnapshot(id: string): Promise<Snapshot>;
   subscribe(
     id: string,
