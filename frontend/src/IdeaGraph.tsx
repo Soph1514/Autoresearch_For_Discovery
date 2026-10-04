@@ -32,11 +32,6 @@ type IdeaNode = Node<{
   select: () => void;
 }>;
 function IdeaBox({ data, selected, id }: NodeProps<IdeaNode>) {
-  const updateInternals = useUpdateNodeInternals();
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => updateInternals(id));
-    return () => cancelAnimationFrame(frame);
-  }, [id, updateInternals]);
   return (
     <button
       type="button"
@@ -122,7 +117,6 @@ function Graph({
   const updateNodeInternals = useUpdateNodeInternals();
   const initialized = useRef(false);
   const [viewportReady, setViewportReady] = useState(false);
-  const previousRun = useRef(snapshot.run.id);
   const inactiveIds = new Set(
     snapshot.ideas
       .filter((i) => {
@@ -192,10 +186,9 @@ function Graph({
       },
     })),
   );
-  const generations = new Map(visibleIdeas.map(i => [i.id, lineage.ranks.get(i.id)!]));
-  const waveNodes: Node[] = Array.from(new Set(generations.values())).map(
+  const waveNodes: Node[] = Array.from(new Set(visibleIdeas.map(i => lineage.ranks.get(i.id)!))).map(
     (generation) => {
-      const members = nodes.filter((n) => generations.get(n.id) === generation);
+      const members = nodes.filter((n) => lineage.ranks.get(n.id) === generation);
       return {
         id: `wave-${generation}`,
         type: "wave",
@@ -255,15 +248,10 @@ function Graph({
     initialized.current = true;
   }
   useEffect(() => {
-    if (previousRun.current !== snapshot.run.id) {
-      initialized.current = false;
-      previousRun.current = snapshot.run.id;
-      setFollow(true);
-    }
     if (!follow && initialized.current) return;
     const timer = setTimeout(() => frameGraph(true), 120);
     return () => clearTimeout(timer);
-  }, [structuralKey, snapshot.run.id, follow]);
+  }, [structuralKey, follow]);
   useEffect(() => {
     if (!viewportReady) return;
     const frame = requestAnimationFrame(() => updateNodeInternals(visibleIdeas.map(i => i.id)));
@@ -335,8 +323,6 @@ function Graph({
           nodes={[...waveNodes, ...nodes]}
           edges={edges}
           nodeTypes={nodeTypes}
-          onNodeClick={(_, n) => { if (n.type === "idea") { setDisplayPaused(true); onSelect(n.id); } }}
-          onNodeDragStart={() => setFollow(false)}
           nodesDraggable={false}
           nodesConnectable={false}
           elementsSelectable
