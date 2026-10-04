@@ -94,3 +94,21 @@ def test_pause_at_batch_boundary_and_stop():
         assert run.snapshot['run']['status'] == 'stopped'
         assert not any(e['status'] == 'running' for e in run.snapshot['experiments'])
     asyncio.run(scenario())
+
+
+def test_stopped_run_summary_retains_verified_winner(monkeypatch):
+    from the_pigeon_holes.ui import api
+
+    async def scenario():
+        run = LabRun(delay=0)
+        await run.run()
+        expected = run.outcome['best_evaluation']['metrics']
+        winner = run.outcome['best_candidate']['id']
+        run.outcome = None
+        run.snapshot['run']['status'] = 'stopped'
+        monkeypatch.setattr(api, 'get_run', lambda _: run)
+        summary = api.run_summary(run.id)
+        assert summary['best_candidate_id'] == winner
+        assert summary['best_metrics'] == expected
+        assert run.snapshot['run']['status'] == 'stopped'
+    asyncio.run(scenario())

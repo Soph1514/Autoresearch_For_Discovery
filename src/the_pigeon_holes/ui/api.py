@@ -331,11 +331,13 @@ def run_summary(run_id: str):
     from .storage import encode
     generation = encode(run.generation_config) or {}
     outcome = run.outcome or {}
+    winner_id = (outcome.get('best_candidate') or {}).get('id') or next((
+        e['ideaId'] for e in run.snapshot['elites'] if e['current'] and e['niche'] == 'Global best'), None)
+    evaluation = encode(outcome.get('best_evaluation') or run.evidence.get('evaluations', {}).get(winner_id)) or {}
     return {'formalization_id': (run.provenance or {}).get('formalization_id'),
         'model': generation.get('model'), 'reported_tokens': outcome.get('tokens_used'),
         'generations': outcome.get('generations_completed'), 'stop_reason': outcome.get('stop_reason'),
         'active_seconds': outcome.get('elapsed_seconds'),
         'budget': run.budget_summary(), 'literature': run.literature,
-        'best_candidate_id': (outcome.get('best_candidate') or {}).get('id'),
-        'best_metrics': (outcome.get('best_evaluation') or {}).get('metrics'),
+        'best_candidate_id': winner_id, 'best_metrics': evaluation.get('metrics'),
         'scope': 'Reported evolution tokens exclude preparation and unknown in-flight billing.'}
