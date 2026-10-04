@@ -43,7 +43,8 @@ elab "#check_fitness_source " file:str : command => do
     if messages.hasErrors then throwError "lean_compile_failed: malformed Lean syntax"
     if stx.isOfKind ``Parser.Command.eoi then break
     unless [``Parser.Command.declaration, ``Parser.Command.namespace,
-            ``Parser.Command.end, ``Parser.Command.open].contains stx.getKind do
+            ``Parser.Command.end, ``Parser.Command.open,
+            ``Parser.Command.moduleDoc].contains stx.getKind do
       throwError "unsupported_formalization: command {stx.getKind}"
     match inspectSyntax stx with
     | .error e => throwError "unsupported_formalization: {e}"
