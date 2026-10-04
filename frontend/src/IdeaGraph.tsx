@@ -202,7 +202,7 @@ function Graph({
       type: "default",
       className: inactiveIds.has(i.id) ? "receded-edge" : "",
       style: {
-        stroke: index ? "#87a89b" : "#c2cbbb",
+        stroke: index ? "#918777" : "#b2a99a",
         strokeWidth: 1.25,
         strokeDasharray: index ? "5 5" : undefined,
       },
@@ -342,7 +342,7 @@ function Graph({
           maxZoom={1.5}
           proOptions={{ hideAttribution: false }}
         >
-          <Background color="#d9dfd2" gap={23} />
+          <Background color="#d5cfc4" gap={23} />
           <Controls
             showInteractive={false}
             onZoomIn={() => setFollow(false)}

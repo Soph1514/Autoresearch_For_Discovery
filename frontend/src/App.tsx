@@ -36,7 +36,7 @@ function Inspector({
           {e.current ? "★ Elite" : "Former elite"} · {e.niche}
         </span>
       ))}
-      <p>{idea.description}</p>
+      <ul className="idea-points">{idea.description.split(/(?<=\.)\s+(?=[A-Z])/).map((point, i) => <li key={i}>{point}</li>)}</ul>
       <h3>How it was formed</h3>
       <div className="parent-links">
         {idea.parents.length ? (
@@ -88,6 +88,13 @@ function Inspector({
           <pre>{idea.sourceCode}</pre>
         </details>
       )}
+      {(snapshot.assessments || []).filter(a => a.candidateId === idea.id).map(a => <section key={a.candidateId}>
+        <h3>Advisory critic</h3>
+        <p>{a.approachSummary}</p><p>{a.noveltyNote}</p>
+        <p>Promise: {a.promiseRating}/5 · {a.model}</p>
+        {a.riskFlags.length > 0 && <p>Risks: {a.riskFlags.join("; ")}</p>}
+        <p className="muted">Advisory only; validity and scores come from the evaluator.</p>
+      </section>)}
       <h3>Experiment attempts</h3>
       {snapshot.experiments
         .filter((e) => e.ideaId === idea.id)
@@ -140,7 +147,7 @@ function ResearchLog({
     <section className="research-log">
       <div className="log-heading">
         <strong>Research log</strong>
-        <span>{snapshot.run.status} · demo events</span>
+        <span>{snapshot.run.status} · {snapshot.run.backend === "python-demo" ? "demo" : "research"} events</span>
         {unread && (
           <button
             onClick={() => {
@@ -192,6 +199,7 @@ export default function App() {
     return () => clearInterval(t);
   }, []);
   useEffect(() => setSelected(null), [snapshot?.run.id]);
+  const custom = snapshot?.run.backend === "python";
   const status = snapshot?.run.status;
   const active =
     status && ["running", "pausing", "paused", "stopping"].includes(status);
@@ -220,9 +228,10 @@ export default function App() {
       <header>
         <span className="wordmark">Research lab</span>
         <span className="demo-label">
-          PYTHON ENGINE · DEMO GENERATOR & EVALUATOR
+          {custom ? "PYTHON ENGINE · CUSTOM RESEARCH" : "PYTHON ENGINE · DEMO GENERATOR & EVALUATOR"}
         </span>
         <button onClick={() => setComposer(true)}>＋ Add problem</button>
+        <a href="/">Back to workbench ↗</a>
         {active ? (
           <>
             <button
@@ -265,9 +274,9 @@ export default function App() {
       <main>
         <section className="intro">
           <div>
-            <div className="eyebrow">ROUTING GAMES / LOWER-BOUND SEARCH</div>
+            <div className="eyebrow">{custom ? "ALGORITHM RESEARCH" : "ROUTING GAMES / LOWER-BOUND SEARCH"}</div>
             <h1>{snapshot?.run.title ?? "A space for branching ideas."}</h1>
-            <p className="muted">
+            {!custom && <><p className="muted">
               Pigou network · unit demand · route delays ℓ₁(x) = x and ℓ₂(x) = c
             </p>
             <p className="source">
@@ -279,7 +288,7 @@ export default function App() {
               >
                 Research context ↗
               </a>
-            </p>
+            </p></>}
           </div>
           <div className="stats">
             <div>
@@ -332,12 +341,13 @@ export default function App() {
               Run routing demo
             </button>
             <p className="muted">
-              Your own problem can be previewed with Add problem.
+              Use Add problem to generate or validate a Lean formulation.
               <br />
-              Its interpretation and execution await the backend.
+              Qwen fidelity scoring highlights formulations that need review.
             </p>
           </section>
         )}
+        {snapshot && <p><a href={`/api/runs/${snapshot.run.id}/artifact`} download="research-run.json">Download run evidence</a></p>}
         {snapshot?.run.contract && (
           <details className="contract">
             <summary>Problem contract · Python backend</summary>
@@ -354,7 +364,7 @@ export default function App() {
             All candidates preserved. Backend owns validity and archive
             decisions.
           </span>
-          <span>Python backend · in-memory run history</span>
+          <span>Python backend · saved run history</span>
         </footer>
       </main>
       {composer && <Composer onClose={() => setComposer(false)} />}

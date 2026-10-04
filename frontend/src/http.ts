@@ -1,9 +1,9 @@
 import type {
   ResearchClient,
-  ProblemInput,
   Run,
   Snapshot,
   ResearchEvent,
+  ControlAcknowledgement,
 } from "./contracts";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -24,21 +24,23 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 export class HttpResearchClient implements ResearchClient {
-  async startRun(input: ProblemInput): Promise<Run> {
-    if (
-      input.mode !== "demo" ||
-      input.attachments.length ||
-      input.resultFiles.length
-    )
-      throw Error("Only the explicit routing demo is connected.");
+  async startDemo(): Promise<Run> {
     return request("/runs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mode: "demo" }),
     });
   }
-  getSnapshot(id: string): Promise<Snapshot> {
-    return request("/runs/" + encodeURIComponent(id));
+  async getSnapshot(id: string): Promise<Snapshot> {
+    const snapshot = await request<Snapshot>("/runs/" + encodeURIComponent(id));
+    if (
+      snapshot.schemaVersion !== 1 ||
+      snapshot.run?.id !== id ||
+      !Number.isInteger(snapshot.sequence) ||
+      !Array.isArray(snapshot.generationFailures)
+    )
+      throw Error("Unsupported research snapshot; refresh the application.");
+    return snapshot;
   }
   subscribe(
     id: string,
@@ -52,7 +54,7 @@ export class HttpResearchClient implements ResearchClient {
     stream.onopen = () => onConnection?.(null);
     stream.onerror = () =>
       onConnection?.(
-        "Research stream disconnected; reconnecting. If the backend restarted, start a new demo.",
+        "Research stream disconnected; reconnecting to saved evidence.",
       );
     stream.onmessage = (message) => {
       try {
@@ -68,11 +70,18 @@ export class HttpResearchClient implements ResearchClient {
             "experiment_updated",
             "elite_changed",
             "log_added",
+            "generation_failed",
+            "assessment_recorded",
             "run_status_changed",
           ].includes(event.type)
         )
           throw Error("Unsupported research event");
         listener(event as ResearchEvent);
+        if (
+          event.type === "run_status_changed" &&
+          ["stopped", "completed", "failed"].includes(event.payload.status)
+        )
+          stream.close();
       } catch {
         stream.close();
         onConnection?.(
@@ -83,12 +92,18 @@ export class HttpResearchClient implements ResearchClient {
     return () => stream.close();
   }
   async pauseRun(id: string) {
-    await request(`/runs/${encodeURIComponent(id)}/pause`, { method: "POST" });
+    return request<ControlAcknowledgement>(`/runs/${encodeURIComponent(id)}/pause`, {
+      method: "POST",
+    });
   }
   async resumeRun(id: string) {
-    await request(`/runs/${encodeURIComponent(id)}/resume`, { method: "POST" });
+    return request<ControlAcknowledgement>(`/runs/${encodeURIComponent(id)}/resume`, {
+      method: "POST",
+    });
   }
   async stopRun(id: string) {
-    await request(`/runs/${encodeURIComponent(id)}/stop`, { method: "POST" });
+    return request<ControlAcknowledgement>(`/runs/${encodeURIComponent(id)}/stop`, {
+      method: "POST",
+    });
   }
 }

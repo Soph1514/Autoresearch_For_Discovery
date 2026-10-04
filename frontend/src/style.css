@@ -1,3 +1,5 @@
+/* Layout defaults are layered so the shared AntiAI theme wins in every build. */
+@layer engine-defaults {
 :root {
   font-family: Inter, system-ui, sans-serif;
   color: #2c3b32;
@@ -426,32 +428,6 @@ dialog::backdrop {
   margin-top: 8px;
   font-size: 12px;
 }
-.attachments {
-  display: grid;
-  gap: 8px;
-}
-.attachment {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 11px;
-  margin-top: 7px;
-}
-.attachment span {
-  overflow-wrap: anywhere;
-  flex: 1;
-}
-.attachment img {
-  width: 60px;
-  height: 50px;
-  object-fit: cover;
-  border-radius: 5px;
-}
-.file-icon {
-  max-width: 60px;
-  padding: 12px;
-  background: #edf0e5;
-}
 .notice {
   padding: 12px;
   background: #eef1e7;
@@ -459,9 +435,6 @@ dialog::backdrop {
   font-size: 11px;
   color: #748268;
   overflow-wrap: anywhere;
-}
-.success {
-  color: #3d6c42;
 }
 .dialog-actions {
   display: flex;
@@ -649,4 +622,6 @@ dialog::backdrop {
 }
 .node-meta span {
   flex-shrink: 0;
+}
+
 }

@@ -36,6 +36,7 @@ class IslandStatus(StrEnum):
 
 
 class StopReason(StrEnum):
+    INVALID_SEED = "invalid_seed"
     TIME_LIMIT = "time_limit"
     TOKEN_LIMIT = "token_limit"
     TIME_AND_TOKEN_LIMIT = "time_and_token_limit"
@@ -59,12 +60,16 @@ class EvolutionConfig:
     lineage_novelty_weight: float = 0.10
     max_novelty_archive_size: int = 128
     max_tokens_per_request: int = 8_192
+    pool_size: int = 4
+    tournament_size: int = 2
     random_seed: int = 0
 
     def __post_init__(self) -> None:
         if not 1 <= self.min_islands <= self.max_islands:
             raise ValueError("island limits must satisfy 1 <= min_islands <= max_islands")
         for name in (
+            "pool_size",
+            "tournament_size",
             "offspring_per_island",
             "max_batch_size",
             "incubation_evaluations",
@@ -92,11 +97,29 @@ class EvolutionConfig:
 
 
 @dataclass(frozen=True)
+class Assessment:
+    """Advisory LLM critique of a valid candidate. Never affects validity or elites."""
+
+    candidate_id: str
+    promise_rating: int
+    approach_summary: str
+    novelty_note: str
+    risk_flags: tuple[str, ...]
+    model: str
+    prompt_version: str
+
+    def __post_init__(self) -> None:
+        if type(self.promise_rating) is not int or not 1 <= self.promise_rating <= 5:
+            raise ValueError("promise_rating must be an integer from 1 to 5")
+
+
+@dataclass(frozen=True)
 class EvolutionLimits:
-    """Whole-run token and active-time limits; the caller supplies the run clock."""
+    """Whole-run token, active-time, and critic-call limits; the caller supplies the run clock."""
 
     max_time_seconds: float | None = None
     max_tokens: int | None = None
+    max_critic_calls: int | None = None
 
     def __post_init__(self) -> None:
         if self.max_time_seconds is None and self.max_tokens is None:
@@ -241,6 +264,8 @@ class IslandState:
     evaluation_count: int = 0
     trials_since_improvement: int = 0
     protected_for_evaluations: int | None = None
+    # Archive cell key -> candidate ID holding that cell. Bounded by pool_size.
+    cells: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -257,6 +282,7 @@ class EvolutionState:
     generation_failures: list[GenerationFailure] = field(default_factory=list)
     global_best_id: str | None = None
     total_evaluations: int = 0
+    assessments: dict[str, Assessment] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

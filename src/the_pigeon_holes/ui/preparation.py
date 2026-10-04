@@ -1,0 +1,62 @@
+"""Bind a server-recorded Lean check to an immutable custom research contract."""
+import asyncio
+import hashlib
+import importlib
+import os
+from pydantic import BaseModel, Field
+from the_pigeon_holes.models.problem_contract import ResourceLimits, build_problem_contract
+
+
+class ContractInput(BaseModel):
+    formalization_id: str
+    seed_program: str = Field(min_length=1, max_length=64000)
+    evaluation_suite_id: str = Field(min_length=1, max_length=200)
+    evaluation_cases: dict[str, dict] = Field(min_length=1, max_length=1000)
+    evaluator_version: str = Field(min_length=1, max_length=200)
+    alignment_reviewed: bool = False
+    case_time_seconds: float = Field(default=5, gt=0, le=300, allow_inf_nan=False)
+    candidate_time_seconds: float = Field(default=60, gt=0, le=3600, allow_inf_nan=False)
+    memory_mb: int = Field(default=512, gt=0, le=32768)
+    max_iterations: int = Field(default=100000, gt=0)
+
+
+def make_evaluator(contract):
+    """Only the operator's environment may name executable adapter code."""
+    target = os.environ.get('RESEARCH_EVALUATOR_FACTORY')
+    if target:
+        module, name = target.split(':', 1)
+        factory = getattr(importlib.import_module(module), name)
+    else:
+        from the_pigeon_holes.evaluation.production import create_evaluator as factory
+    evaluator = factory(contract)
+    if not callable(getattr(evaluator, 'evaluate', None)):
+        raise ValueError('Evaluator factory must return an async CandidateEvaluator.')
+    return evaluator
+
+
+async def prepare_contract(body, artifact, *, builder=build_problem_contract):
+    if artifact is None:
+        raise ValueError('Formalization not found. Submit and check the problem first.')
+    result = artifact['result']
+    if not result['lean_checked']:
+        raise ValueError('Lean must pass checking before contract preparation.')
+    provenance = result.get('check_artifact')
+    if not provenance or provenance.get('source_sha256') != hashlib.sha256(result['lean'].encode()).hexdigest():
+        raise ValueError('A matching Lean check artifact is required. Redeploy the checker and check again.')
+    if provenance.get('exit_code') != 0 or not all(provenance.get(k) for k in ('toolchain', 'dependencies', 'command', 'lean_version')):
+        raise ValueError('Lean check provenance is incomplete.')
+    if result['status'] != 'checked' and not body.alignment_reviewed:
+        raise ValueError('Review the Lean statement against the problem and acknowledge its alignment before continuing.')
+    model = os.environ.get('RESEARCH_MODEL')
+    if not model:
+        raise RuntimeError('Configure RESEARCH_MODEL for interface extraction and candidate generation.')
+    limits = ResourceLimits(body.case_time_seconds, body.candidate_time_seconds, body.memory_mb, body.max_iterations)
+    import anthropic
+    # The synchronous extractor has its own bounded HTTP request; no implicit retries.
+    def build():
+        with anthropic.Anthropic(timeout=90, max_retries=0) as client:
+            return builder(natural_language_spec=artifact['input']['problem'], lean_specification=result['lean'],
+                seed_program=body.seed_program, evaluation_suite_id=body.evaluation_suite_id,
+                evaluation_cases=body.evaluation_cases, resource_limits=limits,
+                evaluator_version=body.evaluator_version, model=model, client=client)
+    return await asyncio.to_thread(build)

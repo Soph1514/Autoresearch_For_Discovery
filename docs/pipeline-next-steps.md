@@ -1,119 +1,101 @@
-# Pipeline integration: next steps
+# Remaining pipeline work
 
-Status: 2026-10-03, following the `eo_loop` merge into `feat/idea-tree`.
+Reconciled on 2026-10-04 with main `e366466`, custom-run integration `7e26e8a`,
+and evaluator branch `origin/eo_loop` at `36fadc0`.
 
-The Lean extractor, contract builder, and evolution loop have compatible interfaces, but the full path is not yet wired or verified end to end. The UI currently runs the real evolution engine with a prepared Pigou contract and explicit demo generation/evaluation adapters. It bypasses Lean extraction and contract construction.
+## Done
 
-See [current integration status](ui-integration-status.md) for what is connected and [evolution design](evolution.md) for the search policy. This checklist proposes integration work; it does not assign teammates or change the agreed architecture.
+- Lean generation/checking/repair, fidelity review, server-recorded check provenance,
+  immutable contract preparation, and both custom-run UI entry points.
+- Built-in `autocorrelation-exact-v1` evaluator: Docker execution, exact host-side
+  scoring, contract admission, per-case and suite timeouts, memory limits, bounded
+  output, and cancellation that removes the candidate container.
+- Real generator/evaluator orchestration, seed validation, island pools and
+  tournament parent selection, ordered UI events, and evidence downloads.
+- Optional advisory critic in the CLI. Generator and critic share token admission;
+  critic usage is charged even when its response is malformed. Critic deadlines
+  retain completed numerical evidence. The UI can render critic events, but does
+  not enable critic calls by default.
+- SQLite history and replay, restart interruption handling, and optional API auth.
+- Local worker built and real Docker tests run. A scripted smoke run also exercises
+  evolution and durable evidence; it is not an LLM benchmark or a Lean proof.
 
-## Implementation dependency DAG
+## Required before a credible end-to-end demo
 
-Arrows mean “must be ready before.” Independent branches can be implemented in parallel. This is a dependency graph, not the runtime feedback loop or idea lineage graph.
+1. **Deploy the checker update.** Redeploy `research/lean-fidelity/modal_checker.py`
+   so the service returns the source hash, actual versions, dependency manifest,
+   command outcome and diagnostics. Recheck the specification afterward.
+2. **Formalize the actual autocorrelation problem.** The numerical benchmark's
+   `autocorrelation_contract()` deliberately contains a Lean placeholder. The
+   custom UI requires a genuine checked artifact and compatible extracted interface;
+   the placeholder must not be presented as formally verified. Inspect the units
+   (`q_i / 2**40`), constraints, `solve(n: int) -> list[int]`, and mean `c1` objective.
+3. **Run a bounded live search.** Configure an Anthropic model/key and use the
+   merged evaluator. Save commands, versions, input suite, actual token/cost data,
+   failures and best source. Verify the full hosted-preparation → custom UI →
+   Docker path, including rejection, pause/resume, cancellation and restart.
+   Local tests and scripted proposals do not establish live model performance.
+4. **Repair the remaining evidence gaps.** Rerun the disputed Ireland–Rosen Lean
+   benchmark result; historical timings are retained but its verdict is unproven.
+   Evaluate fidelity on held-out examples—the existing ten-example comparison
+   includes training examples.
+5. **Record the <=4-minute video and prepare submission.** Show measured improvement
+   over a baseline, distinguish numerical validation from formal proof, and include
+   reproducible setup, repository URL, costs, limitations and video link.
 
-```mermaid
-flowchart TD
-    A[1. Agree shared contract and evaluation semantics]
-    A --> B[2. Preserve complete interface and validate contract]
-    A --> C[3. Produce checked Lean with provenance]
-    A --> D[4. Implement protected sandbox evaluator]
-    B --> E[5. Implement async LLM generation adapter]
-    B --> F[6. Prepare seed and evaluation suite]
-    C --> F
-    D --> F
-    B --> G[7. Stabilize API events and run controls]
-    D --> H[8. Wire production orchestration]
-    E --> H
-    F --> H
-    G --> H
-    H --> I[9. Verify Lean-to-evolution integration]
-    I --> J[10. Connect text and image submission in UI]
-    G --> K[11. Add durable run storage]
-    J --> L[12. Reproducible integrated demonstration]
-    K --> L
+## Follow-up limitations to resolve or disclose
+
+- The evaluator supports only the autocorrelation family, not arbitrary uploaded
+  problems. Other families need their own trusted versioned judges and adapters.
+- `ResourceLimits.max_iterations` is not independently enforced by this worker.
+  Wall-clock and memory limits are enforced; do not claim an instruction/iteration cap.
+- Exact rational scores become floats at the evolution interface. The CLI rechecks
+  the final output exactly, but near-tie ordering remains float-based.
+- Host-side exact scoring runs in a thread. Cancellation stops container work and
+  waiting on scoring, but cannot interrupt an already-running host arithmetic job.
+- Critic quality is unmeasured; keep it advisory. Do not use its rating to override
+  validity or measured rankings. Duplicate programs still use `static_validation`.
+- The API is a single-process lab service with optional shared authentication,
+  not per-user isolation or a multi-worker scheduler. Restart preserves evidence
+  and marks interruptions; it does not resume the optimizer automatically.
+
+## Evaluator setup and extension
+
+```sh
+docker build -t the-pigeon-holes/candidate-worker:v1 docker/worker
 ```
 
-## TODO: unblock the core handoff
+The built-in factory is `the_pigeon_holes.evaluation.production:create_evaluator`;
+no `RESEARCH_EVALUATOR_FACTORY` setting is needed for autocorrelation. It rejects
+unsupported evaluator versions, interfaces, metrics, aggregation and case sizes.
+Docker must be reachable and the image available. Each evaluator resolves the
+worker tag to an immutable local image ID, which is saved in run evidence.
 
-- [x] **1. Agree the shared semantics before editing shared models.**
-  - Confirm ownership of formalization, contract/extraction, generation, evaluation, and the API/UI boundary.
-  - Resolve how run-bound cases relate to metric aggregation. Keep algorithms general; do not expose concrete benchmark answers in generation prompts.
-  - Separate per-evaluation time/memory/iteration limits from whole-run time/token budgets. Define paused-time accounting, cancellation, and provider timeout behavior.
-  - Define what “checked Lean” means and which check artifacts must accompany it. Lean specification checking does not prove generated Python correct.
-  - **Done:** decisions are recorded in [shared semantics](shared-semantics.md).
-    Production enforcement explicitly assigned to later adapters remains noted
-    there rather than being implied by the shared models.
+For another family, set `RESEARCH_EVALUATOR_FACTORY=your_module:create_evaluator`.
+The synchronous trusted factory receives a frozen `ProblemContract` and returns
+an object implementing `async evaluate(candidates, problem)`. Client requests
+cannot choose Python modules. The adapter must return one `CandidateEvaluation`
+per candidate and honor cancellation and contract limits; invalid seeds stop
+before generation. Never substitute the routing demo for an unavailable evaluator.
 
-- [x] **2. Preserve the complete extracted interface in the contract.**
-  - Carry the required supporting type definitions (`pydantic_classes_code`) or an equivalent versioned schema into generation prompts and the evaluation environment.
-  - Validate seed signature compatibility during contract preparation, reusing the existing signature validator where appropriate.
-  - Validate case values/types as well as parameter names. Validate metric configuration and resource limits; prevent mutation of run-bound suite data after preparation.
-  - Treat extracted helper code as generated code: parsing is not authorization to execute it in the API process.
-  - **Done:** the versioned interface and immutable evaluation suite are
-    validated during preparation. A focused builder-to-loop test carries a
-    structured input through generation and a contract-aware evaluator double;
-    production sandbox execution remains item 4.
+## Reproducible checks
 
-- [ ] **3. Connect Lean formalization and checking.**
-  - Accept an existing Lean statement or obtain one from the natural-language specification; return checker diagnostics for correction.
-  - Record source, Lean/toolchain and dependency versions, and check outcome. Do not infer verification from the extractor's Python syntax checks.
-  - Move synchronous extraction off the async API event loop or provide an async adapter, with bounded calls and explicit errors.
-  - **Done when:** checked input can advance to preparation and failed checks remain visible without starting evolution.
+```sh
+PYTHONPATH=src .venv/bin/python -m pytest -q
+cd frontend
+npm test
+npm run build
+```
 
-- [ ] **4. Implement the production `CandidateEvaluator` adapter.**
-  - Run candidate code with the contract's evaluation cases and required interface definitions in an isolated execution environment.
-  - Enforce resource limits and use a fixed, versioned deterministic judge for validity, primary metric, and tie-breakers. Generated code must not modify the judge or benchmark data.
-  - Return one `CandidateEvaluation` per candidate, including failures, partial evidence, and behavioral descriptors where supported. Valid results must contain finite configured metrics.
-  - If an LLM judge is included, keep its assessment separate from executable validity; it must not promote invalid candidates.
-  - **Done when:** valid, invalid, crashing, and timed-out candidates produce consistent evidence and only valid results can become elites.
+Docker tests skip if Docker/image preflight fails. Tests make no live model calls.
+For a live numerical search (the contract's Lean remains a placeholder):
 
-- [ ] **5. Implement the production `ProgramGenerator` adapter.**
-  - Consume existing generation requests; return hypothesis and complete implementation together, following the current evolution design.
-  - Preserve request IDs and return exactly one result or explicit failure per request, including measured token usage.
-  - Bound concurrency, retries, provider calls, and cancellation. Preserve backend-selected ancestry and operators.
-  - **Done when:** the existing loop can replace `DemoGenerator` without changing search policy.
+```sh
+PYTHONPATH=src .venv/bin/python scripts/run_autocorrelation.py \
+  --model "$RESEARCH_MODEL" --n 64 --max-tokens 32768 --max-minutes 5 \
+  --max-critic-calls 0 --seed 0
+```
 
-- [ ] **6. Prepare a runnable problem contract.**
-  - Supply or generate the seed, bind an evaluation suite, carry the full interface, and select the agreed evaluator version.
-  - Use `build_problem_contract` rather than a separately assembled production contract. Check/evaluate the seed and define the response to an invalid baseline.
-  - Keep the prepared specification, suite, and evaluator fixed for the run.
-  - **Done when:** preparation returns either an accepted contract with baseline evidence or actionable diagnostics.
-
-## TODO: connect orchestration and UI
-
-- [ ] **7. Stabilize events and controls with backend owners.**
-  - Agree the versioned event envelope, snapshot format, ordered replay, terminal states, and reconnect behavior already prototyped by the bridge.
-  - Decide whether to retain the separate observation subclass or provide native engine callbacks. Surface generation failures as well as evaluation failures.
-  - Define pause-at-boundary, resume, stop, and cancellation behavior for real adapters.
-  - Add explicit crossover-plus-mutation provenance if supported; the UI must not infer it from `crossover`. Keep inspiration references distinct from parent edges.
-  - **Done when:** backend events fully drive the graph, research log, and controls without UI-side elite selection.
-
-- [ ] **8. Wire the production orchestration entry point.**
-  - Connect accepted Lean → extraction/preparation → `ProblemContract` → `EvolutionLoop.run(contract)` using production generator/evaluator adapters.
-  - Expose preparation progress, diagnostics, and run identity through the API; handle failed stages without silently falling back to the demo.
-  - Preserve a separately labeled demo mode for development without provider credentials.
-  - **Done when:** one API flow reaches the real loop from checked Lean without manually constructing a contract.
-
-- [ ] **9. Verify the complete handoff with focused integration checks.**
-  - Exercise contract builder → loop together, including an example requiring supporting types and a nonempty evaluation suite.
-  - Cover signature mismatch, invalid cases, failed Lean checks, invalid/missing metrics, provider failure, timeout, and stop/reconnect behavior at their relevant boundaries.
-  - Use deterministic provider doubles for repeatable checks, then run a small explicitly configured live-provider smoke test with a bounded budget.
-  - **Done when:** evidence shows the same contract, suite, and evaluator version are used throughout, with failures retained and no invalid elite.
-
-- [ ] **10. Connect the problem composer to preparation.**
-  - Submit natural-language text, optional initial results, and supported image/document attachments to the backend preparation flow.
-  - Implement attachment handling and OCR/vision interpretation; show extracted content and preparation diagnostics before research begins.
-  - Replace the local-preview-only behavior once the production endpoint is ready. Preserve fades, grouped reveals, and automatic graph overview.
-  - **Done when:** user input reaches the accepted contract and its run, with no silent substitution of the Pigou demo.
-
-## TODO: make runs reproducible
-
-- [ ] **11. Persist run state and evidence.**
-  - Store prepared contracts, source artifacts, candidates, evaluations, event cursors, provider usage, and evaluator versions.
-  - Define restart behavior explicitly: either recover work safely or mark interrupted runs, while retaining their history.
-  - **Done when:** restarting the API does not lose completed evidence and reconnect uses persisted history. Add authentication before any non-local deployment.
-
-- [ ] **12. Record one reproducible integrated demonstration.**
-  - Run an agreed problem through preparation, generation, evaluation, archive selection, and the UI. Include rejected candidates and multi-parent ancestry when produced.
-  - Record commands, tool/model versions, input and evaluator versions, actual costs, and results. Distinguish rediscovering a known bound from a new result.
-  - Resolve the team's Python-version/lockfile policy and document a reproducible installation. Preserve the currently uncommitted `uv.lock` edit until reconciled deliberately.
-  - **Done when:** another teammate can reproduce the run and inspect the evidence from the documented setup.
+Set `ANTHROPIC_API_KEY` before running. Increase critic calls only when testing its
+advisory value. Provider token counts are estimates; ambiguous in-flight billing
+can remain unknown. Preparation calls are outside the evolution token budget.

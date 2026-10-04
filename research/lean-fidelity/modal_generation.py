@@ -1,0 +1,81 @@
+"""Hosted Qwen generation and isolated, pinned Lean checking (no training)."""
+from pathlib import Path
+import modal
+
+app = modal.App('lean-generation')
+MODEL = 'Qwen/Qwen3-4B-Instruct-2507'
+REVISION = 'cdbee75f17c01a7cc42f958dc650907174af0554'
+gpu_image = modal.Image.debian_slim(python_version='3.11').pip_install(
+    'torch==2.7.1', 'transformers==4.56.2', 'accelerate==1.10.1')
+cache = modal.Volume.from_name('lean-generation-cache', create_if_missing=True)
+
+@app.cls(image=gpu_image, gpu='A100-80GB', timeout=300, startup_timeout=600,
+         min_containers=0, max_containers=1, scaledown_window=60,
+         volumes={'/cache': cache})
+class Generator:
+    @modal.enter()
+    def load(self):
+        import torch
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+        self.tokenizer = AutoTokenizer.from_pretrained(MODEL, revision=REVISION, cache_dir='/cache')
+        self.model = AutoModelForCausalLM.from_pretrained(
+            MODEL, revision=REVISION, cache_dir='/cache', torch_dtype=torch.bfloat16,
+            device_map='auto').eval()
+
+    @modal.method()
+    def generate(self, problem: str, feedback: str = '') -> str:
+        import torch
+        import re
+        repair = re.search(r'Repair attempt (\d+)', feedback)
+        if repair and int(repair.group(1)) % 3 == 0:
+            diagnostics = feedback.split('Checker diagnostics:', 1)[-1]
+            feedback = ('The previous proof approach failed repeatedly. Construct a fresh minimal proof from the original problem; '
+                        'do not reuse the previous intermediate steps. Preserve all assumptions and the conclusion. '
+                        'For linear natural-number arithmetic, choose existential witnesses then try omega.\n'
+                        + diagnostics)
+        messages = [
+            {'role': 'system', 'content': 'Translate the problem into a complete Lean 4.19 file using Mathlib. Return only Lean code. Use Lean 4 tactic syntax: := by followed by indented tactics on separate lines. Never use Lean 3 begin/end, existsi, or comma-separated tactics. Unpack existentials with rcases h with ⟨w, hw⟩; provide witnesses with refine ⟨w, ?_⟩. Prefer import Mathlib rather than guessing module paths. Available tactics include omega, ring, simp, and exact. Prefer omega for linear Nat/Int arithmetic after unpacking hypotheses and choosing witnesses. Keep proofs minimal; avoid intermediate have statements unless necessary and always specify their types. Preserve the objective and all constraints. Do not use sorry, admit, custom axioms, or executable IO. For optimization problems define the problem and feasibility predicate; do not invent a theorem claiming an unproved solution.'},
+            {'role': 'user', 'content': problem + ('\nPrevious checker feedback:\n' + feedback if feedback else '')}]
+        # A small syntax example prevents the model reverting to Lean 3 proofs.
+        messages.insert(1, {'role': 'user', 'content': 'Lean 4 syntax example: prove commutativity of addition on natural numbers.'})
+        messages.insert(2, {'role': 'assistant', 'content': 'import Mathlib\n\ntheorem addition_commutes (a b : ℕ) : a + b = b + a := by\n  omega'})
+        text = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        batch = self.tokenizer(text, return_tensors='pt').to(self.model.device)
+        if batch.input_ids.shape[1] > 10000:
+            raise ValueError('Problem exceeds generation context limit')
+        options = {'do_sample': bool(feedback), 'repetition_penalty': 1.1}
+        if feedback:
+            # Vary repair proposals instead of greedily repeating the same failed proof.
+            torch.manual_seed(42 + (int(repair.group(1)) if repair else 0))
+            options.update(temperature=0.7, top_p=0.9)
+        with torch.inference_mode():
+            output = self.model.generate(**batch, max_new_tokens=3000, **options,
+                                         pad_token_id=self.tokenizer.eos_token_id)
+        source = self.tokenizer.decode(output[0, batch.input_ids.shape[1]:], skip_special_tokens=True).strip()
+        if source.startswith('```'):
+            source = source.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+        return source
+
+    @modal.method()
+    def judge(self, problem: str, lean_context: str, candidate: str) -> dict:
+        """Prompted pretrained baseline; no reference answer or label is supplied."""
+        import time
+        import torch
+        messages = [
+            {'role': 'system', 'content': 'Judge whether the Lean theorem statement faithfully expresses the natural-language mathematical problem. Compare assumptions, quantifiers, domains, and conclusion. Ignore placeholder proofs. Output exactly faithful or unfaithful, with no explanation.'},
+            {'role': 'user', 'content': f'<problem>\n{problem}\n</problem>\n<lean_context>\n{lean_context}\n</lean_context>\n<candidate>\n{candidate}\n</candidate>'}]
+        text = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        batch = self.tokenizer(text, return_tensors='pt').to(self.model.device)
+        if batch.input_ids.shape[1] > 4096:
+            raise ValueError('Judgment context exceeds 4096 tokens')
+        torch.cuda.synchronize()
+        start = time.perf_counter()
+        with torch.inference_mode():
+            output = self.model.generate(**batch, max_new_tokens=8, do_sample=False,
+                                         pad_token_id=self.tokenizer.eos_token_id)
+        torch.cuda.synchronize()
+        elapsed = time.perf_counter() - start
+        raw = self.tokenizer.decode(output[0, batch.input_ids.shape[1]:], skip_special_tokens=True).strip()
+        normalized = raw.lower().strip(' .\n\t')
+        return {'raw': raw, 'faithful': {'faithful': True, 'unfaithful': False}.get(normalized),
+                'inference_seconds': elapsed, 'model': MODEL, 'revision': REVISION}

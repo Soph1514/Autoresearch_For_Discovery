@@ -99,13 +99,7 @@ function useResearchState(client: ResearchClient) {
     dispatch({ type: "error", error: null });
     try {
       if (action === "start") {
-        const run = await client.startRun({
-          text: "Pigou routing demo",
-          attachments: [],
-          initialResults: "",
-          resultFiles: [],
-          mode: "demo",
-        });
+        const run = await client.startDemo();
         sessionStorage.setItem("research-run", run.id);
         await connect(run.id);
       } else if (state.snapshot) {

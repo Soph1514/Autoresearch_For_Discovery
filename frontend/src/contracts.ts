@@ -6,13 +6,6 @@ export type Status =
   | "stopped"
   | "completed"
   | "failed";
-export interface ProblemInput {
-  text: string;
-  attachments: File[];
-  initialResults: string;
-  resultFiles: File[];
-  mode: "demo";
-}
 export interface Run {
   id: string;
   title: string;
@@ -21,7 +14,7 @@ export interface Run {
   endedAt?: string;
   metricName?: string;
   direction?: "maximize" | "minimize";
-  backend?: "python-demo";
+  backend?: "python-demo" | "python";
   contract?: Record<string, string | number>;
 }
 export interface Idea {
@@ -67,11 +60,36 @@ export interface Log {
   message: string;
   ideaId?: string;
 }
+export interface GenerationFailure {
+  requestId: string;
+  generation: number;
+  error: string;
+  inputTokens: number;
+  outputTokens: number;
+}
+export interface Assessment {
+  candidateId: string;
+  promiseRating: number;
+  approachSummary: string;
+  noveltyNote: string;
+  riskFlags: string[];
+  model: string;
+  promptVersion: string;
+}
+export interface ControlAcknowledgement {
+  schemaVersion: 1;
+  runId: string;
+  action: "pause" | "resume" | "stop";
+  applied: boolean;
+  status: Status;
+}
 export type Update =
+  | { type: "assessment_recorded"; payload: Assessment }
   | { type: "idea_created"; payload: Idea }
   | { type: "experiment_updated"; payload: Experiment }
   | { type: "elite_changed"; payload: Elite }
   | { type: "log_added"; payload: Log }
+  | { type: "generation_failed"; payload: GenerationFailure }
   | {
       type: "run_status_changed";
       payload: { status: Status; endedAt?: string };
@@ -84,15 +102,18 @@ export type ResearchEvent = Update & {
   timestamp: string;
 };
 export interface Snapshot {
+  schemaVersion: 1;
   run: Run;
   ideas: Idea[];
   experiments: Experiment[];
   elites: Elite[];
   logs: Log[];
+  generationFailures: GenerationFailure[];
+  assessments?: Assessment[];
   sequence: number;
 }
 export interface ResearchClient {
-  startRun(input: ProblemInput): Promise<Run>;
+  startDemo(): Promise<Run>;
   getSnapshot(id: string): Promise<Snapshot>;
   subscribe(
     id: string,
@@ -100,15 +121,17 @@ export interface ResearchClient {
     listener: (e: ResearchEvent) => void,
     onConnection?: (error: string | null) => void,
   ): () => void;
-  pauseRun(id: string): Promise<void>;
-  resumeRun(id: string): Promise<void>;
-  stopRun(id: string): Promise<void>;
+  pauseRun(id: string): Promise<ControlAcknowledgement>;
+  resumeRun(id: string): Promise<ControlAcknowledgement>;
+  stopRun(id: string): Promise<ControlAcknowledgement>;
 }
 export function applyEvent(s: Snapshot, e: ResearchEvent): Snapshot {
   if (e.runId !== s.run.id || e.sequence <= s.sequence) return s;
   if (e.sequence !== s.sequence + 1) throw Error("Event sequence gap");
   const n = { ...s, sequence: e.sequence };
   switch (e.type) {
+    case "assessment_recorded":
+      return {...n, assessments: [...(s.assessments || []).filter(a => a.candidateId !== e.payload.candidateId), e.payload]};
     case "idea_created":
       return {
         ...n,
@@ -135,6 +158,16 @@ export function applyEvent(s: Snapshot, e: ResearchEvent): Snapshot {
       };
     case "log_added":
       return { ...n, logs: [...s.logs, e.payload] };
+    case "generation_failed":
+      return {
+        ...n,
+        generationFailures: [
+          ...s.generationFailures.filter(
+            (failure) => failure.requestId !== e.payload.requestId,
+          ),
+          e.payload,
+        ],
+      };
     case "run_status_changed":
       return { ...n, run: { ...s.run, ...e.payload } };
   }

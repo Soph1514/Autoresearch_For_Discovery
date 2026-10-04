@@ -9,13 +9,15 @@ from .models import (
     EvolutionOperator,
     EvolutionOutcome,
     EvolutionProtocolError,
+    EvolutionState,
+    GenerationFailure,
     GenerationRequest,
     GenerationResult,
     ProgramCandidate,
     StopReason,
     TokenUsage,
 )
-from .ports import CandidateEvaluator, ProgramGenerator
+from .ports import CandidateEvaluator, EvolutionObserver, ProgramGenerator, RunCheckpoint
 
 __all__ = [
     "CandidateDraft",
@@ -26,11 +28,15 @@ __all__ = [
     "EvolutionLoop",
     "EvolutionOperator",
     "EvolutionOutcome",
+    "EvolutionObserver",
     "EvolutionProtocolError",
+    "EvolutionState",
+    "GenerationFailure",
     "GenerationRequest",
     "GenerationResult",
     "ProgramCandidate",
     "ProgramGenerator",
+    "RunCheckpoint",
     "StopReason",
     "TokenUsage",
 ]
