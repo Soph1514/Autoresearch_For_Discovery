@@ -44,7 +44,8 @@ def build(tmp_path, project, source=MAX, instance=None):
 
 @pytest.fixture(scope="module")
 def maximum(tmp_path_factory, project):
-    return build(tmp_path_factory.mktemp("maximum"), project)
+    return build(tmp_path_factory.mktemp("maximum"), project,
+                 "/-! Maximize a bounded list sum. -/\n" + MAX)
 
 
 def test_trusted_scorer_precedes_formalization(tmp_path):
@@ -118,6 +119,7 @@ def test_minimum_exists_signed_objective(tmp_path, project, source):
     ("axiom cheat : False", "unsupported_formalization"),
     ("theorem cheat : False := by sorry", "unsupported_formalization"),
     ("#eval IO.println 7", "unsupported_formalization"),
+    ("/-! Documentation is allowed, executable commands are not. -/\n#eval IO.println 7", "unsupported_formalization"),
     ("import Lean\ndef n := 1", "unsupported_formalization"),
     ("#exit\n#eval IO.println 7", "unsupported_formalization"),
     (MAX + MAX.replace("feasible", "feasible2").replace("objective", "objective2").replace("optimal", "optimal2"), "unsupported_formalization"),
