@@ -5,6 +5,7 @@ Run: PYTHONPATH=src .venv/bin/python -m uvicorn the_pigeon_holes.ui.api:app --ho
 import asyncio
 import anyio
 import copy
+from dataclasses import replace
 import json
 import os
 from uuid import uuid4
@@ -76,7 +77,9 @@ class StartInput(BaseModel):
     max_cost_usd: float = Field(default=50, gt=0, le=1000, allow_inf_nan=False)
     literature_review: bool = True
     reasoning_model: Literal['claude-opus-5-5', 'claude-opus-4-6', 'claude-sonnet-4-6'] = 'claude-opus-5-5'
-    max_time_seconds: float = Field(default=300, gt=0, le=3600, allow_inf_nan=False)
+    max_time_seconds: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+    max_output_tokens: int | None = Field(default=None, gt=0, le=128000)
+    enforce_execution_time_limits: bool = False
 
 
 def get_run(run_id):
@@ -102,12 +105,16 @@ async def start_run(body: StartInput):
         model = body.reasoning_model
         try:
             contract = contract_from_dict(artifact['contract'])
+            if not body.enforce_execution_time_limits:
+                contract = replace(contract, resource_limits=replace(contract.resource_limits,
+                    case_time_seconds=None, candidate_time_seconds=None))
             evaluator = await asyncio.to_thread(make_evaluator, contract, store=store)
             from the_pigeon_holes.llm.budget import ProviderTokenBudget
             budget = ProviderTokenBudget(body.max_tokens, max_cost_usd=body.max_cost_usd)
             generator = AnthropicProgramGenerator(AnthropicGeneratorConfig(
-                model=model, reasoning_effort='high', max_output_tokens=12000,
-                timeout_seconds=240, max_attempts=1, token_budget=body.max_tokens), budget=budget)
+                model=model, reasoning_effort='high',
+                max_output_tokens=min(body.max_output_tokens or 128000, 64000 if model == 'claude-sonnet-4-6' else 128000),
+                timeout_seconds=1800, max_attempts=1, token_budget=body.max_tokens), budget=budget)
         except (RuntimeError, ImportError, AttributeError) as error:
             raise HTTPException(503, str(error)) from error
         except ValueError as error:

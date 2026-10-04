@@ -13,6 +13,9 @@ def render_solve_contract(contract: ProblemContract) -> str:
     )
     if tie_breakers:
         objective += f", ties broken by {tie_breakers}"
+    def duration(value):
+        return "no time cap" if value is None else f"{value:g} seconds"
+
     sections = []
     supporting_types = contract.interface.supporting_types_code.strip()
     if supporting_types:
@@ -27,9 +30,9 @@ def render_solve_contract(contract: ProblemContract) -> str:
             "Required function (name and signature must match exactly):\n"
             "```python\n" + contract.solve_signature + "\n    ...\n```",
             f"Objective: {objective}.",
-            (f"Execution limits: {contract.resource_limits.case_time_seconds:g} seconds per call, "
-             f"{contract.resource_limits.candidate_time_seconds:g} seconds for the whole suite, "
-             f"{contract.resource_limits.memory_mb} MiB memory. Return before the per-call limit; "
+            (f"Execution limits: {duration(contract.resource_limits.case_time_seconds)} per call, "
+             f"{duration(contract.resource_limits.candidate_time_seconds)} for the whole suite, "
+             f"{contract.resource_limits.memory_mb} MiB memory. When a time limit is set, return before it; "
              "leave time for startup, serialization and the last search step. Prefer a bounded "
              "search with a valid fallback over running until the deadline."),
         ]

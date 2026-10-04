@@ -50,7 +50,7 @@ async def main():
             'No numpy/scipy: standard library only. Use exact big-integer Kronecker packing to compute '
             'convolution efficiently: pack coefficients into fixed byte slots with base greater than '
             'n*max(q)^2, square the packed integer, and decode. Avoid O(n^2) loops. '
-            'Use a bounded deterministic search that fits the execution limit. Do not claim a published '
+            'Use a finite deterministic search and return the best verified construction. Do not claim a published '
             'record from floating-point estimates. Output integers <=2^60; preserve nonzero integral. '
             'This full-resolution construction-refinement task is distinct from the earlier 32/64/128 '
             'algorithm benchmark. Source: https://einsteinarena.com/problems/first-autocorrelation-inequality '
@@ -59,8 +59,8 @@ async def main():
             'list[int]','def solve(initial: list[int]) -> list[int]:'),
         seed_program=seed,
         evaluation_suite=EvaluationSuite(identity,(EvaluationCase('published-witness',{'initial':initial}),)),
-        resource_limits=ResourceLimits(15,90,512,100000), fitness_function=SidonRefinementFitness.reference)
-    evaluator=SandboxCandidateEvaluator(SidonRefinementFitness(),ContainerLimits(memory_mb=512,timeout_seconds=15))
+        resource_limits=ResourceLimits(None,None,512,100000), fitness_function=SidonRefinementFitness.reference)
+    evaluator=SandboxCandidateEvaluator(SidonRefinementFitness(),ContainerLimits(memory_mb=512,timeout_seconds=None))
     # Reuse only record structure, never the old candidate's code or metrics.
     raw_candidate=prior['evidence']['candidates']['candidate-000000']
     candidate=ProgramCandidate(**{**raw_candidate,'source_code':seed,'operator':EvolutionOperator(raw_candidate['operator']),

@@ -112,3 +112,16 @@ def test_stopped_run_summary_retains_verified_winner(monkeypatch):
         assert summary['best_metrics'] == expected
         assert run.snapshot['run']['status'] == 'stopped'
     asyncio.run(scenario())
+
+
+def test_custom_run_defaults_remove_short_caps():
+    from the_pigeon_holes.ui.api import StartInput
+    defaults = StartInput(mode="custom", contract_id="example")
+    assert defaults.max_time_seconds is None
+    assert defaults.max_output_tokens is None
+    assert defaults.enforce_execution_time_limits is False
+    assert defaults.max_cost_usd == 50
+    explicit = StartInput(mode="custom", max_time_seconds=300, max_output_tokens=12000, enforce_execution_time_limits=True)
+    assert explicit.max_time_seconds == 300
+    assert explicit.max_output_tokens == 12000
+    assert explicit.enforce_execution_time_limits is True

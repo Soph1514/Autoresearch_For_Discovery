@@ -24,7 +24,7 @@ MAX_OUTPUT_BYTES = 1_000_000
 @dataclass(frozen=True)
 class ContainerLimits:
     memory_mb: int
-    timeout_seconds: float
+    timeout_seconds: float | None
     cpus: float = 1.0
     pids_limit: int = 64
     tmpfs_mb: int = 16
@@ -35,6 +35,8 @@ class ContainerLimits:
                 raise ValueError(f'{name} must be a positive integer')
         for name in ('timeout_seconds', 'cpus'):
             value = getattr(self, name)
+            if name == 'timeout_seconds' and value is None:
+                continue
             if isinstance(value, bool) or not math.isfinite(value) or value <= 0:
                 raise ValueError(f'{name} must be positive and finite')
 
