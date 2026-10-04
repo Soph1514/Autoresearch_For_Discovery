@@ -232,7 +232,7 @@ class EvolutionLoop:
             self._validate_generation_results(requests, generated)
             budget.record([result.usage for result in generated])
 
-            candidates, local_evaluations = self._materialize_generation(
+            candidates, local_evaluations, duplicate_targets = self._materialize_generation(
                 state,
                 requests,
                 generated,
@@ -249,6 +249,7 @@ class EvolutionLoop:
                 candidate
                 for candidate in candidates
                 if candidate.id not in local_evaluations
+                and candidate.id not in duplicate_targets
             )
             for candidate in external_candidates:
                 self.observer.evaluation_started(candidate)
@@ -262,7 +263,30 @@ class EvolutionLoop:
                 break
             for evaluation in external_evaluations:
                 self.observer.evaluation_completed(evaluation)
-            evaluations = tuple(local_evaluations.values()) + tuple(external_evaluations)
+            evaluation_by_id = {
+                **local_evaluations,
+                **{evaluation.candidate_id: evaluation for evaluation in external_evaluations},
+            }
+            duplicate_evaluations: list[CandidateEvaluation] = []
+            for candidate_id, canonical_id in sorted(duplicate_targets.items()):
+                canonical = evaluation_by_id.get(canonical_id) or state.evaluations.get(canonical_id)
+                if canonical is None:
+                    raise EvolutionProtocolError(
+                        f"duplicate candidate {candidate_id!r} has unknown canonical source {canonical_id!r}"
+                    )
+                reused = replace(
+                    canonical,
+                    candidate_id=candidate_id,
+                    executed=False,
+                    reused_from_candidate_id=canonical_id,
+                )
+                duplicate_evaluations.append(reused)
+                self.observer.evaluation_completed(reused)
+            evaluations = (
+                tuple(local_evaluations.values())
+                + tuple(external_evaluations)
+                + tuple(duplicate_evaluations)
+            )
             state = self.engine.apply_generation(
                 state,
                 candidates,
@@ -303,7 +327,7 @@ class EvolutionLoop:
         pending: list[ProgramCandidate] = []
         for candidate in sorted(candidates, key=lambda item: item.id):
             evaluation = state.evaluations[candidate.id]
-            if not evaluation.valid:
+            if not evaluation.valid or evaluation.reused_from_candidate_id is not None:
                 continue
             cached = self._assessment_cache.get(candidate.source_fingerprint)
             if cached is not None:
@@ -343,13 +367,21 @@ class EvolutionLoop:
         requests: Sequence[GenerationRequest],
         results: Sequence[GenerationResult],
         problem: ProblemContract,
-    ) -> tuple[tuple[ProgramCandidate, ...], dict[str, CandidateEvaluation]]:
+    ) -> tuple[
+        tuple[ProgramCandidate, ...],
+        dict[str, CandidateEvaluation],
+        dict[str, str],
+    ]:
         request_by_id = {request.id: request for request in requests}
         candidates: list[ProgramCandidate] = []
         local_evaluations: dict[str, CandidateEvaluation] = {}
-        known_fingerprints = {
-            candidate.source_fingerprint for candidate in state.candidates.values()
-        }
+        known_sources = dict(state.source_index)
+        if not known_sources:
+            known_sources = {
+                candidate.source_fingerprint: candidate.id
+                for candidate in state.candidates.values()
+            }
+        duplicate_targets: dict[str, str] = {}
 
         for result in sorted(results, key=lambda item: item.request_id):
             request = request_by_id[result.request_id]
@@ -391,14 +423,16 @@ class EvolutionLoop:
             )
             candidates.append(candidate)
 
-            error = validate_source_signature(candidate.source_code, problem.solve_signature)
-            if error is None and fingerprint in known_fingerprints:
-                error = "candidate duplicates a previously generated normalized source tree"
-            if error is not None:
-                local_evaluations[candidate.id] = self._static_failure(candidate, error)
-            known_fingerprints.add(fingerprint)
+            canonical_id = known_sources.get(fingerprint)
+            if canonical_id is not None:
+                duplicate_targets[candidate.id] = canonical_id
+            else:
+                error = validate_source_signature(candidate.source_code, problem.solve_signature)
+                if error is not None:
+                    local_evaluations[candidate.id] = self._static_failure(candidate, error)
+                known_sources[fingerprint] = candidate.id
 
-        return tuple(candidates), local_evaluations
+        return tuple(candidates), local_evaluations, duplicate_targets
 
     async def _evaluate(
         self,
@@ -463,6 +497,7 @@ class EvolutionLoop:
             failure_reasons=(reason,),
             repairable=True,
             informative=True,
+            executed=False,
         )
 
     @staticmethod
@@ -484,7 +519,9 @@ class EvolutionLoop:
             tokens_used=budget.tokens_used,
             generations_completed=state.generation,
             candidates_generated=len(state.candidates),
-            candidates_evaluated=len(state.evaluations),
+            candidates_evaluated=sum(
+                1 for evaluation in state.evaluations.values() if evaluation.executed
+            ),
             active_islands=len(state.active_islands),
             elite_count=len(elite_ids),
             novelty_count=len(state.novelty_records),

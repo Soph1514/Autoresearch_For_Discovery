@@ -18,6 +18,7 @@ from the_pigeon_holes.evolution import (
     ProgramCandidate,
     StopReason,
     TokenUsage,
+    CandidateDisposition,
 )
 from the_pigeon_holes.models.problem_contract import (
     EvaluationCase,
@@ -167,6 +168,50 @@ def test_loop_closes_generation_and_stops_at_reported_token_limit():
     assert first_child.request_id == generator.calls[0][0].id
     assert first_child.generation_prompt == generator.calls[0][0].prompt
     assert first_child.generation_usage.total_tokens == 10
+
+
+def test_exact_duplicates_reuse_canonical_evaluation_without_execution():
+    class DuplicateGenerator(_Generator):
+        async def generate(self, requests):
+            batch = tuple(requests)
+            self.calls.append(batch)
+            return tuple(
+                GenerationResult(
+                    request_id=request.id,
+                    usage=TokenUsage(4, 6),
+                    draft=CandidateDraft(
+                        "Repeat the baseline", "Same score", "Source differs",
+                        ("constant",), "def solve(x: int) -> int:\n    return 42\n",
+                    ),
+                )
+                for request in batch
+            )
+
+    generator = DuplicateGenerator()
+    evaluator = _Evaluator()
+    loop = EvolutionLoop(
+        config=EvolutionConfig(max_tokens_per_request=10),
+        limits=EvolutionLimits(max_tokens=80),
+        generator=generator,
+        evaluator=evaluator,
+    )
+
+    outcome = asyncio.run(loop.run(CONTRACT))
+
+    assert evaluator.calls == [("candidate-000000",), ("candidate-000001",)]
+    assert outcome.candidates_generated == 9
+    assert outcome.candidates_evaluated == 2
+    assert len(outcome.state.duplicate_records) == 7
+    assert all(
+        disposition is CandidateDisposition.DUPLICATE
+        for candidate_id, disposition in outcome.state.candidate_dispositions.items()
+        if candidate_id not in {"candidate-000000", "candidate-000001"}
+    )
+    assert all(
+        evaluation.reused_from_candidate_id == "candidate-000001"
+        for candidate_id, evaluation in outcome.state.evaluations.items()
+        if candidate_id not in {"candidate-000000", "candidate-000001"}
+    )
 
 
 def test_seed_evaluation_time_counts_toward_limit():

@@ -10,6 +10,7 @@ from the_pigeon_holes.evolution.models import (
     EvolutionConfig,
     EvolutionOperator,
     ProgramCandidate,
+    NoveltyRecord,
 )
 from the_pigeon_holes.evolution.novelty import source_fingerprint
 from the_pigeon_holes.models.problem_contract import (
@@ -207,3 +208,65 @@ def test_invalid_novelty_is_quarantined_and_unsafe_failure_is_not_archived():
     assert unsafe.id not in updated.novelty_records
     assert updated.active_islands[island_id].elite_id == "candidate-000000"
     assert updated.global_best_id == "candidate-000000"
+
+
+def test_novelty_pruning_preserves_active_and_failure_niche_representatives():
+    config = EvolutionConfig(
+        min_islands=1,
+        max_islands=1,
+        pool_size=1,
+        novelty_threshold=0.0,
+        max_novelty_archive_size=3,
+    )
+    engine = EvolutionEngine(config)
+    state = _initial_state(config)
+    island_id = next(iter(state.active_islands))
+    active = _candidate("active", "def solve(x: int) -> int:\n    return x + 1\n",
+                        island_id=island_id, tags=("active",))
+    failures = [
+        _candidate("fail-a1", "def solve(x: int) -> int:\n    return x // 0\n",
+                   island_id=island_id, tags=("divide", "a")),
+        _candidate("fail-a2", "def solve(x: int) -> int:\n    return (x + 1) // 0\n",
+                   island_id=island_id, tags=("divide", "b")),
+        _candidate("fail-b", "def solve(x: int) -> int:\n    raise RuntimeError()\n",
+                   island_id=island_id, tags=("raise",)),
+    ]
+    evaluations = [
+        _evaluation(active.id, 1.0, behavior=(2.0,)),
+        CandidateEvaluation(failures[0].id, False, failure_stage="crash",
+                            failure_reasons=("division",), repairable=True),
+        CandidateEvaluation(failures[1].id, False, failure_stage="crash",
+                            failure_reasons=("division",), repairable=True),
+        CandidateEvaluation(failures[2].id, False, failure_stage="crash",
+                            failure_reasons=("runtime",), repairable=True),
+    ]
+
+    updated = engine.apply_generation(
+        state, (active, *failures), tuple(evaluations), GOAL
+    )
+
+    assert len(updated.novelty_records) == 3
+    assert active.id in updated.novelty_records
+    signatures = {
+        record.failure_signature
+        for record in updated.novelty_records.values()
+        if not record.valid
+    }
+    assert signatures == {("crash", "division"), ("crash", "runtime")}
+
+
+def test_inspiration_selection_rotates_beyond_the_most_novel_pair():
+    engine = EvolutionEngine(EvolutionConfig(min_islands=1))
+    state = _initial_state(engine.config)
+    for index, novelty in enumerate((0.9, 0.8, 0.7), start=1):
+        candidate_id = f"novel-{index}"
+        state.novelty_records[candidate_id] = NoveltyRecord(
+            candidate_id, novelty, True, False, ()
+        )
+
+    first = engine._select_inspirations(state, ())
+    second = engine._select_inspirations(state, ())
+
+    assert first == ("novel-1", "novel-2")
+    assert second != first
+    assert set(first + second) == {"novel-1", "novel-2", "novel-3"}

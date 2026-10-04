@@ -2,6 +2,7 @@
 
 from the_pigeon_holes.evolution.engine import EvolutionEngine
 from the_pigeon_holes.evolution.models import (
+    CandidateDisposition,
     CandidateEvaluation,
     EvolutionConfig,
     EvolutionOperator,
@@ -69,6 +70,8 @@ def test_pool_is_bounded_and_evicts_the_weakest_cell():
     island = state.active_islands[island_id]
     assert set(island.cells) == {"1,0", "2,0"}
     assert island.elite_id == "a"
+    assert state.candidate_dispositions["seed"] is CandidateDisposition.DOMINATED
+    assert "seed" not in engine._valid_candidate_ids(state)
 
 
 def test_elite_is_the_best_member_of_the_pool():

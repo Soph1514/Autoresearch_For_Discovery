@@ -35,6 +35,16 @@ class IslandStatus(StrEnum):
     DORMANT = "dormant"
 
 
+class CandidateDisposition(StrEnum):
+    """Whether a historical candidate remains eligible for search operations."""
+
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+    DOMINATED = "dominated"
+    DUPLICATE = "duplicate"
+    UNSAFE = "unsafe"
+
+
 class StopReason(StrEnum):
     INVALID_SEED = "invalid_seed"
     TIME_LIMIT = "time_limit"
@@ -201,6 +211,8 @@ class CandidateEvaluation:
     repairable: bool = False
     informative: bool = False
     unsafe: bool = False
+    executed: bool = True
+    reused_from_candidate_id: str | None = None
 
     def __post_init__(self) -> None:
         if self.passing_cases < 0 or self.total_cases < 0:
@@ -209,6 +221,8 @@ class CandidateEvaluation:
             raise ValueError("passing_cases cannot exceed total_cases")
         if self.valid and self.unsafe:
             raise ValueError("an unsafe candidate cannot be marked valid")
+        if self.reused_from_candidate_id is not None and self.executed:
+            raise ValueError("a reused evaluation cannot be marked executed")
 
 
 @dataclass(frozen=True)
@@ -251,6 +265,15 @@ class NoveltyRecord:
     valid: bool
     repairable: bool
     failure_signature: tuple[str, ...]
+    times_selected: int = 0
+    last_selected_generation: int | None = None
+
+
+@dataclass(frozen=True)
+class DuplicateRecord:
+    candidate_id: str
+    canonical_candidate_id: str
+    source_fingerprint: str
 
 
 @dataclass
@@ -283,6 +306,9 @@ class EvolutionState:
     global_best_id: str | None = None
     total_evaluations: int = 0
     assessments: dict[str, Assessment] = field(default_factory=dict)
+    source_index: dict[str, str] = field(default_factory=dict)
+    candidate_dispositions: dict[str, CandidateDisposition] = field(default_factory=dict)
+    duplicate_records: dict[str, DuplicateRecord] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

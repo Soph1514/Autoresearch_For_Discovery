@@ -3,6 +3,7 @@
 from .loop import EvolutionLoop
 from .models import (
     CandidateDraft,
+    CandidateDisposition,
     CandidateEvaluation,
     EvolutionConfig,
     EvolutionLimits,
@@ -10,6 +11,7 @@ from .models import (
     EvolutionOutcome,
     EvolutionProtocolError,
     EvolutionState,
+    DuplicateRecord,
     GenerationFailure,
     GenerationRequest,
     GenerationResult,
@@ -21,6 +23,7 @@ from .ports import CandidateEvaluator, EvolutionObserver, ProgramGenerator, RunC
 
 __all__ = [
     "CandidateDraft",
+    "CandidateDisposition",
     "CandidateEvaluation",
     "CandidateEvaluator",
     "EvolutionConfig",
@@ -31,6 +34,7 @@ __all__ = [
     "EvolutionObserver",
     "EvolutionProtocolError",
     "EvolutionState",
+    "DuplicateRecord",
     "GenerationFailure",
     "GenerationRequest",
     "GenerationResult",

@@ -6,6 +6,7 @@ import copy
 import math
 import random
 from collections.abc import Iterable, Sequence
+from dataclasses import replace
 from functools import cmp_to_key
 
 from the_pigeon_holes.execution.interface_validation import validate_source_signature
@@ -13,6 +14,8 @@ from the_pigeon_holes.models.problem_contract import OptimisationGoal, ProblemCo
 
 from .models import (
     CandidateEvaluation,
+    CandidateDisposition,
+    DuplicateRecord,
     EvolutionConfig,
     EvolutionOperator,
     EvolutionProtocolError,
@@ -25,7 +28,7 @@ from .models import (
     ProgramCandidate,
     SearchMode,
 )
-from .novelty import novelty_score
+from .novelty import NoveltyFeatureCache, novelty_score
 from .prompting import render_generation_prompt
 
 
@@ -94,6 +97,12 @@ class EvolutionEngine:
     def __init__(self, config: EvolutionConfig) -> None:
         self.config = config
         self._random = random.Random(config.random_seed)
+        self._novelty_features = NoveltyFeatureCache(max_entries=max(
+            64,
+            config.max_novelty_archive_size
+            + config.max_islands * config.pool_size
+            + config.max_batch_size,
+        ))
 
     def initialise(
         self,
@@ -103,6 +112,10 @@ class EvolutionEngine:
         state = EvolutionState()
         state.candidates[seed.id] = seed
         state.evaluations[seed.id] = evaluation
+        state.source_index[seed.source_fingerprint] = seed.id
+        state.candidate_dispositions[seed.id] = (
+            CandidateDisposition.ACTIVE if evaluation.valid else CandidateDisposition.ARCHIVED
+        )
         state.total_evaluations = 1
         state.next_candidate_number = 1
         if evaluation.valid:
@@ -178,12 +191,26 @@ class EvolutionEngine:
             evaluation = evaluation_by_id[candidate.id]
             updated.candidates[candidate.id] = candidate
             updated.evaluations[candidate.id] = evaluation
-            updated.total_evaluations += 1
+            updated.source_index.setdefault(candidate.source_fingerprint, candidate.id)
+            if evaluation.reused_from_candidate_id is not None:
+                updated.duplicate_records[candidate.id] = DuplicateRecord(
+                    candidate_id=candidate.id,
+                    canonical_candidate_id=evaluation.reused_from_candidate_id,
+                    source_fingerprint=candidate.source_fingerprint,
+                )
+                updated.candidate_dispositions[candidate.id] = CandidateDisposition.DUPLICATE
+            else:
+                updated.total_evaluations += 1
 
             island = updated.active_islands.get(candidate.island_id or "")
             if island is not None:
+                # Incubation is consumed by allocated trials, including wasted
+                # duplicate generations, even when no evaluator call was needed.
                 island.evaluation_count += 1
                 island.trials_since_improvement += 1
+
+            if evaluation.reused_from_candidate_id is not None:
+                continue
 
             references = self._novelty_references(updated, exclude_id=candidate.id)
             novelty = novelty_score(
@@ -192,6 +219,7 @@ class EvolutionEngine:
                 references,
                 behavior_weight=self.config.behavior_novelty_weight,
                 lineage_weight=self.config.lineage_novelty_weight,
+                feature_cache=self._novelty_features,
             )
             novelty_by_id[candidate.id] = novelty
             if self._should_admit_novelty(evaluation, novelty):
@@ -210,7 +238,9 @@ class EvolutionEngine:
                 self._consider_local_elite(updated, candidate, evaluation, goal)
                 self._consider_global_best(updated, candidate, evaluation, goal)
 
+        self._refresh_working_set(updated)
         self._make_stagnant_islands_dormant(updated)
+        self._refresh_working_set(updated)
         self._spawn_islands(
             updated,
             candidates,
@@ -218,7 +248,8 @@ class EvolutionEngine:
             previous_elites,
             goal,
         )
-        self._prune_novelty_archive(updated)
+        self._prune_novelty_archive(updated, goal)
+        self._refresh_working_set(updated)
         updated.generation += 1
         return updated
 
@@ -359,9 +390,22 @@ class EvolutionEngine:
                 for record in state.novelty_records.values()
                 if record.candidate_id not in parent_ids
             ),
-            key=lambda record: (-record.novelty_score, record.candidate_id),
+            key=lambda record: (
+                record.times_selected,
+                record.last_selected_generation
+                if record.last_selected_generation is not None else -1,
+                -record.novelty_score,
+                record.candidate_id,
+            ),
         )
-        return tuple(record.candidate_id for record in ranked[:2])
+        selected = ranked[:2]
+        for record in selected:
+            state.novelty_records[record.candidate_id] = replace(
+                record,
+                times_selected=record.times_selected + 1,
+                last_selected_generation=state.generation + 1,
+            )
+        return tuple(record.candidate_id for record in selected)
 
     def _mutation_strength(
         self,
@@ -434,7 +478,7 @@ class EvolutionEngine:
             candidate
             for candidate in candidates
             if state.evaluations[candidate.id].valid
-            and novelty_by_id[candidate.id] >= self.config.spawn_novelty_threshold
+            and novelty_by_id.get(candidate.id, -1.0) >= self.config.spawn_novelty_threshold
         ]
         valid_candidates.sort(
             key=cmp_to_key(
@@ -594,6 +638,7 @@ class EvolutionEngine:
                     [(anchor, anchor_evaluation)],
                     behavior_weight=self.config.behavior_novelty_weight,
                     lineage_weight=self.config.lineage_novelty_weight,
+                    feature_cache=self._novelty_features,
                 ),
                 candidate_id,
             )
@@ -607,6 +652,7 @@ class EvolutionEngine:
             candidate_id
             for candidate_id, evaluation in state.evaluations.items()
             if evaluation.valid
+            and state.candidate_dispositions.get(candidate_id) is CandidateDisposition.ACTIVE
         )
 
     @staticmethod
@@ -628,16 +674,89 @@ class EvolutionEngine:
         incubation_bonus = 2.0 if EvolutionEngine._is_protected(island, state) else 0.0
         return 1.0 + incubation_bonus + min(island.trials_since_improvement, 5) * 0.2
 
-    def _prune_novelty_archive(self, state: EvolutionState) -> None:
-        excess = len(state.novelty_records) - self.config.max_novelty_archive_size
-        if excess <= 0:
+    def _prune_novelty_archive(
+        self,
+        state: EvolutionState,
+        goal: OptimisationGoal,
+    ) -> None:
+        """Keep protected nodes and niche representatives before raw novelty."""
+        if len(state.novelty_records) <= self.config.max_novelty_archive_size:
             return
-        removable = sorted(
+
+        protected = {state.global_best_id} if state.global_best_id else set()
+        for island in state.active_islands.values():
+            protected.update(island.cells.values())
+            if island.elite_id:
+                protected.add(island.elite_id)
+
+        niches: dict[tuple[str, ...], list[str]] = {}
+        for candidate_id, record in state.novelty_records.items():
+            evaluation = state.evaluations[candidate_id]
+            niche = (
+                ("valid", cell_key(evaluation))
+                if record.valid
+                else ("invalid", *record.failure_signature)
+            )
+            niches.setdefault(niche, []).append(candidate_id)
+
+        niche_representatives: set[str] = set()
+        for niche, candidate_ids in niches.items():
+            if niche[0] == "valid":
+                representative = best_candidate_id(candidate_ids, state.evaluations, goal)
+            else:
+                representative = max(
+                    candidate_ids,
+                    key=lambda candidate_id: (
+                        state.novelty_records[candidate_id].novelty_score,
+                        candidate_id,
+                    ),
+                )
+            if representative is not None:
+                niche_representatives.add(representative)
+
+        ranked = sorted(
             state.novelty_records.values(),
-            key=lambda record: (record.novelty_score, record.candidate_id),
+            key=lambda record: (
+                0 if record.candidate_id in protected else
+                1 if record.candidate_id in niche_representatives else 2,
+                -record.novelty_score,
+                record.times_selected,
+                record.candidate_id,
+            ),
         )
-        for record in removable[:excess]:
-            state.novelty_records.pop(record.candidate_id)
+        keep = {
+            record.candidate_id
+            for record in ranked[: self.config.max_novelty_archive_size]
+        }
+        state.novelty_records = {
+            candidate_id: record
+            for candidate_id, record in state.novelty_records.items()
+            if candidate_id in keep
+        }
+
+    @staticmethod
+    def _refresh_working_set(state: EvolutionState) -> None:
+        """Recompute bounded search eligibility without deleting historical evidence."""
+        working = set(state.novelty_records)
+        if state.global_best_id:
+            working.add(state.global_best_id)
+        for island in state.active_islands.values():
+            working.update(island.cells.values())
+            if island.elite_id:
+                working.add(island.elite_id)
+
+        for candidate_id, evaluation in state.evaluations.items():
+            if candidate_id in state.duplicate_records:
+                disposition = CandidateDisposition.DUPLICATE
+            elif evaluation.unsafe:
+                disposition = CandidateDisposition.UNSAFE
+            elif candidate_id in working:
+                disposition = CandidateDisposition.ACTIVE
+            elif evaluation.valid:
+                disposition = CandidateDisposition.DOMINATED
+            else:
+                disposition = CandidateDisposition.ARCHIVED
+            state.candidate_dispositions[candidate_id] = disposition
 
     @staticmethod
     def _new_island_id(state: EvolutionState) -> str:

@@ -72,9 +72,16 @@ The loop maintains three logical stores:
 3. **Novelty archive:** useful stepping stones that are materially different,
    including explicitly quarantined invalid candidates.
 
-The in-memory novelty archive is size-bounded and retains the highest-scoring
-entries when full. Evidence history remains complete even when an entry leaves
-the novelty working set.
+The in-memory novelty archive is size-bounded. Pruning first prioritizes active island representatives and the
+global best, then preserves one strong representative per behavioral cell or
+invalid failure signature before filling remaining capacity by novelty. Evidence
+history remains complete even when an entry leaves the novelty working set.
+
+The complete history and the bounded working population are separate. Only the
+global best, active island pools, and bounded novelty archive remain eligible for
+selection. Evicted valid candidates are marked dominated, other failures are
+archived, and dormant-island history stays inspectable without silently returning
+to parent selection.
 
 Invalid novelty candidates must have recorded failure evidence and be judged
 repairable or informative. They may be repair targets, labelled inspirations,
@@ -147,6 +154,17 @@ invalidity or trusted objective performance. The first implementation uses:
 - failure-signature differences for invalid candidates.
 
 LLM novelty judgments, code embeddings, and learned descriptors are deferred.
+Normalized-source duplicates are recorded as aliases of the first canonical
+candidate. They reuse its evaluation without another evaluator call, remain in
+lineage/evidence, and cannot independently enter pools, novelty memory, or critic
+assessment. This exact reuse is not semantic score caching.
+
+Deterministic novelty features—normalized mechanism sets, AST node multisets, and
+behavior-vector norms—are cached within a run by source/feature identity. The
+cache is LRU-bounded from the configured working-set capacities and changes
+computation cost only, never novelty semantics. Inspirations rotate
+by prior selection count and age before novelty so the same two archive records do
+not dominate every prompt.
 
 ## Evaluation and update
 
