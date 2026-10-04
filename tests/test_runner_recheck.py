@@ -152,7 +152,8 @@ def test_comparison_counts_a_missing_case_as_unmatched():
 
 
 def test_builtin_problems_are_registered():
-    assert set(PROBLEMS) == {"autocorrelation", "bin-packing"}
+    assert set(PROBLEMS) == {"autocorrelation", "bin-packing", "knapsack", "tsp",
+                             "max-cut", "makespan"}
     assert PROBLEMS["bin-packing"].best_known == BEST_KNOWN
 
 

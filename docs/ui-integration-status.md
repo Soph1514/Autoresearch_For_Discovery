@@ -2,7 +2,8 @@
 
 The AntiAI workbench prepares Lean and can bind it to a custom research contract.
 The engine page displays either the explicit routing demo or a custom run. The built-in
-Docker evaluator supports autocorrelation; other families need an adapter.
+Docker evaluator supports the six registered families in
+[known-problems.md](known-problems.md); additional families need a trusted fitness function.
 
 ## Problem preparation
 
@@ -59,9 +60,10 @@ evaluator before candidate generation. The UI reports missing evaluator configur
 The engine labels custom runs separately and offers a run-evidence download.
 
 `RESEARCH_MODEL` selects the Anthropic model for extraction and generation.
-The built-in registry provides `autocorrelation` version `exact-v1`:
-`solve(n: int) -> list[int]`, mean `c1` minimization, with case sizes from 2 to
-4096. Build the Docker worker before starting.
+The built-in registry provides `autocorrelation`, `bin-packing`, `knapsack`,
+`tsp`, `max-cut` and `makespan`, each at version `exact-v1`. Each validates
+its own interface, metric, aggregation and case bounds; see
+[known-problems.md](known-problems.md). Build the Docker worker before starting.
 `RESEARCH_FITNESS_REGISTRY=module:create_registry` supplies another
 operator-trusted registry; see [setup and remaining work](pipeline-next-steps.md). The checker must be redeployed
 with its provenance response before preparing custom contracts.

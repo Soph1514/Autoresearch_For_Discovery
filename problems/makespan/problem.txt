@@ -1,0 +1,11 @@
+Construct a schedule of independent, nonpreemptive jobs on identical parallel
+machines. All jobs are available at time zero; there are no precedences, setup
+times, or machine eligibility restrictions. Processing durations are positive
+integers. Each machine processes its assigned jobs sequentially without idle time.
+
+Implement solve(machines: int, durations: list[int]) -> list[int].
+Return one machine index in 0 through machines-1 for every job, in original job
+order. Every job must be assigned exactly once. Empty machines are allowed.
+Minimize makespan: the maximum total assigned processing duration over machines.
+Order within a machine does not change this objective. Across evaluation cases,
+minimize the sum of case makespans.

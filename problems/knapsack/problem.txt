@@ -2,3 +2,9 @@ Given a finite collection of items, each with a natural-number weight and value,
 and a natural-number capacity, construct a subset of the items whose total weight
 does not exceed the capacity and whose total value is maximum among all feasible
 subsets. Each item may be selected at most once. The empty subset is allowed.
+
+Implement solve(capacity: int, weights: list[int], values: list[int]) -> list[int].
+Return distinct item indices. Weights and values are parallel nonempty lists of
+nonnegative integers; zero weights and zero capacity are allowed. Maximize
+total_value, the sum of the selected values. A feasible subset is valid even if
+it is not optimal. Across evaluation cases maximize the sum of total values.

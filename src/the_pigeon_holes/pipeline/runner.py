@@ -28,6 +28,10 @@ from the_pigeon_holes.llm.program_generator import (
 from the_pigeon_holes.models.problem_contract import ProblemContract
 from the_pigeon_holes.problems import autocorrelation_contract, bin_packing_contract
 from the_pigeon_holes.problems.bin_packing import BEST_KNOWN as BIN_PACKING_BEST_KNOWN
+from the_pigeon_holes.problems.knapsack import knapsack_contract, BEST_KNOWN as KNAPSACK_BEST_KNOWN
+from the_pigeon_holes.problems.tsp import tsp_contract, BEST_KNOWN as TSP_BEST_KNOWN
+from the_pigeon_holes.problems.max_cut import max_cut_contract, BEST_KNOWN as MAX_CUT_BEST_KNOWN
+from the_pigeon_holes.problems.makespan import makespan_contract, BEST_KNOWN as MAKESPAN_BEST_KNOWN
 
 ENTRY_POINT = "solve"
 
@@ -51,6 +55,10 @@ PROBLEMS: Mapping[str, BuiltInProblem] = {
     for problem in (
         BuiltInProblem("autocorrelation", autocorrelation_contract),
         BuiltInProblem("bin-packing", bin_packing_contract, BIN_PACKING_BEST_KNOWN),
+        BuiltInProblem("knapsack", knapsack_contract, KNAPSACK_BEST_KNOWN),
+        BuiltInProblem("tsp", tsp_contract, TSP_BEST_KNOWN),
+        BuiltInProblem("max-cut", max_cut_contract, MAX_CUT_BEST_KNOWN),
+        BuiltInProblem("makespan", makespan_contract, MAKESPAN_BEST_KNOWN),
     )
 }
 

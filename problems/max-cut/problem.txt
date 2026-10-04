@@ -1,0 +1,9 @@
+Construct a partition maximizing the weight of crossing edges in a simple
+undirected graph. The input n is the vertex count; each edge is an integer
+triple [u, v, weight], with distinct in-range endpoints and nonnegative weight.
+Each undirected edge appears once. Isolated vertices and empty edge sets are allowed.
+
+Implement solve(n: int, edges: list[list[int]]) -> list[int].
+Return one integer label, 0 or 1, for every vertex. Either part may be empty.
+Maximize cut_weight: sum the weights of edges whose endpoint labels differ,
+counting each input edge once. Across cases maximize the sum of cut weights.

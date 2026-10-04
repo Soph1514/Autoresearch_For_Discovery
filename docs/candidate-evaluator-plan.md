@@ -15,9 +15,11 @@ Merged from `origin/eo_loop` (`36fadc0`) into the custom-research integration on
   can be referenced by a new problem contract; API clients cannot supply code or
   Python import paths.
 - `evaluation/production.py`: generic sandbox `CandidateEvaluator`.
-  Contracts must use `solve(n: int) -> list[int]`, mean `c1` minimization, no
-  tie-breakers/supporting definitions, and valid `n` cases. Unsupported contracts
-  fail before execution. Valid output must pass every suite case.
+  Contract compatibility is checked by the selected registered fitness function.
+  Autocorrelation requires `solve(n: int) -> list[int]` and mean `c1`
+  minimization. Other supported families and objectives are listed in
+  [known-problems.md](known-problems.md). Unsupported contracts fail before
+  execution. Valid output must pass every suite case.
 - `execution/container_runner.py`: bounded Docker preflight; worker tags resolved
   to local immutable image IDs; async candidate execution; network disabled,
   read-only filesystem, memory/swap cap, CPU/PID limits, unprivileged user and

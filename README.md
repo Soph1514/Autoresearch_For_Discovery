@@ -3,7 +3,7 @@
 Algorithm autoresearch framework based on [the agreed design](context/agents.md).
 The AntiAI UI supports hosted Lean generation, checking/repair and fidelity review,
 plus custom evolution through the generic Docker evaluator and registered
-autocorrelation fitness function, alongside a separate routing demo. Start with
+fitness functions for six problem families, alongside a separate routing demo. Start with
 the [UI setup](frontend/README.md);
 see [integration status](docs/ui-integration-status.md) for remaining gaps.
 
@@ -147,6 +147,19 @@ LEAN_TEST_LAKE=lake PYTHONPATH=src:. uv run python -m unittest discover -v
 
 
 ## Autocorrelation fitness function
+
+The generic runner also supports bin packing, 0/1 knapsack, symmetric TSP,
+weighted max cut and identical-machine makespan. See
+[known construction problems](docs/known-problems.md) for objective sources,
+instances, tests and commands. For example:
+
+```sh
+uv run python scripts/run_problem.py --problem knapsack \
+  --model "$RESEARCH_MODEL" --max-minutes 5 --max-critic-calls 0
+```
+
+These families use registered hand-written scorers. Automatic fitness-function
+generation is not implemented.
 
 The generic evaluator executes candidates in Docker and passes their outputs to
 the registered, content-addressed autocorrelation fitness function. It uses exact

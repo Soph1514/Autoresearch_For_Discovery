@@ -8,6 +8,11 @@ not change [shared-semantics.md](shared-semantics.md) or
 
 ## Problem
 
+The hand-written known-problem step is now implemented for six registered
+families; see [known-problems.md](known-problems.md) for sources, fixed instances
+and qualification. The synthesis and qualification automation proposed below
+remains unimplemented and deferred.
+
 Scaling to a new problem family currently requires a teammate to hand-write a
 `FitnessFunction`. That is the correct default and should stay the default for
 anything we report. It does not cover two cases:
