@@ -234,3 +234,63 @@ def test_extract_signature_via_llm_tool_call():
 def test_extract_signature_requires_model():
     with pytest.raises(TypeError):
         extract_signature("def solve (n : Nat) : Nat", client=MagicMock())
+
+
+def _schema_objects(schema: dict):
+    """Yield every JSON-Schema object node, so strict-mode rules can be checked."""
+    if schema.get("type") == "object":
+        yield schema
+    for key in ("properties", "items"):
+        child = schema.get(key)
+        if isinstance(child, dict):
+            values = child.values() if key == "properties" else [child]
+            for value in values:
+                if isinstance(value, dict):
+                    yield from _schema_objects(value)
+
+
+def test_extraction_tool_is_strict_and_not_forced():
+    """Forced tool_choice is rejected by current models; strict mode replaces it."""
+    mock_client = MagicMock()
+    block = MagicMock()
+    block.type = "tool_use"
+    block.name = "submit_extracted_interface"
+    block.input = {
+        "parameters": [{"name": "n", "python_type": "int"}],
+        "return_type": "int",
+        "signature_str": "def solve(n: int) -> int:",
+        "pydantic_classes_code": "",
+        "optimisation_goal": {
+            "primary": {"name": "value", "direction": "maximize"},
+            "aggregation": "mean",
+            "tie_breakers": [],
+        },
+    }
+    response = MagicMock()
+    response.content = [block]
+    response.stop_reason = "tool_use"
+    mock_client.messages.create.return_value = response
+
+    extract_signature("def solve (n : Nat) : Nat", model="claude-sonnet-5-5", client=mock_client)
+
+    kwargs = mock_client.messages.create.call_args.kwargs
+    assert kwargs["tool_choice"]["type"] == "auto"
+    tool = kwargs["tools"][0]
+    assert tool["strict"] is True
+    for node in _schema_objects(tool["input_schema"]):
+        assert node["additionalProperties"] is False
+        assert set(node["required"]) == set(node["properties"])
+
+
+def test_extract_signature_reports_a_text_only_reply_distinctly():
+    """With tool_choice auto the model may answer in prose; say so."""
+    mock_client = MagicMock()
+    text = MagicMock()
+    text.type = "text"
+    response = MagicMock()
+    response.content = [text]
+    response.stop_reason = "end_turn"
+    mock_client.messages.create.return_value = response
+
+    with pytest.raises(RuntimeError, match="answered in text"):
+        extract_signature("def solve (n : Nat) : Nat", model="claude-sonnet-5-5", client=mock_client)

@@ -799,6 +799,14 @@ wheels = [
 ]
 
 [[package]]
+name = "lake"
+version = "1.0.1"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9a/1b/b6283a3bd0991d5307d13f8c4e02d1750b41d201ee13d754db3a8313fee7/lake-1.0.1-py2.py3-none-any.whl", hash = "sha256:65b71f6dd3449b25688916e6b798568df3b50126e72ec445682a9035b5011e83", size = 56136 },
+]
+
+[[package]]
 name = "lean-interact"
 version = "0.11.5"
 source = { registry = "https://pypi.org/simple" }
@@ -1538,6 +1546,7 @@ source = { editable = "." }
 dependencies = [
     { name = "anthropic" },
     { name = "datasets" },
+    { name = "lake" },
     { name = "lean-interact" },
     { name = "modal" },
     { name = "pydantic" },
@@ -1562,6 +1571,7 @@ requires-dist = [
     { name = "datasets", specifier = ">=4.0.0" },
     { name = "fastapi", marker = "extra == 'ui'", specifier = ">=0.115" },
     { name = "httpx", marker = "extra == 'ui'", specifier = ">=0.28" },
+    { name = "lake", specifier = ">=1.0.1" },
     { name = "lean-interact", specifier = ">=0.11.5" },
     { name = "modal", specifier = ">=1.6.1" },
     { name = "modal", marker = "extra == 'ui'", specifier = ">=1.0,<2" },

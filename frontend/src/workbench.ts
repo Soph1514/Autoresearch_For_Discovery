@@ -1,4 +1,5 @@
 import { mountCustomResearch } from './customResearch';
+import { mountScorerReview } from './scorerReview';
 import { formalize } from './formalizationClient';
 import { readAttachment } from './attachments';
 const element = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -121,6 +122,14 @@ function renderResult(result: Awaited<ReturnType<typeof formalize>>) {
       element('details').append(handoff);
       clearHandoff = mountCustomResearch(handoff, result.formalization_id);
     }
+}
+// A session awaiting review outlives the page and the backend, so it must be
+// reachable by link; otherwise a restart strands the human mid-decision.
+const savedSynthesis = new URLSearchParams(window.location.search).get('synthesis');
+if (savedSynthesis) {
+  const panel = document.createElement('section');
+  element('details').append(panel);
+  mountScorerReview(panel, savedSynthesis);
 }
 const savedId = new URLSearchParams(window.location.search).get('formalization');
 if (savedId) {

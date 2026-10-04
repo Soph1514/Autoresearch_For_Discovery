@@ -284,3 +284,48 @@ def test_direct_contract_validates_metrics_resources_and_interface():
             resource_limits=_limits(),
             fitness_function=FITNESS,
         )
+
+
+def test_build_accepts_a_pre_extracted_interface_without_calling_a_model():
+    """A reviewed interface must reach the contract byte-identically, with no model call."""
+    from the_pigeon_holes.execution.signature_extractor import ExtractedInterface
+
+    extracted = ExtractedInterface(
+        function_name="solve",
+        parameters=[Parameter("items", "list[int]"), Parameter("capacity", "int")],
+        return_type="list[bool]",
+        signature_str="def solve(items: list[int], capacity: int) -> list[bool]:",
+        pydantic_classes_code="",
+        optimisation_goal=GOAL,
+    )
+    client = MagicMock()
+    client.messages.create.side_effect = AssertionError("extraction must not be called")
+
+    contract = build_problem_contract(
+        natural_language_spec="Pick items under capacity.",
+        lean_specification=LEAN,
+        seed_program=SEED,
+        evaluation_suite_id="knapsack-public-v1",
+        evaluation_cases=CASES,
+        resource_limits=_limits(),
+        fitness_function=FITNESS,
+        client=client,
+        extracted=extracted,
+    )
+
+    assert contract.interface == InterfaceDefinition.from_extracted(extracted)
+    assert contract.optimisation_goal == GOAL
+    client.messages.create.assert_not_called()
+
+
+def test_build_requires_a_model_when_no_interface_is_supplied():
+    with pytest.raises(ValueError, match="model or an extracted interface"):
+        build_problem_contract(
+            natural_language_spec="Pick items under capacity.",
+            lean_specification=LEAN,
+            seed_program=SEED,
+            evaluation_suite_id="knapsack-public-v1",
+            evaluation_cases=CASES,
+            resource_limits=_limits(),
+            fitness_function=FITNESS,
+        )
