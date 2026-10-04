@@ -6,6 +6,9 @@ from dataclasses import replace
 from pathlib import Path
 from pydantic import BaseModel, Field
 from the_pigeon_holes.fitness.compiler import compile_fitness, load_lean_fitness, VERSION
+from the_pigeon_holes.fitness.synthesis.adapter import (
+    SYNTHESIS_VERSION, load_synthesised_fitness,
+)
 from the_pigeon_holes.fitness.registry import configured_registry
 from the_pigeon_holes.models.problem_contract import (
     EvaluationCase, EvaluationSuite, ResourceLimits, build_problem_contract,
@@ -19,6 +22,7 @@ class ContractInput(BaseModel):
     evaluation_cases: dict[str, dict] = Field(min_length=1, max_length=1000)
     fitness_function_id: str | None = Field(default=None, min_length=1, max_length=200)
     fitness_function_version: str | None = Field(default=None, min_length=1, max_length=200)
+    synthesis_id: str | None = Field(default=None, min_length=1, max_length=200)
     alignment_reviewed: bool = False
     case_time_seconds: float = Field(default=5, gt=0, le=300, allow_inf_nan=False)
     candidate_time_seconds: float = Field(default=60, gt=0, le=3600, allow_inf_nan=False)
@@ -41,6 +45,15 @@ def make_evaluator(contract, *, store=None, registry=None):
             fitness = load_lean_fitness(Path(saved['artifact']), reference)
         except OSError as error:
             raise ValueError('Compiled evaluator files are missing. Prepare the contract again.') from error
+        active.register(fitness)
+    elif not registered and reference.version == SYNTHESIS_VERSION and reference.id.startswith('synth-'):
+        saved = store.get('fitness', reference.id) if store is not None else None
+        if saved is None:
+            raise ValueError('Accepted scorer not found. Prepare the contract again.')
+        try:
+            fitness = load_synthesised_fitness(Path(saved['artifact']), reference)
+        except OSError as error:
+            raise ValueError('Accepted scorer files are missing. Run the synthesis again.') from error
         active.register(fitness)
     evaluator = create_evaluator(contract, registry=active)
     if not callable(getattr(evaluator, 'evaluate', None)):
@@ -66,6 +79,10 @@ async def prepare_contract(body, artifact, *, builder=build_problem_contract, re
     active_registry = registry if registry is not None else configured_registry()
     if bool(body.fitness_function_id) != bool(body.fitness_function_version):
         raise ValueError('Select both the fitness function ID and version, or neither to compile Lean.')
+    if body.synthesis_id:
+        if body.fitness_function_id:
+            raise ValueError('Choose a registered fitness function or an accepted synthesis, not both.')
+        return _synthesised_contract(body, result, limits, store)
     if not body.fitness_function_id:
         if store is None:
             raise RuntimeError('An artifact store is required to save the compiled evaluator.')
@@ -116,3 +133,29 @@ async def prepare_contract(body, artifact, *, builder=build_problem_contract, re
             fitness_function.validate_contract(contract)
             return contract
     return await asyncio.to_thread(build)
+
+
+def _synthesised_contract(body, result, limits, store):
+    """Build a contract around the scorer a human accepted in a synthesis session."""
+    from the_pigeon_holes.ui.synthesis import load_accepted_scorer
+
+    if store is None:
+        raise RuntimeError('An artifact store is required to load an accepted scorer.')
+    session = store.get('synthesis', body.synthesis_id)
+    if session is None:
+        raise ValueError('Synthesis session not found.')
+    if session['state'] != 'accepted':
+        raise ValueError(
+            f"This synthesis is {session['state']}; no scorer was accepted, so no "
+            "contract can be created.")
+    if session['lean_source'] != result['lean']:
+        raise ValueError('The Lean statement changed after the scorer was accepted.')
+    scorer = load_accepted_scorer(session)
+    contract = scorer.contract(
+        seed_program=body.seed_program or None,
+        evaluation_suite=EvaluationSuite(body.evaluation_suite_id, tuple(
+            EvaluationCase(identity, inputs)
+            for identity, inputs in body.evaluation_cases.items())),
+        limits=limits)
+    scorer.validate_contract(contract)
+    return contract

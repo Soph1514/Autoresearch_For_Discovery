@@ -160,11 +160,16 @@ def test_registered_family_skips_compiler_and_uses_baseline(client, monkeypatch)
 
 
 def test_compiler_rejection_reaches_frontend_with_stage(client):
+    # An unsupported statement is not a user mistake: the compiler's accepted
+    # language is small, so this answers 409 offering human-reviewed synthesis.
+    # Other compiler stages keep 422. See docs/fitness-synthesis.md.
     api.store.put('formalization', 'unsupported', formalization('def scalar : Nat := 7'))
     response = client.post('/api/contracts', json=request_body('unsupported'))
-    assert response.status_code == 422
-    assert response.json()['detail']['stage'] == 'unsupported_formalization'
-    assert 'optimization declaration' in response.json()['detail']['message']
+    assert response.status_code == 409
+    detail = response.json()['detail']
+    assert detail['synthesis_required'] is True
+    assert detail['stage'] == 'unsupported_formalization'
+    assert 'optimization declaration' in detail['message']
 
 
 def test_review_and_source_binding_still_gate_compilation(client, monkeypatch):

@@ -1,4 +1,6 @@
 /** Shared handoff used by the workbench and the engine's problem composer. */
+import { mountScorerReview, type SynthesisView } from './scorerReview';
+
 type FitnessReference = { id: string; version: string };
 export type PreparationFields = {
   seed: string; suite: string; cases: string; reviewed: boolean;
@@ -15,6 +17,16 @@ export function contractInput(formalizationId: string, fields: PreparationFields
     fitness_function_version: fields.fitness?.version ?? null,
     alignment_reviewed: fields.reviewed,
   };
+}
+
+/** Carries the server's structured detail so callers can react to it, not just show it. */
+export class PreparationFailure extends Error {
+  constructor(message: string, readonly detail: unknown) { super(message); }
+}
+
+export function synthesisRequired(detail: unknown): boolean {
+  return Boolean(detail && typeof detail === 'object' && 'synthesis_required' in detail
+    && (detail as { synthesis_required?: unknown }).synthesis_required);
 }
 
 export function preparationError(detail: unknown): string {
@@ -37,6 +49,7 @@ export function mountCustomResearch(host: HTMLElement, formalizationId: string) 
     <label><input type="checkbox" data-field="reviewed"> I reviewed the Lean statement against my problem.</label>
     <p><button type="button" data-action="prepare">Prepare research</button></p>
     <p data-status role="status"></p>
+    <section data-review hidden></section>
     <p><a data-compiler hidden target="_blank" rel="noopener">View compiler result</a></p>
     <button type="button" data-action="refresh">Check evaluator availability</button>
     <label class="field">Research time limit (seconds, optional)<input type="number" data-field="seconds" placeholder="No time cap" min="1"></label>
@@ -55,6 +68,8 @@ export function mountCustomResearch(host: HTMLElement, formalizationId: string) 
   const start = host.querySelector<HTMLButtonElement>('[data-action="start"]')!;
   const status = host.querySelector<HTMLElement>('[data-status]')!;
   const compilerLink = host.querySelector<HTMLAnchorElement>('[data-compiler]')!;
+  const reviewHost = host.querySelector<HTMLElement>('[data-review]')!;
+  let disposeReview: (() => void) | null = null;
   const family = field('fitness') as HTMLSelectElement;
   let contractId: string | null = null;
   let evaluatorConfigured = false;
@@ -75,7 +90,7 @@ export function mountCustomResearch(host: HTMLElement, formalizationId: string) 
     const response = await fetch(path, {method: body ? 'POST' : 'GET', signal: controller.signal,
       headers: {'Content-Type': 'application/json'}, body: body ? JSON.stringify(body) : undefined});
     const result = await response.json();
-    if (!response.ok) throw Error(preparationError(result.detail));
+    if (!response.ok) throw new PreparationFailure(preparationError(result.detail), result.detail);
     return result;
   }
   async function capabilities() {
@@ -121,9 +136,67 @@ export function mountCustomResearch(host: HTMLElement, formalizationId: string) 
         evaluatorConfigured = false;
         status.textContent += ` Research prepared; availability check failed: ${error instanceof Error ? error.message : String(error)}`;
       }
-    } catch (error) { status.textContent = error instanceof Error ? error.message : String(error); }
+    } catch (error) {
+      status.textContent = error instanceof Error ? error.message : String(error);
+      if (error instanceof PreparationFailure && synthesisRequired(error.detail)) {
+        offerSynthesis(error.detail as { message?: string });
+      }
+    }
     finally { lock(false); }
   };
+  function offerSynthesis(detail: { message?: string }) {
+    // Offered, never started automatically: synthesis costs money.
+    reviewHost.hidden = false;
+    reviewHost.replaceChildren();
+    const explain = document.createElement('p');
+    explain.textContent = `The Lean compiler cannot build a scorer for this statement`
+      + (detail.message ? `: ${detail.message}. ` : '. ')
+      + 'Two models can each write one instead, a third picks one, and you decide '
+      + 'whether to accept it. Up to three rounds; if you reject the last one, nothing '
+      + 'is registered.';
+    const begin = document.createElement('button');
+    begin.type = 'button';
+    begin.textContent = 'Synthesise a scorer for review';
+    begin.onclick = async () => {
+      begin.disabled = true;
+      try {
+        const session = await request('/api/syntheses', {
+          formalization_id: formalizationId,
+          evaluation_suite_id: field('suite').value,
+          evaluation_cases: JSON.parse(field('cases').value),
+          seed_program: field('seed').value.trim() ? field('seed').value : null,
+          alignment_reviewed: (field('reviewed') as HTMLInputElement).checked,
+        });
+        disposeReview?.();
+        disposeReview = mountScorerReview(reviewHost, session.id, {
+          onAccepted: view => { void prepareFromSynthesis(view); },
+        });
+      } catch (error) {
+        explain.textContent = error instanceof Error ? error.message : String(error);
+        begin.disabled = false;
+      }
+    };
+    reviewHost.append(explain, begin);
+  }
+  async function prepareFromSynthesis(view: SynthesisView) {
+    status.textContent = 'Freezing the contract around the scorer you accepted…';
+    try {
+      const result = await request('/api/contracts', {
+        ...contractInput(formalizationId, {
+          seed: field('seed').value, suite: field('suite').value, cases: field('cases').value,
+          fitness: null, reviewed: (field('reviewed') as HTMLInputElement).checked,
+        }),
+        synthesis_id: view.id,
+      });
+      contractId = result.id;
+      status.textContent = `Contract frozen around the scorer you accepted. ${result.signature} · `
+        + `${result.direction} ${result.metric}. Evidence tier: ${view.evidence_tier}.`;
+      await capabilities();
+      start.disabled = !evaluatorConfigured;
+    } catch (error) {
+      status.textContent = error instanceof Error ? error.message : String(error);
+    }
+  }
   start.onclick = async () => {
     if (working || !contractId) return;
     lock(true); status.textContent = 'Starting research…';
@@ -139,5 +212,5 @@ export function mountCustomResearch(host: HTMLElement, formalizationId: string) 
   };
   // Populate both composers from the actual server registry, rather than assuming a family.
   void refreshAvailability();
-  return () => { controller.abort(); host.oninput = null; };
+  return () => { controller.abort(); disposeReview?.(); host.oninput = null; };
 }

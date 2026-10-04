@@ -20,6 +20,9 @@ import anthropic
 # machine-parseable.
 _EXTRACTION_TOOL = {
     "name": "submit_extracted_interface",
+    # Strict mode guarantees the tool input validates against this schema, which
+    # replaces the forced tool_choice current models reject.
+    "strict": True,
     "description": (
         "Submit the extracted Python interface derived from a Lean 4 "
         "formalization.  This includes the function signature and any Pydantic "
@@ -46,6 +49,7 @@ _EXTRACTION_TOOL = {
                         },
                     },
                     "required": ["name", "python_type"],
+                    "additionalProperties": False,
                 },
                 "description": "Ordered list of function parameters with types.",
             },
@@ -79,6 +83,7 @@ _EXTRACTION_TOOL = {
                             "direction": {"type": "string", "enum": ["maximize", "minimize"]},
                         },
                         "required": ["name", "direction"],
+                        "additionalProperties": False,
                     },
                     "aggregation": {
                         "type": "string",
@@ -94,11 +99,14 @@ _EXTRACTION_TOOL = {
                                 "direction": {"type": "string", "enum": ["maximize", "minimize"]},
                             },
                             "required": ["name", "direction"],
+                            "additionalProperties": False,
                         },
                         "description": "Secondary metrics used to break ties; empty if none.",
                     },
                 },
-                "required": ["primary", "aggregation"],
+                # Strict mode requires every property to be listed as required.
+                "required": ["primary", "aggregation", "tie_breakers"],
+                "additionalProperties": False,
             },
         },
         "required": [
@@ -108,6 +116,7 @@ _EXTRACTION_TOOL = {
             "pydantic_classes_code",
             "optimisation_goal",
         ],
+        "additionalProperties": False,
     },
 }
 
@@ -459,7 +468,9 @@ def extract_signature(
         max_tokens=4096,
         system=_SYSTEM_PROMPT,
         tools=[_EXTRACTION_TOOL],
-        tool_choice={"type": "tool", "name": "submit_extracted_interface"},
+        # Forced tool choice is rejected by current models; strict mode on the
+        # tool keeps the input schema-valid without it.
+        tool_choice={"type": "auto", "disable_parallel_tool_use": True},
         messages=[{"role": "user", "content": user_message}],
     )
 
@@ -485,8 +496,15 @@ def extract_signature(
                 optimisation_goal=_parse_goal(data["optimisation_goal"]),
             )
 
+    # With tool_choice auto the model may answer in prose instead of calling the
+    # tool; say which happened so the failure is diagnosable.
+    declined = any(getattr(block, "type", None) == "text" for block in response.content)
+    reason = (
+        "the model answered in text instead of calling 'submit_extracted_interface'"
+        if declined
+        else "the response contained no 'submit_extracted_interface' tool-use block"
+    )
     raise RuntimeError(
-        "Claude response did not contain a 'submit_extracted_interface' "
-        "tool-use block.  Raw response content: "
+        f"Interface extraction failed: {reason}.  Raw response content: "
         f"{json.dumps([str(b) for b in response.content])}"
     )
