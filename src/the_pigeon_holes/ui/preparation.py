@@ -24,7 +24,8 @@ def evaluator_factory():
     """Only the operator's environment may name executable adapter code."""
     target = os.environ.get('RESEARCH_EVALUATOR_FACTORY')
     if not target:
-        raise RuntimeError('Python evaluator is not connected. Configure RESEARCH_EVALUATOR_FACTORY when it is ready.')
+        from the_pigeon_holes.evaluation.production import create_evaluator
+        return create_evaluator
     module, name = target.split(':', 1)
     return getattr(importlib.import_module(module), name)
 

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import anthropic
+from .budget import ProviderTokenBudget, TokenBudgetExceeded
 
 from the_pigeon_holes.evolution.models import (
     CandidateDraft,
@@ -78,10 +79,6 @@ class AnthropicGeneratorConfig:
             raise ValueError("retry_backoff_seconds must be finite and nonnegative")
 
 
-class _TokenBudgetExceeded(Exception):
-    pass
-
-
 class AnthropicProgramGenerator:
     """Generate one structured candidate per backend-authored request."""
 
@@ -90,12 +87,13 @@ class AnthropicProgramGenerator:
         config: AnthropicGeneratorConfig,
         *,
         client: Any | None = None,
+        budget: ProviderTokenBudget | None = None,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
         self.config = config
         self.client = client or anthropic.AsyncAnthropic(max_retries=0)
         self._sleep = sleep
-        self._reserved_tokens = 0
+        self.budget = budget or (ProviderTokenBudget(config.token_budget) if config.token_budget is not None else None)
         self._semaphore = asyncio.Semaphore(config.max_concurrency)
 
     async def generate(
@@ -128,7 +126,7 @@ class AnthropicProgramGenerator:
                             "disable_parallel_tool_use": True,
                         },
                     )
-                except _TokenBudgetExceeded:
+                except TokenBudgetExceeded:
                     last_error = "remaining token budget cannot cover the counted prompt and maximum output"
                     break
                 except anthropic.APIError as exc:
@@ -158,20 +156,9 @@ class AnthropicProgramGenerator:
         await self.client.close()
 
     async def _create(self, **kwargs):
-        if self.config.token_budget is None:
+        if self.budget is None:
             return await self.client.messages.create(**kwargs)
-        counted = await self.client.messages.count_tokens(**{
-            key: value for key, value in kwargs.items() if key != 'max_tokens'})
-        reservation = counted.input_tokens + kwargs['max_tokens']
-        # No await between admission and reservation: concurrent calls share one budget.
-        if self._reserved_tokens + reservation > self.config.token_budget:
-            raise _TokenBudgetExceeded()
-        self._reserved_tokens += reservation
-        # Keep the reservation on ambiguous failure/cancellation; usage may have accrued.
-        response = await self.client.messages.create(**kwargs)
-        usage = self._add_usage(TokenUsage(), response)
-        self._reserved_tokens += usage.total_tokens - reservation
-        return response
+        return await self.budget.create(self.client, **kwargs)
 
     @staticmethod
     def _parse_candidate(response: Any) -> CandidateDraft:

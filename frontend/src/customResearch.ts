@@ -2,11 +2,11 @@
 export function mountCustomResearch(host: HTMLElement, formalizationId: string) {
   const controller = new AbortController();
   host.innerHTML = `<h3>Prepare algorithm research</h3>
-    <p>Provide a baseline implementation and fixed evaluation cases for your evaluator.</p>
+    <p>Provide a baseline implementation and fixed evaluation cases. The built-in evaluator supports autocorrelation: solve(n: int) → list[int], minimizing mean c1.</p>
     <label class="field">Seed Python<textarea data-field="seed" rows="8" aria-label="Seed Python"></textarea></label>
     <label class="field">Evaluation suite ID<input data-field="suite" aria-label="Evaluation suite ID"></label>
     <label class="field">Case inputs (JSON object keyed by case ID)<textarea data-field="cases" rows="6" aria-label="Case inputs" placeholder='{"case-1": {"parameter": 1}}'></textarea></label>
-    <label class="field">Evaluator version<input data-field="evaluator" aria-label="Evaluator version"></label>
+    <label class="field">Evaluator version<input data-field="evaluator" aria-label="Evaluator version" placeholder="autocorrelation-exact-v1"></label>
     <label><input type="checkbox" data-field="reviewed"> I reviewed the Lean statement against my problem.</label>
     <p><button type="button" data-action="prepare">Prepare contract</button></p>
     <p data-status role="status"></p><button type="button" data-action="refresh">Check evaluator availability</button>
@@ -42,8 +42,8 @@ export function mountCustomResearch(host: HTMLElement, formalizationId: string) 
     lock(true);
     try {
       const capabilities = await request('/api/capabilities');
-      evaluatorConfigured = capabilities.custom_evaluator_configured && capabilities.model_configured;
-      status.textContent = evaluatorConfigured ? (contractId ? 'Ready to evaluate the seed and start research.' : 'Evaluator configured. Prepare a contract first.') : 'Waiting for the evaluator and research model configuration.';
+      evaluatorConfigured = capabilities.custom_evaluator_configured && capabilities.model_configured && capabilities.evaluator_ready !== false;
+      status.textContent = evaluatorConfigured ? (contractId ? 'Ready to evaluate the seed and start research.' : 'Evaluator configured. Prepare a contract first.') : (capabilities.evaluator_error || 'Configure the research model before starting.');
     } catch (error) { status.textContent = error instanceof Error ? error.message : String(error); }
     finally { lock(false); }
   };
@@ -57,9 +57,9 @@ export function mountCustomResearch(host: HTMLElement, formalizationId: string) 
         alignment_reviewed: (field('reviewed') as HTMLInputElement).checked});
       contractId = result.id;
       const capabilities = await request('/api/capabilities');
-      evaluatorConfigured = capabilities.custom_evaluator_configured && capabilities.model_configured;
+      evaluatorConfigured = capabilities.custom_evaluator_configured && capabilities.model_configured && capabilities.evaluator_ready !== false;
       status.textContent = `${result.signature} · ${result.direction} ${result.metric}. Contract saved (${result.id}). ` +
-        (evaluatorConfigured ? 'The seed will be evaluated before generation starts.' : 'Waiting for the Python evaluator to be connected.');
+        (evaluatorConfigured ? 'The seed will be evaluated before generation starts.' : (capabilities.evaluator_error || 'Configure the research model before starting.'));
     } catch (error) { status.textContent = error instanceof Error ? error.message : String(error); }
     finally { lock(false); }
   };

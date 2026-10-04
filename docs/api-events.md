@@ -34,6 +34,9 @@ Version 1 event types are:
 - `generation_failed`: request ID, generation, sanitized error, and measured
   input/output token usage. The generation prompt is retained in evolution
   state but is not put on the UI wire.
+- `assessment_recorded`: advisory critic output keyed by `candidateId`; includes
+  promise rating, approach, novelty note, risks, model and prompt version. It never
+  changes validity or metric scores. Older snapshots may omit `assessments`.
 - `log_added`: an append-only research log record.
 - `run_status_changed`: an authoritative status transition.
 
@@ -118,11 +121,12 @@ The response contains the contract `id`, signature, metric and direction.
 
 `POST /api/runs` accepts `{"mode":"custom", "contract_id":"...",
 "max_tokens":32768, "max_time_seconds":300}` or `{"mode":"demo"}`.
-Custom runs fail closed if the evaluator is unavailable. Backend `python` denotes
+Custom runs default to the autocorrelation factory and fail closed when the
+contract is unsupported or Docker/the worker image is unavailable. Backend `python` denotes
 a custom run; `python-demo` denotes the analytic routing demo.
 
-`GET /api/capabilities` reports configuration availability (not a remote health
-check). `GET /api/runs` lists saved runs. `GET /api/runs/{id}/artifact` exports
+`GET /api/capabilities` reports configuration availability and Docker/image readiness for the built-in evaluator
+(`evaluator_ready`, `evaluator_error`). Override factories are checked at run start. `GET /api/runs` lists saved runs. `GET /api/runs/{id}/artifact` exports
 contracts, provenance, generation configuration, evidence, events and available
 outcomes. Evaluation inputs use tagged scalar/list/tuple/mapping nodes to preserve
 Python types across storage. This export includes hidden suite data and generation

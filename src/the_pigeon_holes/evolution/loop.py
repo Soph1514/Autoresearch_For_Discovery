@@ -6,11 +6,13 @@ import asyncio
 import math
 import time
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 
 from the_pigeon_holes.models.problem_contract import ProblemContract
 
 from .engine import EvolutionEngine, validate_source_signature
 from .models import (
+    Assessment,
     CandidateEvaluation,
     EvolutionConfig,
     EvolutionLimits,
@@ -26,7 +28,13 @@ from .models import (
     TokenUsage,
 )
 from .novelty import source_fingerprint
-from .ports import CandidateEvaluator, EvolutionObserver, ProgramGenerator, RunCheckpoint
+from .ports import (
+    CandidateCritic,
+    CandidateEvaluator,
+    EvolutionObserver,
+    ProgramGenerator,
+    RunCheckpoint,
+)
 
 
 class _RunDeadlineReached(Exception):
@@ -35,6 +43,9 @@ class _RunDeadlineReached(Exception):
 
 class _NullObserver:
     def candidate_created(self, candidate: ProgramCandidate) -> None:
+        pass
+
+    def assessment_recorded(self, assessment: Assessment) -> None:
         pass
 
     def evaluation_started(self, candidate: ProgramCandidate) -> None:
@@ -66,6 +77,12 @@ class _BudgetTracker:
         self.clock = clock
         self.started_at = clock()
         self.tokens_used = 0
+        self.critic_calls = 0
+
+    def critic_budget_allows(self, additional: int) -> bool:
+        if self.limits.max_critic_calls is None:
+            return True
+        return self.critic_calls + additional <= self.limits.max_critic_calls
 
     @property
     def elapsed_seconds(self) -> float:
@@ -118,6 +135,7 @@ class EvolutionLoop:
         checkpoint: RunCheckpoint = _open_checkpoint,
         clock: Callable[[], float] = time.monotonic,
         require_valid_seed: bool = False,
+        critic: CandidateCritic | None = None,
     ) -> None:
         self.require_valid_seed = require_valid_seed
         self.config = config
@@ -127,7 +145,11 @@ class EvolutionLoop:
         self.observer = observer or _NullObserver()
         self.checkpoint = checkpoint
         self.clock = clock
+        self.critic = critic
         self.engine = EvolutionEngine(config)
+        # Assessments depend only on the source and its evidence, so identical
+        # sources are never sent to the critic twice in one run.
+        self._assessment_cache: dict[str, Assessment] = {}
 
     async def run(self, problem: ProblemContract) -> EvolutionOutcome:
         budget = _BudgetTracker(
@@ -165,6 +187,11 @@ class EvolutionLoop:
                     failure_reasons=("Run deadline reached during seed evaluation.",))
         self.observer.evaluation_completed(seed_evaluation)
         state = self.engine.initialise(seed, seed_evaluation)
+        try:
+            await self._within_budget(self._assess_valid(state, (seed,), problem, budget), budget)
+        except _RunDeadlineReached:
+            self.observer.state_committed(state)
+            return self._outcome(state, budget, StopReason.TIME_LIMIT)
         self.observer.state_committed(state)
 
         if self.require_valid_seed and not seed_evaluation.valid:
@@ -242,6 +269,10 @@ class EvolutionLoop:
                 evaluations,
                 problem.optimisation_goal,
             )
+            try:
+                await self._within_budget(self._assess_valid(state, candidates, problem, budget), budget)
+            except _RunDeadlineReached:
+                stop_reason = StopReason.TIME_LIMIT
             self.observer.state_committed(state)
 
         assert stop_reason is not None
@@ -259,6 +290,52 @@ class EvolutionLoop:
             if timeout.expired():
                 raise _RunDeadlineReached() from error
             raise
+    async def _assess_valid(
+        self,
+        state: EvolutionState,
+        candidates: Sequence[ProgramCandidate],
+        problem: ProblemContract,
+        budget: _BudgetTracker,
+    ) -> None:
+        """Attach advisory critic output to valid candidates. Never affects validity or elites."""
+        if self.critic is None:
+            return
+        pending: list[ProgramCandidate] = []
+        for candidate in sorted(candidates, key=lambda item: item.id):
+            evaluation = state.evaluations[candidate.id]
+            if not evaluation.valid:
+                continue
+            cached = self._assessment_cache.get(candidate.source_fingerprint)
+            if cached is not None:
+                self._record_assessment(state, replace(cached, candidate_id=candidate.id))
+                continue
+            if not budget.critic_budget_allows(len(pending) + 1):
+                break
+            pending.append(candidate)
+        if not pending:
+            return
+        budget.critic_calls += len(pending)
+        before = getattr(self.critic, 'usage', TokenUsage())
+        tasks = [asyncio.create_task(self.critic.assess(candidate, state.evaluations[candidate.id], problem))
+                 for candidate in pending]
+        try:
+            results = await asyncio.gather(*tasks)
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            after = getattr(self.critic, 'usage', before)
+            budget.record([TokenUsage(after.input_tokens - before.input_tokens, after.output_tokens - before.output_tokens)])
+        for candidate, assessment in zip(pending, results):
+            if assessment is None:
+                continue
+            self._assessment_cache[candidate.source_fingerprint] = assessment
+            self._record_assessment(state, assessment)
+
+    def _record_assessment(self, state: EvolutionState, assessment: Assessment) -> None:
+        state.assessments[assessment.candidate_id] = assessment
+        self.observer.assessment_recorded(assessment)
 
     def _materialize_generation(
         self,

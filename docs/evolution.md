@@ -19,10 +19,9 @@ It does not establish mathematical validity, calculate trusted objective
 metrics, sandbox generated code, or change the problem specification or
 evaluator.
 
-The first implementation is a self-contained sub-loop with injected generator
-and evaluator protocols. It keeps its state in memory. Future `llm`,
-`execution`, `judging`, `archive`, and `pipeline` components will provide real
-adapters and persistence without changing the search policy.
+The sub-loop uses injected generator and evaluator protocols and in-memory search
+state. Production adapters now include Anthropic generation and a Docker-backed
+autocorrelation evaluator; the UI persists evidence and outcomes in SQLite.
 
 ## Input
 
@@ -85,8 +84,10 @@ in evidence history only.
 ## Islands and local elites
 
 The loop starts with four active islands and permits growth to a configurable
-maximum, initially eight. Each island has one active local elite. The global
-best is stored independently so island lifecycle changes cannot lose it.
+maximum, initially eight. Each island preserves up to four behavioral-cell
+representatives and one active local elite (the best representative). Candidates
+compete within their cell; capacity pressure evicts the weakest representative.
+The global best is stored independently so island lifecycle changes cannot lose it.
 
 A valid candidate may found a new island when it is sufficiently novel and is
 either Pareto-nondominated on objective quality and novelty or ranks in the top
@@ -98,7 +99,7 @@ elites are preserved. The initial implementation supports spawning and
 dormancy but defers automatic merging until stronger behavioral descriptors
 exist.
 
-Behavioral descriptors are optional. When a future evaluator supplies a stable
+Behavioral descriptors are optional. When an evaluator supplies a stable
 descriptor, evolution uses it for novelty and island spawning. When absent,
 novelty falls back to mechanism tags, source structure, lineage, and failure
 signatures. No universal normalization contract is imposed in the first
@@ -113,14 +114,16 @@ incubation and stagnation state.
 
 Initial operator weights are:
 
-- 45% mutate a local elite;
+- 45% mutate a parent selected from the local pool;
 - 15% crossover valid, distant candidates;
 - 10% develop a valid novelty candidate;
 - 15% repair an invalid novelty candidate; and
 - 15% generate a fresh restart.
 
 Unavailable operator weight is redistributed among eligible operators.
-Ordinary mutation uses the local elite. Crossover uses valid candidates only.
+Ordinary mutation uses a seeded tournament over the local pool (default size two).
+Crossover excludes the first parent from the second tournament and falls back to
+the distance rule when needed. Both use valid candidates only.
 Repair directly targets a repairable invalid novelty candidate. A restart has
 no program parent. Up to two archive entries may be supplied as inspirations,
 with their validity and known failures clearly labelled.
@@ -181,16 +184,19 @@ The time limit covers active evolution time, including seed evaluation and
 candidate execution, but excludes time fully paused at a batch boundary.
 In-flight draining before that boundary still counts. Token use covers every
 evolution-related LLM call.
-Initially this is program generation; future formatting repairs, reflections,
-novelty judgments, and qualitative judgments must charge the same budget.
+Generation and optional advisory critic calls share provider token admission in
+the live CLI. Reported critic usage, including malformed replies, is charged to
+the loop. Future formatting repairs and reflections must use the same budget.
 
 Before dispatch, each request reserves a configured conservative token ceiling.
 Reservations are replaced with actual provider-reported use afterward. If an
 API call exceeds its reservation, its completed result is retained and the loop
 stops scheduling further work.
 
-Separate reflection calls are deferred. The first implementation feeds trusted
-scores and failure evidence directly into later prompts.
+The optional critic assesses valid candidates only, is cached by source fingerprint,
+and is bounded by `max_critic_calls` and the active-time deadline. Its notes are
+labelled advisory in later prompts and never affect validity or elite ranking.
+Separate reflection calls and measured critic-quality monitoring remain deferred.
 
 ## Initial component contacts
 
@@ -208,10 +214,9 @@ not change pause/resume semantics.
 `AnthropicProgramGenerator` is the first production generator adapter. It uses
 schema-constrained candidate submission and bounded concurrency, per-attempt
 timeouts, and retries; orchestration supplies its model/configuration. The
-future pipeline still needs to construct the production adapters and call the
-sub-loop. Persistent archive storage, resumable runs, sandbox execution, Lean
-certificate checking, qualitative judging, and staged evaluation remain
-deferred.
+custom-run bridge constructs adapters and calls the loop. Evidence storage and
+Docker execution are implemented. Optimizer resumption after restart, formal
+certificate checking and staged confirmation remain future work.
 
 ## Non-negotiable invariants
 
@@ -234,7 +239,8 @@ deferred.
 
 - minimum active islands: 4;
 - maximum active islands: 8;
-- local elite capacity: 1;
+- local pool capacity: 4 behavioral cells, with one elite;
+- tournament size: 2;
 - offspring per island: 2;
 - maximum generation batch: 16;
 - maximum novelty working set: 128;

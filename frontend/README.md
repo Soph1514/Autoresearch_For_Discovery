@@ -37,15 +37,15 @@ npm run build
 
 ## Custom research
 
-Set `RESEARCH_MODEL` and `ANTHROPIC_API_KEY` on the backend. Once the protected
-Python evaluator arrives, set `RESEARCH_EVALUATOR_FACTORY=module:create_evaluator`
-as described in [the handoff](../docs/pipeline-next-steps.md). Redeploy the updated
+Set `RESEARCH_MODEL` and `ANTHROPIC_API_KEY` on the backend. The built-in evaluator supports autocorrelation. Build its worker with
+`docker build -t the-pigeon-holes/candidate-worker:v1 docker/worker` from the
+repository root. No factory environment variable is needed for this family;
+see [setup and remaining work](../docs/pipeline-next-steps.md) for custom adapters. Redeploy the updated
 `research/lean-fidelity/modal_checker.py` so successful checks include provenance.
 
 After formalization, fill the seed, suite and evaluator fields and prepare the
 contract. Review its extracted signature and objective before starting research.
-The seed is evaluated first; a failed seed stops generation. Missing evaluator
-configuration is shown explicitly, and **Check evaluator availability** refreshes
+The seed is evaluated first; a failed seed stops generation. Docker/image preflight failures are shown explicitly, and **Check evaluator availability** refreshes
 readiness without repeating extraction.
 
 Run history is stored in `runs/research.sqlite3` (override with `RESEARCH_STORE`).

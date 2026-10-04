@@ -88,6 +88,13 @@ function Inspector({
           <pre>{idea.sourceCode}</pre>
         </details>
       )}
+      {(snapshot.assessments || []).filter(a => a.candidateId === idea.id).map(a => <section key={a.candidateId}>
+        <h3>Advisory critic</h3>
+        <p>{a.approachSummary}</p><p>{a.noveltyNote}</p>
+        <p>Promise: {a.promiseRating}/5 · {a.model}</p>
+        {a.riskFlags.length > 0 && <p>Risks: {a.riskFlags.join("; ")}</p>}
+        <p className="muted">Advisory only; validity and scores come from the evaluator.</p>
+      </section>)}
       <h3>Experiment attempts</h3>
       {snapshot.experiments
         .filter((e) => e.ideaId === idea.id)

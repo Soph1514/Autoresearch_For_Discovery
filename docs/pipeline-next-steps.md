@@ -1,63 +1,84 @@
 # Remaining pipeline work
 
-Reconciled against main `e366466` and the custom-run integration in this branch.
+Reconciled on 2026-10-04 with main `e366466`, custom-run integration `7e26e8a`,
+and evaluator branch `origin/eo_loop` at `36fadc0`.
 
-Implemented: server-recorded formalizations and checker provenance, immutable
-contract preparation, a custom-run UI, injected evaluator wiring, seed admission,
-Anthropic generation with prompt/output token reservations, active-call deadlines,
-SQLite artifacts and replay, restart interruption handling, evidence download, and
-optional shared-password authentication. See [integration](ui-integration-status.md).
+## Done
 
-1. **Connect the incoming protected evaluator.** Implement `CandidateEvaluator`
-   and the factory described below. Enforce case/candidate time, memory and
-   iteration limits inside the isolated worker, protect judge and suite data,
-   and return explicit crash/timeout/invalid results. Propagate cancellation to
-   remote work. Reject unsupported evaluator versions and problem/metric contracts.
-2. **Deploy the checker update.** Its response now records source hash, actual
-   Lean/toolchain versions, Mathlib commit, dependency manifest, command outcome
-   and diagnostics. Older checker deployments can still prepare Lean for review,
-   but cannot create a custom contract until rechecked with this provenance.
-3. **Run the live integration benchmark.** Supply a known seed and fixed suite,
-   connect the evaluator and model, then exercise successful search, invalid seed,
-   rejection, pause/resume, cancellation and restart recovery. Download evidence.
-   The automated integration checks use injected ports; they do not establish that
-   hosted services or sandbox execution work together.
-4. **Recheck benchmark evidence.** The committed Ireland–Rosen result contained
-   opposing verification verdicts in merge-conflict markers. It is now explicitly
-   `not_proven` pending rerun; historical timing/cost fields remain. No local Lean
-   installation was available during reconciliation. The separate ten-example
-   fidelity comparison includes training examples and is not held-out evidence.
-5. **Finish the presentation and submission.** Record the <=4-minute video only
-   once the live run provides genuine algorithm-improvement evidence. Include
-   setup, benchmark versions, costs, limitations, repository and video links.
+- Lean generation/checking/repair, fidelity review, server-recorded check provenance,
+  immutable contract preparation, and both custom-run UI entry points.
+- Built-in `autocorrelation-exact-v1` evaluator: Docker execution, exact host-side
+  scoring, contract admission, per-case and suite timeouts, memory limits, bounded
+  output, and cancellation that removes the candidate container.
+- Real generator/evaluator orchestration, seed validation, island pools and
+  tournament parent selection, ordered UI events, and evidence downloads.
+- Optional advisory critic in the CLI. Generator and critic share token admission;
+  critic usage is charged even when its response is malformed. Critic deadlines
+  retain completed numerical evidence. The UI can render critic events, but does
+  not enable critic calls by default.
+- SQLite history and replay, restart interruption handling, and optional API auth.
+- Local worker built and real Docker tests run. A scripted smoke run also exercises
+  evolution and durable evidence; it is not an LLM benchmark or a Lean proof.
 
-## Evaluator handoff
+## Required before a credible end-to-end demo
 
-Set `RESEARCH_EVALUATOR_FACTORY=your_module:create_evaluator`. This is trusted
-server configuration, never a client-supplied Python import. The synchronous
-factory receives the frozen `ProblemContract` and returns an object with:
+1. **Deploy the checker update.** Redeploy `research/lean-fidelity/modal_checker.py`
+   so the service returns the source hash, actual versions, dependency manifest,
+   command outcome and diagnostics. Recheck the specification afterward.
+2. **Formalize the actual autocorrelation problem.** The numerical benchmark's
+   `autocorrelation_contract()` deliberately contains a Lean placeholder. The
+   custom UI requires a genuine checked artifact and compatible extracted interface;
+   the placeholder must not be presented as formally verified. Inspect the units
+   (`q_i / 2**40`), constraints, `solve(n: int) -> list[int]`, and mean `c1` objective.
+3. **Run a bounded live search.** Configure an Anthropic model/key and use the
+   merged evaluator. Save commands, versions, input suite, actual token/cost data,
+   failures and best source. Verify the full hosted-preparation → custom UI →
+   Docker path, including rejection, pause/resume, cancellation and restart.
+   Local tests and scripted proposals do not establish live model performance.
+4. **Repair the remaining evidence gaps.** Rerun the disputed Ireland–Rosen Lean
+   benchmark result; historical timings are retained but its verdict is unproven.
+   Evaluate fidelity on held-out examples—the existing ten-example comparison
+   includes training examples.
+5. **Record the <=4-minute video and prepare submission.** Show measured improvement
+   over a baseline, distinguish numerical validation from formal proof, and include
+   reproducible setup, repository URL, costs, limitations and video link.
 
-```python
-async def evaluate(self, candidates, problem):
-    # Run candidates in the protected environment; never in the API process.
-    # Return one CandidateEvaluation for every candidate.id, including failures.
-    ...
+## Follow-up limitations to resolve or disclose
+
+- The evaluator supports only the autocorrelation family, not arbitrary uploaded
+  problems. Other families need their own trusted versioned judges and adapters.
+- `ResourceLimits.max_iterations` is not independently enforced by this worker.
+  Wall-clock and memory limits are enforced; do not claim an instruction/iteration cap.
+- Exact rational scores become floats at the evolution interface. The CLI rechecks
+  the final output exactly, but near-tie ordering remains float-based.
+- Host-side exact scoring runs in a thread. Cancellation stops container work and
+  waiting on scoring, but cannot interrupt an already-running host arithmetic job.
+- Critic quality is unmeasured; keep it advisory. Do not use its rating to override
+  validity or measured rankings. Duplicate programs still use `static_validation`.
+- The API is a single-process lab service with optional shared authentication,
+  not per-user isolation or a multi-worker scheduler. Restart preserves evidence
+  and marks interruptions; it does not resume the optimizer automatically.
+
+## Evaluator setup and extension
+
+```sh
+docker build -t the-pigeon-holes/candidate-worker:v1 docker/worker
 ```
 
-The factory must reject contracts it cannot judge, including unsupported
-`evaluator_version`, interface, suite or metrics. Generated helper definitions
-are untrusted too. Valid results must pass every suite case and contain finite
-values for the primary metric and all tie-breakers; the evolution loop enforces
-these result-shape requirements. The first evaluation is the seed. A rejected
-seed ends the run before generation. No evaluator is substituted when unavailable.
+The built-in factory is `the_pigeon_holes.evaluation.production:create_evaluator`;
+no `RESEARCH_EVALUATOR_FACTORY` setting is needed for autocorrelation. It rejects
+unsupported evaluator versions, interfaces, metrics, aggregation and case sizes.
+Docker must be reachable and the image available. Each evaluator resolves the
+worker tag to an immutable local image ID, which is saved in run evidence.
 
-Whole-run deadlines cancel adapter awaits, but actual worker termination depends
-on the evaluator honoring cancellation. The generator counts prompts and reserves
-maximum output before provider calls, retaining reservations on ambiguous failure.
-Token-count estimates may differ from provider billing; cancelled in-flight usage
-can remain unknown. Preparation calls are outside the evolution token budget.
+For another family, set `RESEARCH_EVALUATOR_FACTORY=your_module:create_evaluator`.
+The synchronous trusted factory receives a frozen `ProblemContract` and returns
+an object implementing `async evaluate(candidates, problem)`. Client requests
+cannot choose Python modules. The adapter must return one `CandidateEvaluation`
+per candidate and honor cancellation and contract limits; invalid seeds stop
+before generation. Never substitute the routing demo for an unavailable evaluator.
 
-## Reproducible local checks
+## Reproducible checks
 
 ```sh
 PYTHONPATH=src .venv/bin/python -m pytest -q
@@ -66,5 +87,15 @@ npm test
 npm run build
 ```
 
-These tests make no live model calls. Live Lean benchmark verification additionally
-requires the pinned Lean/Mathlib setup described in the root README.
+Docker tests skip if Docker/image preflight fails. Tests make no live model calls.
+For a live numerical search (the contract's Lean remains a placeholder):
+
+```sh
+PYTHONPATH=src .venv/bin/python scripts/run_autocorrelation.py \
+  --model "$RESEARCH_MODEL" --n 64 --max-tokens 32768 --max-minutes 5 \
+  --max-critic-calls 0 --seed 0
+```
+
+Set `ANTHROPIC_API_KEY` before running. Increase critic calls only when testing its
+advisory value. Provider token counts are estimates; ambiguous in-flight billing
+can remain unknown. Preparation calls are outside the evolution token budget.

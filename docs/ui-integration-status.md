@@ -1,8 +1,8 @@
 # UI integration
 
 The AntiAI workbench prepares Lean and can bind it to a custom research contract.
-The engine page displays either the explicit routing demo or a custom run. Custom
-execution requires the incoming protected evaluator to be configured.
+The engine page displays either the explicit routing demo or a custom run. The built-in
+Docker evaluator supports autocorrelation; other families need an adapter.
 
 ## Problem preparation
 
@@ -59,8 +59,10 @@ evaluator before candidate generation. The UI reports missing evaluator configur
 The engine labels custom runs separately and offers a run-evidence download.
 
 `RESEARCH_MODEL` selects the Anthropic model for extraction and generation.
-`RESEARCH_EVALUATOR_FACTORY=module:factory` connects the trusted evaluator adapter;
-see [handoff requirements](pipeline-next-steps.md). The checker must be redeployed
+The default factory connects `autocorrelation-exact-v1`: `solve(n: int) -> list[int]`,
+mean `c1` minimization, with case sizes from 2 to 4096. Build the Docker worker
+before starting. `RESEARCH_EVALUATOR_FACTORY=module:factory` overrides this for
+another trusted adapter; see [setup and remaining work](pipeline-next-steps.md). The checker must be redeployed
 with its provenance response before preparing custom contracts.
 
 `RESEARCH_STORE` defaults to `runs/research.sqlite3`. Contracts, formalizations,
@@ -73,3 +75,13 @@ The default server is localhost-only. Set `RESEARCH_API_PASSWORD` (and optionall
 `RESEARCH_API_USER`, default `research`) to require HTTP Basic authentication on
 all API routes. Use HTTPS through a reverse proxy for a shared deployment. This
 is a shared-password lab service, without per-user isolation or multi-worker scheduling.
+
+
+The evaluator now enforces bounded stdout/stderr, case and candidate-suite deadlines,
+and memory limits. Stop removes its container before cancellation completes. Numerical
+scores are judged independently on the host. The benchmark CLI uses a Lean placeholder;
+it does not bypass the custom UI's provenance requirements. Iteration counts and
+interruption of host arithmetic threads remain limitations.
+
+The merged `assessment_recorded` event is accepted, replayed and shown as advisory
+in the inspector. The CLI can enable the critic; custom UI runs currently leave it off.

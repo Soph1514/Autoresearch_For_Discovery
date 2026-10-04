@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 from the_pigeon_holes.evolution.loop import EvolutionLoop
 from the_pigeon_holes.evolution.models import (
+    Assessment,
     CandidateEvaluation,
     EvolutionConfig,
     EvolutionLimits,
@@ -67,6 +68,7 @@ class LabRun:
         self.outcome = None
         self.evidence = {'candidates': {}, 'evaluations': {}, 'generation_failures': {}}
         self.generation_config = getattr(generator, 'config', None)
+        self.evaluator_config = {'image': getattr(evaluator, 'image', None), 'limits': getattr(evaluator, 'limits', None)}
         self.wake = asyncio.Event()
         self.gate = asyncio.Event()
         self.gate.set()
@@ -81,7 +83,7 @@ class LabRun:
                 "evaluatorVersion": "pigou-analytic-demo-v1",
                 "signature": "def solve() -> float:", "formalVerification": "Not performed",
                 "maxTokens": 160, "maxTimeSeconds": 60,
-            }}, "ideas": [], "experiments": [], "elites": [], "logs": [],
+            }}, "ideas": [], "experiments": [], "elites": [], "logs": [], "assessments": [],
             "generationFailures": [], "schemaVersion": SCHEMA_VERSION, "sequence": 0}
 
         if self.custom:
@@ -90,7 +92,8 @@ class LabRun:
                 direction=contract.optimisation_goal.primary.direction,
                 contract={'evaluationSuiteId': contract.evaluation_suite.id,
                     'evaluatorVersion': contract.evaluator_version, 'signature': contract.solve_signature,
-                    'formalVerification': 'Lean specification checked; Python validity evaluated per candidate',
+                    'formalVerification': ('Lean specification checked; Python validity evaluated per candidate'
+                        if provenance and provenance.get('check_artifact') else 'Not performed; numerical evaluation only'),
                     'maxTokens': self.limits.max_tokens, 'maxTimeSeconds': self.limits.max_time_seconds})
         self.persist()
 
@@ -99,7 +102,7 @@ class LabRun:
             self.store.put('run', self.id, {'snapshot': self.snapshot, 'events': self.events,
                 'contract': self.contract, 'provenance': self.provenance, 'outcome': self.outcome,
                 'config': self.config, 'limits': self.limits, 'evidence': self.evidence,
-                'generation_config': self.generation_config})
+                'generation_config': self.generation_config, 'evaluator_config': self.evaluator_config})
 
     @classmethod
     def restore(cls, artifact, store):
@@ -108,9 +111,11 @@ class LabRun:
         from .storage import contract_from_dict
         run.contract = contract_from_dict(artifact['contract'])
         run.snapshot, run.events = artifact['snapshot'], artifact['events']
+        run.snapshot.setdefault('assessments', [])
         run.provenance, run.outcome = artifact.get('provenance'), artifact.get('outcome')
         run.evidence = artifact.get('evidence', {})
         run.generation_config = artifact.get('generation_config')
+        run.evaluator_config = artifact.get('evaluator_config')
         run.config, run.limits = artifact.get('config'), artifact.get('limits')
         run.custom = run.snapshot['run']['backend'] != 'python-demo'
         run.wake, run.gate = asyncio.Event(), asyncio.Event()
@@ -147,6 +152,7 @@ class LabRun:
                 "elite_changed": ("elites", "niche"),
                 "log_added": ("logs", "id"),
                 "generation_failed": ("generationFailures", "requestId"),
+                "assessment_recorded": ("assessments", "candidateId"),
             }[kind]
             records = self.snapshot[key]
             index = next((i for i, record in enumerate(records) if record[identity] == payload[identity]
@@ -213,6 +219,17 @@ class LabRun:
             "outputTokens": failure.usage.output_tokens,
         })
         self.log("generation_failure", failure.error)
+
+    def assessment_recorded(self, assessment: Assessment) -> None:
+        self.emit("assessment_recorded", {
+            "candidateId": assessment.candidate_id,
+            "promiseRating": assessment.promise_rating,
+            "approachSummary": assessment.approach_summary,
+            "noveltyNote": assessment.novelty_note,
+            "riskFlags": list(assessment.risk_flags),
+            "model": assessment.model,
+            "promptVersion": assessment.prompt_version,
+        })
 
     def state_committed(self, state: EvolutionState) -> None:
         self.state(state)

@@ -102,13 +102,15 @@ def test_preparation_rejects_unbound_or_unreviewed_lean(monkeypatch):
     asyncio.run(scenario())
 
 
-def test_api_persists_formalization_and_fails_closed_without_evaluator(tmp_path, monkeypatch):
+def test_api_persists_formalization_and_fails_closed_when_evaluator_unavailable(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
     from the_pigeon_holes.ui import api
     monkeypatch.setattr(api, 'store', ArtifactStore(tmp_path / 'api.sqlite3'))
     monkeypatch.setattr(api, 'runs', {})
     monkeypatch.setenv('RESEARCH_MODEL', 'test')
-    monkeypatch.delenv('RESEARCH_EVALUATOR_FACTORY', raising=False)
+    def unavailable(contract):
+        raise RuntimeError('Python evaluator is not connected.')
+    monkeypatch.setattr(api, 'make_evaluator', unavailable)
     async def prepared(body, progress=None):
         return {'lean': 'theorem example : True := by trivial', 'lean_checked': True, 'status': 'review'}
     monkeypatch.setattr(api, 'prepare', prepared)

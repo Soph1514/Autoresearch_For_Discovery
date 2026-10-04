@@ -83,7 +83,7 @@ def get_run(run_id):
 @app.get('/api/health')
 def health():
     return {'mode': 'research-bridge', 'engine': 'EvolutionLoop', 'demo_available': True,
-            'custom_evaluator_configured': bool(os.environ.get('RESEARCH_EVALUATOR_FACTORY'))}
+            'custom_evaluator_configured': True}
 
 
 @app.post('/api/runs', status_code=201)
@@ -99,12 +99,15 @@ async def start_run(body: StartInput):
             raise HTTPException(503, 'Configure RESEARCH_MODEL before starting custom research.')
         try:
             contract = contract_from_dict(artifact['contract'])
-            evaluator = make_evaluator(contract)
+            evaluator = await asyncio.to_thread(make_evaluator, contract)
             generator = AnthropicProgramGenerator(AnthropicGeneratorConfig(model=model, max_attempts=1, token_budget=body.max_tokens))
         except (RuntimeError, ImportError, AttributeError) as error:
             raise HTTPException(503, str(error)) from error
         except ValueError as error:
             raise HTTPException(422, str(error)) from error
+        if any(r.task and not r.task.done() for r in runs.values()):
+            await generator.aclose()
+            raise HTTPException(409, 'Stop the active local run before starting another.')
         run = LabRun(contract=contract, generator=generator, evaluator=evaluator,
             config=EvolutionConfig(), limits=EvolutionLimits(max_tokens=body.max_tokens, max_time_seconds=body.max_time_seconds),
             store=store, provenance=artifact['provenance'])
@@ -236,8 +239,17 @@ def paper_theme():
 
 @app.get('/api/capabilities')
 def capabilities():
-    return {'custom_evaluator_configured': bool(os.environ.get('RESEARCH_EVALUATOR_FACTORY')),
-            'model_configured': bool(os.environ.get('RESEARCH_MODEL')), 'persistent_history': True}
+    ready, error = True, None
+    if not os.environ.get('RESEARCH_EVALUATOR_FACTORY'):
+        from the_pigeon_holes.execution.container_runner import preflight
+        try:
+            preflight()
+        except RuntimeError as failure:
+            ready, error = False, str(failure)
+    return {'custom_evaluator_configured': True,
+            'evaluator_ready': ready, 'evaluator_error': error,
+            'model_configured': bool(os.environ.get('RESEARCH_MODEL')), 'persistent_history': True,
+            'builtin_evaluator': 'autocorrelation-exact-v1'}
 
 
 @app.get('/api/runs')

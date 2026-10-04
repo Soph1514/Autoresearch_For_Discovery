@@ -27,6 +27,7 @@ EVENT_TYPES = frozenset(
         "elite_changed",
         "log_added",
         "generation_failed",
+        "assessment_recorded",
         "run_status_changed",
     }
 )
