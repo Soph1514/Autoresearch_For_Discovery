@@ -7,6 +7,7 @@ function RunProvenance({runId, status}: {runId: string; status: string}) {
   const [summary, setSummary] = useState<{formalization_id?: string; contract_id?: string; compiler?: {status: string}; model?: string; reported_tokens?: number; generations?: number; stop_reason?: string;
     published_baseline?: {agent?: string; c1?: number; cells?: number; source?: string; repository?: string};
     budget?: {max_cost_usd: number; estimated_cost_usd: number; committed_cost_usd: number};
+    literature_reused_from?: string;
     literature?: {text: string; sources: {url: string; title: string}[]; queries: string[]}} | null>(null);
   useEffect(() => {
     const controller = new AbortController();
@@ -25,7 +26,7 @@ function RunProvenance({runId, status}: {runId: string; status: string}) {
       {' · credit belongs to the source construction; improvements are measured from this seed.'}</span>}
     {summary.compiler && summary.contract_id && <a href={`/api/contracts/${encodeURIComponent(summary.contract_id)}/compiler`} target="_blank" rel="noopener">Compiled scorer & verification ↗</a>}
     {summary.budget && <span>API estimate ${summary.budget.estimated_cost_usd.toFixed(2)} / ${summary.budget.max_cost_usd.toFixed(2)} cap · ${summary.budget.committed_cost_usd.toFixed(2)} including reservations</span>}
-    {summary.literature && <details className="literature-review"><summary>Opening literature review · {summary.literature.sources.length} sources</summary>
+    {summary.literature && <details className="literature-review"><summary>{summary.literature_reused_from ? 'Reused literature review' : 'Opening literature review'} · {summary.literature.sources.length} sources</summary>
       <p style={{whiteSpace: 'pre-wrap'}}>{summary.literature.text}</p>
       <ul>{summary.literature.sources.filter(s => /^https?:\/\//.test(s.url)).map(s => <li key={s.url}><a href={s.url} target="_blank" rel="noreferrer">{s.title}</a></li>)}</ul>
       <p>Source claims guide exploration; only the fixed evaluator decides validity and scores.</p></details>}

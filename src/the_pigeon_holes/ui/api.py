@@ -362,6 +362,8 @@ def run_summary(run_id: str):
         'model': generation.get('model'), 'reported_tokens': outcome.get('tokens_used'),
         'generations': outcome.get('generations_completed'), 'stop_reason': outcome.get('stop_reason'),
         'active_seconds': outcome.get('elapsed_seconds'),
-        'budget': run.budget_summary(), 'literature': run.literature,
+        'budget': run.budget_summary(),
+        'literature': run.literature or (run.provenance or {}).get('reused_literature'),
+        'literature_reused_from': (run.provenance or {}).get('reused_literature_run'),
         'best_candidate_id': winner_id, 'best_metrics': evaluation.get('metrics'),
         'scope': 'Reported evolution tokens exclude preparation and unknown in-flight billing.'}
