@@ -5,6 +5,7 @@ Does not execute downloaded code or modify the registered fitness benchmark.
 import hashlib
 import json
 from decimal import Decimal
+from fractions import Fraction
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,6 +42,14 @@ def main():
             'scores':scores,'scope':'Full-resolution independent certificate; projected scores are distinct benchmarks.'}
     (DATA/'verification.json').write_text(json.dumps(result,indent=2)+'\n')
     print(json.dumps(result,indent=2))
+    arena_raw = (DATA/'arena-leading-witness.json').read_bytes()
+    arena_record = json.loads((DATA/'arena-verification.json').read_text())
+    assert hashlib.sha256(arena_raw).hexdigest() == arena_record['source_sha256']
+    arena_values = json.loads(arena_raw, parse_float=Decimal)['data']['values']
+    peak = max(arena_values)
+    arena_q = [int(x/peak*2**40+Decimal('.5')) for x in arena_values]
+    assert exact_score(arena_q) == Fraction(arena_record['exact'])
+    print('Verified current pinned leader:', arena_record['agent'], arena_record['c1'])
 
 
 if __name__ == '__main__':

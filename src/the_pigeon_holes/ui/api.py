@@ -335,6 +335,7 @@ def run_summary(run_id: str):
         e['ideaId'] for e in run.snapshot['elites'] if e['current'] and e['niche'] == 'Global best'), None)
     evaluation = encode(outcome.get('best_evaluation') or run.evidence.get('evaluations', {}).get(winner_id)) or {}
     return {'formalization_id': (run.provenance or {}).get('formalization_id'),
+        'published_baseline': (run.provenance or {}).get('published_baseline'),
         'model': generation.get('model'), 'reported_tokens': outcome.get('tokens_used'),
         'generations': outcome.get('generations_completed'), 'stop_reason': outcome.get('stop_reason'),
         'active_seconds': outcome.get('elapsed_seconds'),
