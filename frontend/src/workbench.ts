@@ -68,7 +68,7 @@ form.onsubmit = async (event) => {
   element('stop-formalization').hidden = false;
   element<HTMLButtonElement>('upload').disabled = true;
   element('problem-title').textContent = problem.value.split('\n')[0].slice(0, 120);
-  element('problem-sub').textContent = mode.value === 'formal' ? 'Existing Lean formulation' : 'Qwen3-4B-Instruct · generation + repair until Lean passes';
+  element('problem-sub').textContent = mode.value === 'formal' ? 'Existing Lean formulation' : 'Qwen draft · Opus 5.5 repair until Lean passes';
   element('validation-status').textContent = 'Processing…';
   element('run-state').textContent = 'Running';
   element('best').textContent = '—'; element('count').textContent = '0';
@@ -86,7 +86,7 @@ form.onsubmit = async (event) => {
       if (event.lean !== undefined) element('lean-output').textContent = event.lean;
       if (event.attempt) element('count').textContent = String(event.attempt);
       if (event.stage) {
-        const message = `Attempt ${event.attempt}: ${event.stage}`;
+        const message = `Attempt ${event.attempt}: ${event.stage === 'repairing' ? 'repairing with Claude Opus 5.5' : event.stage}`;
         element('validation-status').textContent = message;
         log(message);
       }

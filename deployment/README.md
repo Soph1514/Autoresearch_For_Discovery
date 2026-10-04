@@ -11,6 +11,12 @@ secrets or data volumes, bounded output, and cancellation cleanup. Local executi
 continues using Docker. The existing generation, checker, fidelity, and attachment
 apps must be deployed in the same Modal environment.
 
+Qwen generates the first Lean draft. After a failed check, Claude Opus 5.5 repairs
+the source using the original formulation and current checker diagnostics.
+The loop rechecks each repair until it passes or the user presses Stop; provider
+errors are surfaced. The UI identifies Opus repairs. The Anthropic key in the
+app Secret funds these repair calls as well as research.
+
 ## Credentials
 
 `autoresearch-lab-secrets` is a Modal Secret containing `ANTHROPIC_API_KEY`,

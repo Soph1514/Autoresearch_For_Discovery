@@ -289,8 +289,9 @@ def compile_fitness(*, statement: str, instance: Mapping[str, object],
                         dependencies=json.loads((project / "lake-manifest.json").read_text()),
                         validation={"compiled": True, "kernel_correspondence": True,
                                     "per_score_kernel_check": True}, status="checking")
+        lakefile = 'lakefile.toml' if (project / 'lakefile.toml').is_file() else 'lakefile.lean'
         manifest["project_files"] = {name: _digest((project / name).read_bytes()) for name in
-                                     ("lean-toolchain", "lake-manifest.json", "lakefile.toml")}
+                                     ("lean-toolchain", "lake-manifest.json", lakefile)}
         manifest["files"] = {p.name: _digest(p.read_bytes()) for p in workspace.iterdir() if p.is_file()}
         encoded = _json(manifest)
         (workspace / "manifest.json").write_text(encoded)
