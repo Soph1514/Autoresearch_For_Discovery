@@ -70,7 +70,7 @@ def require_model_credentials(model: str) -> None:
 def formalise(problem_name: str) -> tuple[str, str]:
     """Formalise a general problem and return its Lean path and NL instance."""
     load_dotenv()
-    problem = ROOT / "problems" / problem_name
+    problem = ROOT / "problems" / problem_name.replace("-", "_")
     general_problem = problem / "problem.txt"
     instance = problem / "instance.txt"
     if not general_problem.is_file() or not instance.is_file():

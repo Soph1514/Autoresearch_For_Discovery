@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from the_pigeon_holes.execution.signature_extractor import MetricGoal, OptimisationGoal, Parameter
-from the_pigeon_holes.fitness.autocorrelation import (
+from problems.autocorrelation.fitness import (
     AUTOCORRELATION_FITNESS_REF,
     SCALE_BITS,
 )

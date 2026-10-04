@@ -3,11 +3,27 @@
 Algorithm autoresearch framework based on [the agreed design](context/agents.md).
 The AntiAI UI supports hosted Lean generation, checking/repair and fidelity review,
 plus custom evolution through the generic Docker evaluator and registered
-autocorrelation fitness function, alongside a separate routing demo. Start with
+fitness functions for six problem families, alongside a separate routing demo. Start with
 the [UI setup](frontend/README.md);
 see [integration status](docs/ui-integration-status.md) for remaining gaps.
 
 The Lea CLI path below supports 0/1 knapsack specification validation.
+
+For problems without a registered scorer, the [Lean fitness compiler](docs/fitness-compiler.md)
+formalizes once, compiles a verified evaluator, and scores candidates directly in
+Lean with kernel checks. Existing scorers take precedence. Both frontend composers
+expose this through **Prepare research**: choose a known problem family or
+**New problem — Lean compiler**, enter cases, then start research with the saved scorer. Replay the
+saved subset-sum example without API calls:
+
+```sh
+uv run python scripts/run_lean_fitness.py
+```
+
+The end-to-end Python entry point is
+`the_pigeon_holes.pipeline.runner.autoresearch`: it takes the problem name,
+statement, instance, run directory, Lean project and search model. The fallback
+does not prove that generated Lean faithfully translates the English statement.
 
 Generate its formalisation with:
 
@@ -83,7 +99,7 @@ src/the_pigeon_holes/
     models/                   Shared records
     evolution/                Idea generation and selection
     execution/                Candidate implementation and execution
-    fitness/                  Trusted validity and objective scoring
+    fitness/                  Shared fitness interface and trusted registry
     problems/                 Built-in problem contracts
     archive/                  Elites, evidence and lineage
     pipeline/                 Research loop and budgets
@@ -91,6 +107,7 @@ src/the_pigeon_holes/
 problems/
     lea_task.txt              Shared Lea formalization contract
     lean/                     Shared pinned Lean and mathlib project
+    <problem>/fitness.py      Problem-specific validity and objective scoring
 problems/knapsack/
     problem.txt               General natural-language problem
     instance.txt              Concrete instance to solve
@@ -147,6 +164,19 @@ LEAN_TEST_LAKE=lake PYTHONPATH=src:. uv run python -m unittest discover -v
 
 
 ## Autocorrelation fitness function
+
+The generic runner also supports bin packing, 0/1 knapsack, symmetric TSP,
+weighted max cut and identical-machine makespan. See
+[known construction problems](docs/known-problems.md) for objective sources,
+instances, tests and commands. For example:
+
+```sh
+uv run python scripts/run_problem.py --problem knapsack \
+  --model "$RESEARCH_MODEL" --max-minutes 5 --max-critic-calls 0
+```
+
+These families use registered hand-written scorers. Automatic fitness-function
+generation is not implemented.
 
 The generic evaluator executes candidates in Docker and passes their outputs to
 the registered, content-addressed autocorrelation fitness function. It uses exact

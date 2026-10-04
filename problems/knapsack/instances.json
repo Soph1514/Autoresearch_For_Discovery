@@ -1,0 +1,92 @@
+[
+  {
+    "id": "original-5",
+    "inputs": {
+      "capacity": 10,
+      "weights": [
+        2,
+        3,
+        4,
+        5,
+        9
+      ],
+      "values": [
+        3,
+        4,
+        8,
+        8,
+        10
+      ]
+    },
+    "target": {
+      "value": 16,
+      "kind": "optimal",
+      "justification": "Exhaustive enumeration of all feasible constructions; independently rechecked in tests/test_construction_fitness.py."
+    },
+    "optimal_witness": [
+      2,
+      3
+    ]
+  },
+  {
+    "id": "density-trap",
+    "inputs": {
+      "capacity": 50,
+      "weights": [
+        10,
+        20,
+        30
+      ],
+      "values": [
+        60,
+        100,
+        120
+      ]
+    },
+    "target": {
+      "value": 220,
+      "kind": "optimal",
+      "justification": "Exhaustive enumeration of all feasible constructions; independently rechecked in tests/test_construction_fitness.py."
+    },
+    "optimal_witness": [
+      1,
+      2
+    ]
+  },
+  {
+    "id": "mixed-8",
+    "inputs": {
+      "capacity": 20,
+      "weights": [
+        3,
+        5,
+        7,
+        9,
+        4,
+        6,
+        8,
+        2
+      ],
+      "values": [
+        4,
+        9,
+        12,
+        14,
+        7,
+        10,
+        13,
+        3
+      ]
+    },
+    "target": {
+      "value": 34,
+      "kind": "optimal",
+      "justification": "Exhaustive enumeration of all feasible constructions; independently rechecked in tests/test_construction_fitness.py."
+    },
+    "optimal_witness": [
+      1,
+      2,
+      6
+    ]
+  }
+]

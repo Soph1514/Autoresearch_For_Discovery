@@ -1,0 +1,7 @@
+Given weights : List Nat and capacity : Nat, construct a binary selection list
+chosen : List Nat of the same length as weights. Each chosen entry is 0 or 1.
+The selected total is the sum of the pointwise products of weights and chosen.
+The selection is feasible when that total is at most capacity. Maximize the
+selected total over all feasible binary selection lists. Empty lists are allowed.
+
+The instance parameters are named weights and capacity. The candidate is chosen.

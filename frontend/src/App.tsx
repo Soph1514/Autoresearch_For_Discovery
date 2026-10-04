@@ -4,7 +4,7 @@ import { IdeaGraph, operationLabel } from "./IdeaGraph";
 import { Composer } from "./Composer";
 import type { Run, Snapshot } from "./contracts";
 function RunProvenance({runId, status}: {runId: string; status: string}) {
-  const [summary, setSummary] = useState<{formalization_id?: string; model?: string; reported_tokens?: number; generations?: number; stop_reason?: string;
+  const [summary, setSummary] = useState<{formalization_id?: string; contract_id?: string; compiler?: {status: string}; model?: string; reported_tokens?: number; generations?: number; stop_reason?: string;
     budget?: {max_cost_usd: number; estimated_cost_usd: number; committed_cost_usd: number};
     literature?: {text: string; sources: {url: string; title: string}[]; queries: string[]}} | null>(null);
   useEffect(() => {
@@ -18,6 +18,7 @@ function RunProvenance({runId, status}: {runId: string; status: string}) {
   if (!summary) return null;
   return <div className="run-summary">
     {summary.formalization_id && <a href={`/?formalization=${summary.formalization_id}`}>Checked specification & alignment review ↗</a>}
+    {summary.compiler && summary.contract_id && <a href={`/api/contracts/${encodeURIComponent(summary.contract_id)}/compiler`} target="_blank" rel="noopener">Compiled scorer & verification ↗</a>}
     {summary.budget && <span>API estimate ${summary.budget.estimated_cost_usd.toFixed(2)} / ${summary.budget.max_cost_usd.toFixed(2)} cap · ${summary.budget.committed_cost_usd.toFixed(2)} including reservations</span>}
     {summary.literature && <details className="literature-review"><summary>Opening literature review · {summary.literature.sources.length} sources</summary>
       <p style={{whiteSpace: 'pre-wrap'}}>{summary.literature.text}</p>
@@ -27,9 +28,17 @@ function RunProvenance({runId, status}: {runId: string; status: string}) {
     {summary.reported_tokens != null && <span>{summary.reported_tokens.toLocaleString()} reported evolution tokens · {summary.generations} generations · {summary.stop_reason?.replaceAll('_', ' ')}</span>}
   </div>;
 }
-type WitnessCase = {output?: number[]; c1_exact?: {numerator: string; denominator: string}};
-function Witness({runId, candidateId}: {runId: string; candidateId: string}) {
-  const [record, setRecord] = useState<{cases: Record<string, WitnessCase & {fitness_evidence?: WitnessCase}> } | null>(null);
+type Rational = {numerator: string; denominator: string};
+type CaseWitness = {output?: number[]; lower_bound?: number} & Record<string, unknown>;
+
+function rationalFor(witness: CaseWitness, metric: string): Rational | undefined {
+  // Every fitness function records its metric under "<metric>_exact".
+  const value = witness[`${metric}_exact`] as Rational | undefined;
+  return value && value.numerator !== undefined ? value : undefined;
+}
+
+function Witness({runId, candidateId, metric}: {runId: string; candidateId: string; metric?: string}) {
+  const [record, setRecord] = useState<{cases: Record<string, CaseWitness & {fitness_evidence?: CaseWitness}>} | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     setRecord(null);
@@ -37,21 +46,46 @@ function Witness({runId, candidateId}: {runId: string; candidateId: string}) {
       .then(r => r.ok ? r.json() : null).then(setRecord).catch(() => {});
     return () => controller.abort();
   }, [runId, candidateId]);
-  if (!record) return null;
-  return <section><h3>Constructed witnesses</h3>{Object.entries(record.cases).map(([id, raw]) => {
-    const c = raw.fitness_evidence ?? raw;
-    if (!c.output || !c.c1_exact) return null;
-    const q = c.output, peak = Math.max(...q), n = q.length;
-    const path = q.map((x,i) => `${i ? 'L' : 'M'} ${10 + 280*i/n} ${90-75*x/peak} H ${10+280*(i+1)/n}`).join(' ');
+  // Without the run's metric name there is no witness key to look up.
+  if (!record || !metric) return null;
+  return <section><h3>Constructed witnesses</h3>{Object.entries(record.cases).map(([id, c]) => {
+    const witness = c.fitness_evidence ?? c;
+    if (witness?.kernel_checked && typeof witness.lean_certificate === 'string') {
+      return <div key={id} className="witness">
+        <p>{id} · Checked by the Lean kernel</p>
+        <details><summary>Lean certificate</summary>
+          <pre style={{whiteSpace: 'pre-wrap', overflowWrap: 'anywhere'}}>{witness.lean_certificate}</pre>
+        </details>
+      </div>;
+    }
+    const exact = witness && rationalFor(witness, metric);
+    if (!witness?.output || !exact) return null;
+    const q = witness.output, n = q.length;
+    const approx = Number(exact.numerator) / Number(exact.denominator);
     return <div key={id} className="witness">
-      <p>{id} · {n} cells · c1 ≈ {(Number(c.c1_exact.numerator)/Number(c.c1_exact.denominator)).toFixed(8)}</p>
-      <svg viewBox="0 0 300 112" role="img" aria-label={`Step function witness for ${id}, heights normalized for display`}>
-        <path d="M10 90H290" stroke="#bcb5a9"/><path d={path} fill="none" stroke="#655d52" strokeWidth="1.5"/>
-        <text x="10" y="108" fontSize="10">−1/4</text><text x="267" y="108" fontSize="10">1/4</text>
-      </svg>
-      <details><summary>Exact rational certificate</summary><p className="exact-score">{c.c1_exact.numerator} / {c.c1_exact.denominator}</p><p className="muted">Computed independently with integer arithmetic. Full integer heights are included in the evidence download.</p></details>
+      <p>{id} · {n} values · {metric} ≈ {Number.isInteger(approx) ? approx : approx.toFixed(8)}
+        {witness.lower_bound !== undefined && <> · proven bound {witness.lower_bound}</>}</p>
+      {/* The step-function plot only means anything for the autocorrelation family. */}
+      {metric === "c1" ? <StepFunction id={id} values={q} /> : <OutputPreview values={q} />}
+      <details><summary>Exact rational certificate</summary><p className="exact-score">{exact.numerator} / {exact.denominator}</p><p className="muted">Computed independently with integer arithmetic. The full witness is included in the evidence download.</p></details>
     </div>;
   })}</section>;
+}
+
+function StepFunction({id, values}: {id: string; values: number[]}) {
+  const peak = Math.max(...values), n = values.length;
+  const path = values.map((x,i) => `${i ? 'L' : 'M'} ${10 + 280*i/n} ${90-75*x/peak} H ${10+280*(i+1)/n}`).join(' ');
+  return <svg viewBox="0 0 300 112" role="img" aria-label={`Step function witness for ${id}, heights normalized for display`}>
+    <path d="M10 90H290" stroke="#bcb5a9"/><path d={path} fill="none" stroke="#655d52" strokeWidth="1.5"/>
+    <text x="10" y="108" fontSize="10">−1/4</text><text x="267" y="108" fontSize="10">1/4</text>
+  </svg>;
+}
+
+function OutputPreview({values}: {values: number[]}) {
+  const shown = values.slice(0, 48);
+  return <p className="exact-score">
+    {shown.join(", ")}{values.length > shown.length && ` … (${values.length} values)`}
+  </p>;
 }
 function Inspector({
   snapshot,
@@ -86,7 +120,7 @@ function Inspector({
           {e.current ? "★ Elite" : "Former elite"} · {e.niche}
         </span>
       ))}
-      {snapshot.run.backend === "python" && <Witness runId={snapshot.run.id} candidateId={idea.id} />}
+      {snapshot.run.backend === "python" && <Witness runId={snapshot.run.id} candidateId={idea.id} metric={snapshot.run.metricName} />}
       <h3>Candidate hypothesis</h3>
       <p className="muted">Proposed by the generator. Only the recorded test cases were evaluated.</p>
       <ul className="idea-points">{idea.description.split(/(?<=\.)\s+(?=[A-Z])/).map((point, i) => <li key={i}>{point}</li>)}</ul>
@@ -349,7 +383,7 @@ export default function App() {
           <div>
             <div className="eyebrow">{custom ? "ALGORITHM RESEARCH" : "ROUTING GAMES / LOWER-BOUND SEARCH"}</div>
             <h1>{snapshot?.run.title ?? "A space for branching ideas."}</h1>
-            {custom && <p className="muted">Exact numerical evaluation · lower c1 is better. A checked specification is not a proof of the optimal constant.</p>}
+            {custom && <p className="muted">Deterministic evaluation · {snapshot?.run.direction === 'maximize' ? 'higher' : 'lower'} {snapshot?.run.metricName || 'objective'} is better. Candidate scores do not prove global optimality.</p>}
             {!custom && <><p className="muted">
               Pigou network · unit demand · route delays ℓ₁(x) = x and ℓ₂(x) = c
             </p>
@@ -440,7 +474,7 @@ export default function App() {
             {Object.entries(snapshot.run.contract).map(([key, value]) => (
               <div className="metric" key={key}>
                 <span>{key}</span>
-                <strong>{typeof value === "object" ? JSON.stringify(value) : String(value)}</strong>
+                <strong>{typeof value === 'object' ? JSON.stringify(value) : String(value ?? '')}</strong>
               </div>
             ))}
           </details>

@@ -6,7 +6,7 @@ Merged from `origin/eo_loop` (`36fadc0`) into the custom-research integration on
 
 ## Implemented
 
-- `fitness/autocorrelation.py`: exact integer validation and rational `c1` scoring.
+- `problems/autocorrelation/fitness.py`: exact integer validation and rational `c1` scoring.
   Candidates return nonnegative integers representing `q_i / 2**40`. Length must
   be between 2 and 4096; bools/floats, all-zero and tiny-integral outputs fail.
   Its registered identity is `autocorrelation` version `exact-v1`, with a source
@@ -15,9 +15,11 @@ Merged from `origin/eo_loop` (`36fadc0`) into the custom-research integration on
   can be referenced by a new problem contract; API clients cannot supply code or
   Python import paths.
 - `evaluation/production.py`: generic sandbox `CandidateEvaluator`.
-  Contracts must use `solve(n: int) -> list[int]`, mean `c1` minimization, no
-  tie-breakers/supporting definitions, and valid `n` cases. Unsupported contracts
-  fail before execution. Valid output must pass every suite case.
+  Contract compatibility is checked by the selected registered fitness function.
+  Autocorrelation requires `solve(n: int) -> list[int]` and mean `c1`
+  minimization. Other supported families and objectives are listed in
+  [known-problems.md](known-problems.md). Unsupported contracts fail before
+  execution. Valid output must pass every suite case.
 - `execution/container_runner.py`: bounded Docker preflight; worker tags resolved
   to local immutable image IDs; async candidate execution; network disabled,
   read-only filesystem, memory/swap cap, CPU/PID limits, unprivileged user and

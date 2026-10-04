@@ -1,0 +1,10 @@
+Construct a shortest closed tour through all cities of a symmetric traveling
+salesperson instance. The input is a square matrix of nonnegative integer edge
+costs with zero diagonal. Triangle inequality is not required.
+
+Implement solve(distances: list[list[int]]) -> list[int].
+Return a permutation of the city indices 0 through n-1. Do not repeat the start
+at the end. The scorer includes the closing edge from the last city to the first.
+Minimize tour_length: the sum of all n edge costs in this closed tour.
+Any complete permutation is feasible, even when it is not optimal.
+Across multiple evaluation cases, minimize the sum of tour lengths.
