@@ -1,0 +1,61 @@
+name: Test and deploy Modal lab
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: modal-lab-${{ github.event_name == 'pull_request' && github.ref || 'production' }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: pip install -e '.[ui]' pytest modal==1.6.1
+      - run: python -m pytest tests/test_modal_hosting.py tests/test_container_runner.py tests/test_ui_bridge.py tests/test_custom_research.py tests/test_ui_compiler.py
+      - run: npm ci && npm test && npm run build
+        working-directory: frontend
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+      - run: pip install modal==1.6.1
+      - name: Check deployment credentials
+        run: |
+          test -n "$MODAL_TOKEN_ID" && test -n "$MODAL_TOKEN_SECRET" || {
+            echo 'Set MODAL_TOKEN_ID and MODAL_TOKEN_SECRET for the arin06 workspace in repository Actions secrets.'
+            exit 1
+          }
+      - run: python deployment/deploy.py

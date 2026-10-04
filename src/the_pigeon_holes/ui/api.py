@@ -91,7 +91,8 @@ def get_run(run_id):
 @app.get('/api/health')
 def health():
     return {'mode': 'research-bridge', 'engine': 'EvolutionLoop', 'demo_available': True,
-            'custom_evaluator_configured': True}
+            'custom_evaluator_configured': True,
+            'revision': os.environ.get('RESEARCH_REVISION', 'local')}
 
 
 @app.post('/api/runs', status_code=201)
