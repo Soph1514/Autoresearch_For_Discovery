@@ -161,8 +161,9 @@ def test_candidate_suite_cases_run_concurrently(evaluator):
     from dataclasses import replace
     problem = replace(contract(),
         evaluation_suite=EvaluationSuite('two', (EvaluationCase('a', {'n': 64}), EvaluationCase('b', {'n': 64}))),
-        resource_limits=ResourceLimits(.8, 1.0, 128, 1))
-    source = 'def solve(n: int) -> list[int]:\n    import time\n    time.sleep(.55)\n    return [2**40] * n\n'
+        # Leave room for Docker startup/cleanup on macOS; serial sleeps still exceed the suite deadline.
+        resource_limits=ResourceLimits(3.0, 3.8, 128, 1))
+    source = 'def solve(n: int) -> list[int]:\n    import time\n    time.sleep(2)\n    return [2**40] * n\n'
     (result,) = run(evaluator, [source], problem)
     assert result.valid
 

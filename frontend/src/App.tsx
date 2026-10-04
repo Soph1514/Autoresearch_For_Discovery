@@ -27,8 +27,9 @@ function RunProvenance({runId, status}: {runId: string; status: string}) {
     {summary.reported_tokens != null && <span>{summary.reported_tokens.toLocaleString()} reported evolution tokens · {summary.generations} generations · {summary.stop_reason?.replaceAll('_', ' ')}</span>}
   </div>;
 }
+type WitnessCase = {output?: number[]; c1_exact?: {numerator: string; denominator: string}};
 function Witness({runId, candidateId}: {runId: string; candidateId: string}) {
-  const [record, setRecord] = useState<{cases: Record<string, {output?: number[]; c1_exact?: {numerator: string; denominator: string}}> } | null>(null);
+  const [record, setRecord] = useState<{cases: Record<string, WitnessCase & {fitness_evidence?: WitnessCase}> } | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     setRecord(null);
@@ -37,7 +38,8 @@ function Witness({runId, candidateId}: {runId: string; candidateId: string}) {
     return () => controller.abort();
   }, [runId, candidateId]);
   if (!record) return null;
-  return <section><h3>Constructed witnesses</h3>{Object.entries(record.cases).map(([id, c]) => {
+  return <section><h3>Constructed witnesses</h3>{Object.entries(record.cases).map(([id, raw]) => {
+    const c = raw.fitness_evidence ?? raw;
     if (!c.output || !c.c1_exact) return null;
     const q = c.output, peak = Math.max(...q), n = q.length;
     const path = q.map((x,i) => `${i ? 'L' : 'M'} ${10 + 280*i/n} ${90-75*x/peak} H ${10+280*(i+1)/n}`).join(' ');
@@ -339,7 +341,7 @@ export default function App() {
           <label htmlFor="run-history">Saved runs</label>
           <select id="run-history" value={snapshot?.run.id || ''} onChange={e => window.location.assign(`/engine.html?run=${encodeURIComponent(e.target.value)}`)}>
             <option value="" disabled>Select a research run</option>
-            {[...history].reverse().map(run => <option key={run.id} value={run.id}>{run.title} · {run.status} · {new Date(run.startedAt).toLocaleString('en-GB')}</option>)}
+            {[...history].reverse().map(run => <option key={run.id} value={run.id}>{run.title} · {run.id.slice(0, 8)} · {run.status} · {new Date(run.startedAt).toLocaleString('en-GB')}</option>)}
           </select>
           {snapshot && <span className="badge">{snapshot.run.status} · {snapshot.sequence} saved events</span>}
         </nav>}
@@ -380,7 +382,7 @@ export default function App() {
             </div>
           </div>
         </section>
-        {active && snapshot && <p className="activity" role="status">{status === 'paused' ? 'Paused between batches. Resume to continue.' : status === 'pausing' ? 'Finishing the active batch before pausing…' : status === 'stopping' ? 'Cancelling active work…' : snapshot.experiments.some(e => e.status === 'running') ? 'Evaluating candidate programs in the isolated worker…' : 'Research engine active · generating and reviewing the next batch. Model calls can take a few minutes.'}</p>}
+        {active && snapshot && <p className="activity" role="status">{status === 'paused' ? 'Paused between batches. Resume to continue.' : status === 'pausing' ? 'Finishing the active batch before pausing…' : status === 'stopping' ? 'Cancelling active work…' : snapshot.experiments.some(e => e.status === 'running') ? 'Evaluating candidate programs in the isolated worker…' : snapshot.ideas.length === 0 ? 'Searching and reviewing prior work before evolution…' : 'Research engine active · generating and reviewing the next batch. Model calls can take a few minutes.'}</p>}
         {snapshot && best !== null && <div className="run-summary">
           {improvement !== null && <span><strong>{improvement.toFixed(1)}%</strong> improvement over this run’s seed</span>}
           <span><strong>{snapshot.experiments.filter(e => e.valid).length}</strong> valid candidates</span>

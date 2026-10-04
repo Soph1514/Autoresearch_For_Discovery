@@ -29,16 +29,17 @@ verified = 0
 for candidate_id, record in artifact['evidence'].get('numerical', {}).items():
     scores = []
     for case in record['cases'].values():
-        if 'c1_exact' not in case:
+        witness = case.get('fitness_evidence', case)
+        if 'c1_exact' not in witness:
             continue
-        exact = case['c1_exact']
-        score = c1(case['output'])
-        assert len(case['output']) == case['inputs']['n']
+        exact = witness['c1_exact']
+        score = c1(witness['output'])
+        assert len(witness['output']) == case['inputs']['n']
         assert score == Fraction(int(exact['numerator']), int(exact['denominator']))
         scores.append(score)
         verified += 1
-    if 'mean_c1_exact' in record:
-        mean = record['mean_c1_exact']
+    mean = record.get('mean_c1_exact') or record.get('aggregate_metrics_exact', {}).get('c1')
+    if mean:
         assert sum(scores) / len(scores) == Fraction(int(mean['numerator']), int(mean['denominator']))
 rows = []
 for idea in artifact['snapshot']['ideas']:
@@ -57,7 +58,8 @@ if best:
 summary = {'run_id': args.run_id, 'status': artifact['snapshot']['run']['status'], 'candidates':len(rows),
     'events': len(artifact['events']), 'independently_rechecked_witnesses':verified,
     'best': (artifact.get('outcome') or {}).get('best_evaluation'),
-    'reported_tokens': (artifact.get('outcome') or {}).get('tokens_used')}
+    'reported_tokens': (artifact.get('outcome') or {}).get('tokens_used'),
+    'budget': artifact.get('budget'), 'literature': artifact.get('literature')}
 (folder / 'summary.json').write_text(json.dumps(summary, indent=2))
 print(json.dumps(summary, indent=2))
 print(folder.resolve())
