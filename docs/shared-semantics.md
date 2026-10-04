@@ -12,8 +12,10 @@ team coordination decision.
   immutable evaluation-suite preparation, and rejection diagnostics.
 - **Evolution** owns search allocation, variation requests, lineage, novelty,
   and elite policy. It does not execute candidate code or inspect hidden cases.
-- **Evaluation** owns sandbox execution, suite cases, deterministic validity,
-  metric calculation, aggregation, and behavioral evidence.
+- **Fitness functions** own deterministic problem-specific validity, metric
+  calculation, exact evidence, and behavioral descriptors.
+- **Evaluation** owns sandbox execution, suite cases, resource enforcement and
+  metric aggregation. It resolves only registered fitness functions.
 - **API/UI orchestration** owns run identity, lifecycle controls, and event
   presentation. It does not choose elites or reinterpret validity.
 
@@ -26,11 +28,11 @@ evaluator maps a candidate over the suite and applies
 
 The generation port receives rendered requests containing the general problem,
 Lean context, complete Python interface, objective, and selected evolutionary
-evidence. It never receives evaluation case values, expected answers, or judge
-internals. The evaluation port receives the complete contract.
+evidence. It never receives evaluation case values, expected answers, or fitness
+function internals. The evaluation port receives the complete contract.
 
-The suite ID, cases, interface version, evaluator version, specification, and
-goal are fixed for a run. Stored case data is recursively immutable. An
+The suite ID, cases, interface version, content-addressed fitness reference,
+specification, and goal are fixed for a run. Stored case data is recursively immutable. An
 evaluator must request an isolated materialized copy before sandbox execution.
 
 ## Limits and run controls

@@ -1,12 +1,13 @@
 """Local durable artifacts. No candidate or supporting Python is executed here."""
 import json
+import hashlib
 import sqlite3
 from collections.abc import Mapping
 from dataclasses import fields, is_dataclass
 from pathlib import Path
 from the_pigeon_holes.models.problem_contract import (
     ProblemContract, InterfaceDefinition, Parameter, EvaluationSuite, EvaluationCase,
-    ResourceLimits, OptimisationGoal, MetricGoal, FrozenList,
+    ResourceLimits, OptimisationGoal, MetricGoal, FrozenList, FitnessFunctionRef,
 )
 
 
@@ -42,6 +43,22 @@ def encode(value):
 
 
 def contract_from_dict(data):
+    data = dict(data)
+    fitness_data = data.get('fitness_function')
+    if fitness_data is None:
+        # Migrate the one known built-in identity. Other historical artifacts remain
+        # replayable, but their synthetic reference cannot resolve for a new run.
+        legacy = data.pop('evaluator_version')
+        if legacy == 'autocorrelation-exact-v1':
+            from the_pigeon_holes.fitness.autocorrelation import AUTOCORRELATION_FITNESS_REF
+            fitness_data = encode(AUTOCORRELATION_FITNESS_REF)
+        else:
+            fitness_data = {
+                'id': f'legacy:{legacy}', 'version': 'unregistered',
+                'implementation_sha256': hashlib.sha256(
+                    f'legacy:{legacy}'.encode()
+                ).hexdigest(),
+            }
     interface = data['interface']
     goal = data['optimisation_goal']
     return ProblemContract(**{**data,
@@ -50,7 +67,8 @@ def contract_from_dict(data):
             EvaluationCase(case['id'], unpack_inputs(case['inputs'])) for case in data['evaluation_suite']['cases'])),
         'optimisation_goal': OptimisationGoal(**{**goal, 'primary': MetricGoal(**goal['primary']),
             'tie_breakers': tuple(MetricGoal(**m) for m in goal['tie_breakers'])}),
-        'resource_limits': ResourceLimits(**data['resource_limits'])})
+        'resource_limits': ResourceLimits(**data['resource_limits']),
+        'fitness_function': FitnessFunctionRef(**fitness_data)})
 
 
 class ArtifactStore:

@@ -9,6 +9,7 @@ from the_pigeon_holes.llm.prompts import render_solve_contract
 from the_pigeon_holes.models.problem_contract import (
     EvaluationCase,
     EvaluationSuite,
+    FitnessFunctionRef,
     InterfaceDefinition,
     MetricGoal,
     OptimisationGoal,
@@ -29,6 +30,7 @@ CASES = {
     "small": {"items": [3, 4, 5], "capacity": 7},
     "empty": {"items": [], "capacity": 0},
 }
+FITNESS = FitnessFunctionRef("test", "v1", "0" * 64)
 
 
 def _mock_client(input_dict):
@@ -80,7 +82,7 @@ def _build(client, seed=SEED, cases=CASES):
         evaluation_suite_id="knapsack-public-v1",
         evaluation_cases=cases,
         resource_limits=_limits(),
-        evaluator_version="v1",
+        fitness_function=FITNESS,
         model="claude-sonnet-5-5",
         client=client,
     )
@@ -195,7 +197,7 @@ def test_structured_types_reach_contract_and_prompt_without_execution():
             "one": {"items": [{"weight": 2, "label": "a"}]},
         },
         resource_limits=_limits(),
-        evaluator_version="structured-v1",
+        fitness_function=FITNESS,
         model="claude-sonnet-5-5",
         client=_mock_client(output),
     )
@@ -223,7 +225,7 @@ def test_structured_input_field_type_is_validated():
             evaluation_suite_id="bad",
             evaluation_cases={"bad": {"item": {"weight": "heavy"}}},
             resource_limits=_limits(),
-            evaluator_version="v1",
+            fitness_function=FITNESS,
             model="claude-sonnet-5-5",
             client=_mock_client(output),
         )
@@ -247,7 +249,7 @@ def test_supporting_code_is_parsed_but_not_executed_during_preparation():
         evaluation_suite_id="safe-parse",
         evaluation_cases={"case": {"item": {"weight": 1}}},
         resource_limits=_limits(),
-        evaluator_version="v1",
+        fitness_function=FITNESS,
         model="claude-sonnet-5-5",
         client=_mock_client(output),
     )
@@ -280,5 +282,5 @@ def test_direct_contract_validates_metrics_resources_and_interface():
             ),
             optimisation_goal=GOAL,
             resource_limits=_limits(),
-            evaluator_version="v1",
+            fitness_function=FITNESS,
         )

@@ -16,7 +16,7 @@ from the_pigeon_holes.evolution.models import (
     TokenUsage,
 )
 from the_pigeon_holes.evolution.prompting import render_generation_prompt
-from the_pigeon_holes.judging.autocorrelation_problem import autocorrelation_contract
+from the_pigeon_holes.problems.autocorrelation import autocorrelation_contract
 from the_pigeon_holes.llm.critic import AnthropicCritic, CriticConfig, _parse
 
 

@@ -1,6 +1,7 @@
 """Exercise production orchestration with injected ports, without running candidate code."""
 import asyncio
 import hashlib
+from contextlib import nullcontext
 import pytest
 from the_pigeon_holes.evolution.models import EvolutionLimits, CandidateEvaluation
 from the_pigeon_holes.ui.bridge import LabRun
@@ -78,9 +79,14 @@ def test_restart_marks_active_attempts_interrupted(tmp_path):
 
 
 def test_preparation_rejects_unbound_or_unreviewed_lean(monkeypatch):
+    from the_pigeon_holes.ui import preparation
+    async def inline(function, *args, **kwargs):
+        return function(*args, **kwargs)
+    monkeypatch.setattr(preparation.asyncio, 'to_thread', inline)
     contract = demo_contract()
     body = ContractInput(formalization_id='f', seed_program=contract.seed_program,
-        evaluation_suite_id='test', evaluation_cases={'one': {}}, evaluator_version='test')
+        evaluation_suite_id='test', evaluation_cases={'one': {}},
+        fitness_function_id='pigou-demo', fitness_function_version='analytic-v1')
     result = {'lean_checked': True, 'lean': contract.lean_specification, 'status': 'review'}
     artifact = {'input': {'problem': 'test'}, 'result': result}
     async def scenario():
@@ -97,7 +103,16 @@ def test_preparation_rejects_unbound_or_unreviewed_lean(monkeypatch):
             seen.append(kwargs)
             return contract
         body.alignment_reviewed = True
-        assert await prepare_contract(body, artifact, builder=builder) == contract
+        class Registry:
+            def find(self, identity, version):
+                return type('Fitness', (), {
+                    'reference': contract.fitness_function,
+                    'validate_contract': lambda self, prepared: None,
+                })()
+        assert await prepare_contract(
+            body, artifact, builder=builder, registry=Registry(),
+            client_factory=lambda: nullcontext(object()),
+        ) == contract
         assert seen[0]['lean_specification'] == result['lean']
     asyncio.run(scenario())
 
@@ -166,7 +181,8 @@ def test_api_custom_contract_to_completed_run_and_replay(tmp_path, monkeypatch):
     with TestClient(api.app) as client:
         prepared = client.post('/api/contracts', json={'formalization_id': 'checked',
             'seed_program': demo_contract().seed_program, 'evaluation_suite_id': 'test',
-            'evaluation_cases': {'case': {}}, 'evaluator_version': 'test'})
+            'evaluation_cases': {'case': {}}, 'fitness_function_id': 'pigou-demo',
+            'fitness_function_version': 'analytic-v1'})
         assert prepared.status_code == 201
         response = client.post('/api/runs', json={'mode': 'custom',
             'contract_id': prepared.json()['id'], 'max_tokens': 8192})

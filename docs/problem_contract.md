@@ -9,7 +9,8 @@ Code lives in:
 - `src/the_pigeon_holes/models/problem_contract.py` for preparation and models;
 - `src/the_pigeon_holes/execution/signature_extractor.py` for extraction;
 - `src/the_pigeon_holes/execution/interface_validation.py` for safe structural
-  validation; and
+  validation;
+- `src/the_pigeon_holes/fitness/` for trusted fitness contracts and registry; and
 - `src/the_pigeon_holes/llm/prompts.py` for the generation-facing interface.
 
 ## Model
@@ -29,8 +30,12 @@ class ProblemContract:
     evaluation_suite: EvaluationSuite
     optimisation_goal: OptimisationGoal
     resource_limits: ResourceLimits
-    evaluator_version: str
+    fitness_function: FitnessFunctionRef
 ```
+
+`FitnessFunctionRef` contains the registered function ID, semantic version, and
+SHA-256 digest of its implementation. A changed implementation therefore cannot
+silently reuse scores from an earlier run.
 
 `InterfaceDefinition` preserves:
 
@@ -60,7 +65,7 @@ build_problem_contract(
     evaluation_suite_id=...,
     evaluation_cases={"case-id": {"parameter": value}},
     resource_limits=...,
-    evaluator_version=...,
+    fitness_function=...,
     model=...,
     client=...,
 )
@@ -77,7 +82,9 @@ Preparation performs these checks before returning:
 6. Validate nested structured fields by parsing supporting class definitions.
 7. Validate nonempty, unique metric names, directions, and aggregation.
 8. Validate positive, coherent case/candidate resource limits.
-9. Recursively freeze the accepted suite data.
+9. Require the referenced fitness function to be registered and compatible with
+   the interface, suite, metrics, directions, and aggregation.
+10. Recursively freeze the accepted suite data.
 
 The safe validator supports extractor-produced primitives, lists, tuples,
 dictionaries, `T | None`, and nested named structured types. Unknown type
@@ -88,10 +95,11 @@ syntax fails preparation instead of being guessed or evaluated.
 The generation prompt contains the general natural-language and Lean context,
 supporting type definitions, exact signature, objective, and evolutionary
 evidence. It deliberately excludes suite IDs, case values, expected answers,
-and evaluator internals.
+and fitness-function internals.
 
 The evaluator port receives the complete contract, including cases and
-resource limits. Supporting definitions remain untrusted generated code:
+resource limits. It resolves the fitness reference through the operator-owned
+registry; request bodies cannot name Python modules. Supporting definitions remain untrusted generated code:
 parsing them for a schema is not authorization to execute them in the API
 process. The production evaluator may load them only inside its protected
 execution environment.
@@ -109,8 +117,9 @@ does not establish that:
 
 Lean checking belongs to the persisted formalization artifact. Custom preparation
 requires matching source-hash and checker provenance, stored beside the frozen
-contract. Behavioral checking belongs to the versioned sandbox evaluator, and
-custom runs reject an invalid seed before generating candidates.
+contract. Behavioral checking belongs to the registered deterministic fitness
+function, while the generic evaluator owns sandbox execution and aggregation.
+Custom runs reject an invalid seed before generating candidates.
 
 ## Tests
 

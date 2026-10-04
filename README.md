@@ -2,8 +2,9 @@
 
 Algorithm autoresearch framework based on [the agreed design](context/agents.md).
 The AntiAI UI supports hosted Lean generation, checking/repair and fidelity review,
-plus custom evolution through the built-in autocorrelation Docker evaluator and
-a separate routing demo. Start with the [UI setup](frontend/README.md);
+plus custom evolution through the generic Docker evaluator and registered
+autocorrelation fitness function, alongside a separate routing demo. Start with
+the [UI setup](frontend/README.md);
 see [integration status](docs/ui-integration-status.md) for remaining gaps.
 
 The Lea CLI path below supports 0/1 knapsack specification validation.
@@ -82,7 +83,8 @@ src/the_pigeon_holes/
     models/                   Shared records
     evolution/                Idea generation and selection
     execution/                Candidate implementation and execution
-    judging/                  Validity and objective scoring
+    fitness/                  Trusted validity and objective scoring
+    problems/                 Built-in problem contracts
     archive/                  Elites, evidence and lineage
     pipeline/                 Research loop and budgets
     llm/                      Shared model integration
@@ -144,11 +146,12 @@ LEAN_TEST_LAKE=lake PYTHONPATH=src:. uv run python -m unittest discover -v
 ```
 
 
-## Autocorrelation evaluator
+## Autocorrelation fitness function
 
-The merged evaluator executes candidates in Docker and scores their integer
-outputs with an exact rational judge. It supports `solve(n: int) -> list[int]`,
-mean `c1` minimization and evaluator version `autocorrelation-exact-v1`.
+The generic evaluator executes candidates in Docker and passes their outputs to
+the registered, content-addressed autocorrelation fitness function. It uses exact
+rational scoring and supports `solve(n: int) -> list[int]` with mean `c1`
+minimization. Its identity is `autocorrelation` version `exact-v1`.
 
 ```sh
 docker build -t the-pigeon-holes/candidate-worker:v1 docker/worker

@@ -13,13 +13,13 @@ Preserve the original pipeline. Focus the novel contribution on diversified, eli
 3. **Evolutionary idea generation:** select elite parents or explore new directions; mutate or combine ideas; check novelty and maintain diverse approaches.
 4. **Python implementation:** implement and execute a candidate algorithm.
 5. **Candidate object:** produce the constructed or optimized solution.
-6. **Judging:** use a deterministic judge for validity and objective score, and an LLM judge to assess the idea and outcome. LLM judgment must not override failed executable validity checks.
+6. **Fitness and critique:** use a required trusted deterministic fitness function for validity and objective scores. An optional LLM critic may assess the idea and outcome, but cannot override executable validity checks or measured scores.
 7. **Solution and elite archive:** retain verified winners across diverse niches and select them as parents for further experiments.
 8. **Feedback and stopping:** return rejected attempts and experimental feedback to idea generation; return the best valid solution when time or cost limits are reached.
 
 ## Problem contract
 
-The `ProblemContract` is the frozen hand-off from Lean formalization (step 2) to the evolutionary loop (steps 3–5). It binds the general Lean statement to an immutable evaluation suite and holds the complete versioned Python interface, a seed program, the optimisation goal (primary metric, aggregation, tie-breakers), per-evaluation resource limits, and the evaluator version.
+The `ProblemContract` is the frozen hand-off from Lean formalization (step 2) to the evolutionary loop (steps 3–5). It binds the general Lean statement to an immutable evaluation suite and holds the complete versioned Python interface, a seed program, the optimisation goal (primary metric, aggregation, tie-breakers), per-evaluation resource limits, and a content-addressed reference to a required registered fitness function.
 
 - The Lean statement and `solve` signature are general. The evaluator maps a candidate over the suite and aggregates metrics; generation prompts never contain case values.
 - The contract builder preserves supporting types, validates the exact seed signature and every case value, and recursively freezes accepted suite data.
@@ -41,7 +41,7 @@ separate idea-to-code translation stage.
 - Preserve strong candidates across behavioral niches rather than only one global winner.
 - Diversity should reflect mechanisms or observed performance, not merely different wording.
 - Candidate records should retain hypotheses, parent IDs, code versions, validity, scores, costs, and experimental evidence, including failures.
-- Keep the specification and evaluator fixed during a run; periodic changes to the Lean specification are not an agreed requirement. The problem contract enforces this by being frozen.
+- Keep the specification, suite, optimization goal, and fitness function fixed during a run; periodic changes to the Lean specification are not an agreed requirement. The problem contract enforces this by being frozen.
 - Aim to retain reusable algorithms, not just a good object for one evaluation case.
 
 ## Diagrams

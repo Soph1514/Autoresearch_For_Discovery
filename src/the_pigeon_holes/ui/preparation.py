@@ -1,9 +1,9 @@
 """Bind a server-recorded Lean check to an immutable custom research contract."""
 import asyncio
 import hashlib
-import importlib
 import os
 from pydantic import BaseModel, Field
+from the_pigeon_holes.fitness.registry import configured_registry
 from the_pigeon_holes.models.problem_contract import ResourceLimits, build_problem_contract
 
 
@@ -12,7 +12,8 @@ class ContractInput(BaseModel):
     seed_program: str = Field(min_length=1, max_length=64000)
     evaluation_suite_id: str = Field(min_length=1, max_length=200)
     evaluation_cases: dict[str, dict] = Field(min_length=1, max_length=1000)
-    evaluator_version: str = Field(min_length=1, max_length=200)
+    fitness_function_id: str = Field(min_length=1, max_length=200)
+    fitness_function_version: str = Field(min_length=1, max_length=200)
     alignment_reviewed: bool = False
     case_time_seconds: float = Field(default=5, gt=0, le=300, allow_inf_nan=False)
     candidate_time_seconds: float = Field(default=60, gt=0, le=3600, allow_inf_nan=False)
@@ -21,20 +22,16 @@ class ContractInput(BaseModel):
 
 
 def make_evaluator(contract):
-    """Only the operator's environment may name executable adapter code."""
-    target = os.environ.get('RESEARCH_EVALUATOR_FACTORY')
-    if target:
-        module, name = target.split(':', 1)
-        factory = getattr(importlib.import_module(module), name)
-    else:
-        from the_pigeon_holes.evaluation.production import create_evaluator as factory
-    evaluator = factory(contract)
+    """Build generic sandbox execution around the contract's trusted fitness function."""
+    from the_pigeon_holes.evaluation.production import create_evaluator
+    evaluator = create_evaluator(contract)
     if not callable(getattr(evaluator, 'evaluate', None)):
         raise ValueError('Evaluator factory must return an async CandidateEvaluator.')
     return evaluator
 
 
-async def prepare_contract(body, artifact, *, builder=build_problem_contract):
+async def prepare_contract(body, artifact, *, builder=build_problem_contract, registry=None,
+                           client_factory=None):
     if artifact is None:
         raise ValueError('Formalization not found. Submit and check the problem first.')
     result = artifact['result']
@@ -51,12 +48,20 @@ async def prepare_contract(body, artifact, *, builder=build_problem_contract):
     if not model:
         raise RuntimeError('Configure RESEARCH_MODEL for interface extraction and candidate generation.')
     limits = ResourceLimits(body.case_time_seconds, body.candidate_time_seconds, body.memory_mb, body.max_iterations)
-    import anthropic
+    active_registry = registry or configured_registry()
+    fitness_function = active_registry.find(
+        body.fitness_function_id, body.fitness_function_version
+    )
+    if client_factory is None:
+        import anthropic
+        client_factory = lambda: anthropic.Anthropic(timeout=90, max_retries=0)
     # The synchronous extractor has its own bounded HTTP request; no implicit retries.
     def build():
-        with anthropic.Anthropic(timeout=90, max_retries=0) as client:
-            return builder(natural_language_spec=artifact['input']['problem'], lean_specification=result['lean'],
+        with client_factory() as client:
+            contract = builder(natural_language_spec=artifact['input']['problem'], lean_specification=result['lean'],
                 seed_program=body.seed_program, evaluation_suite_id=body.evaluation_suite_id,
                 evaluation_cases=body.evaluation_cases, resource_limits=limits,
-                evaluator_version=body.evaluator_version, model=model, client=client)
+                fitness_function=fitness_function.reference, model=model, client=client)
+            fitness_function.validate_contract(contract)
+            return contract
     return await asyncio.to_thread(build)

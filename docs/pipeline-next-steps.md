@@ -7,9 +7,10 @@ and evaluator branch `origin/eo_loop` at `36fadc0`.
 
 - Lean generation/checking/repair, fidelity review, server-recorded check provenance,
   immutable contract preparation, and both custom-run UI entry points.
-- Built-in `autocorrelation-exact-v1` evaluator: Docker execution, exact host-side
-  scoring, contract admission, per-case and suite timeouts, memory limits, bounded
-  output, and cancellation that removes the candidate container.
+- Generic `sandbox-fitness-v1` evaluator plus the built-in `autocorrelation`
+  `exact-v1` fitness function: Docker execution, exact host-side scoring, contract
+  admission, per-case and suite timeouts, memory limits, bounded output, and
+  cancellation that removes the candidate container.
 - Real generator/evaluator orchestration, seed validation, island pools and
   tournament parent selection, ordered UI events, and evidence downloads.
 - Optional advisory critic in the CLI. Generator and critic share token admission;
@@ -41,8 +42,9 @@ lineage, rejected attempts and held-out checks are exported. See
 
 ## Follow-up limitations to resolve or disclose
 
-- The evaluator supports only the autocorrelation family, not arbitrary uploaded
-  problems. Other families need their own trusted versioned judges and adapters.
+- The built-in registry contains only the autocorrelation fitness function, not
+  arbitrary uploaded problems. Other families need their own trusted, versioned,
+  content-addressed fitness functions.
 - `ResourceLimits.max_iterations` is not independently enforced by this worker.
   Wall-clock and memory limits are enforced; do not claim an instruction/iteration cap.
 - Exact rational scores become floats at the evolution interface. The CLI rechecks
@@ -61,18 +63,20 @@ lineage, rejected attempts and held-out checks are exported. See
 docker build -t the-pigeon-holes/candidate-worker:v1 docker/worker
 ```
 
-The built-in factory is `the_pigeon_holes.evaluation.production:create_evaluator`;
-no `RESEARCH_EVALUATOR_FACTORY` setting is needed for autocorrelation. It rejects
-unsupported evaluator versions, interfaces, metrics, aggregation and case sizes.
-Docker must be reachable and the image available. Each evaluator resolves the
+The built-in factory is `the_pigeon_holes.evaluation.production:create_evaluator`.
+It resolves the contract's required fitness reference through the trusted registry
+and rejects unknown versions, changed implementation digests, incompatible
+interfaces, metrics, aggregation, and case sizes. Docker must be reachable and
+the image available. Each evaluator resolves the
 worker tag to an immutable local image ID, which is saved in run evidence.
 
-For another family, set `RESEARCH_EVALUATOR_FACTORY=your_module:create_evaluator`.
-The synchronous trusted factory receives a frozen `ProblemContract` and returns
-an object implementing `async evaluate(candidates, problem)`. Client requests
-cannot choose Python modules. The adapter must return one `CandidateEvaluation`
-per candidate and honor cancellation and contract limits; invalid seeds stop
-before generation. Never substitute the routing demo for an unavailable evaluator.
+For another family, install an operator-owned package and set
+`RESEARCH_FITNESS_REGISTRY=your_module:create_registry`. The factory returns a
+`FitnessFunctionRegistry`; API clients select a registered ID and version but
+cannot choose Python modules or upload scoring code. The generic evaluator owns
+sandboxing, concurrency, cancellation, limits, aggregation, and conversion to
+`CandidateEvaluation`. Invalid seeds stop before generation. Never substitute
+the routing demo for an unavailable fitness function or evaluator.
 
 ## Reproducible checks
 

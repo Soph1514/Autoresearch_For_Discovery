@@ -135,7 +135,7 @@ function Inspector({
         <p>{a.approachSummary}</p><p>{a.noveltyNote}</p>
         <p>Promise: {a.promiseRating}/5 · {a.model}</p>
         {a.riskFlags.length > 0 && <p>Risks: {a.riskFlags.join("; ")}</p>}
-        <p className="muted">Advisory only; validity and scores come from the evaluator.</p>
+        <p className="muted">Advisory only; validity and scores come from the deterministic fitness function.</p>
       </section>)}
       <h3>Experiment attempts</h3>
       {snapshot.experiments
@@ -152,7 +152,7 @@ function Inspector({
                 {e.valid === null
                   ? "Pending"
                   : e.valid
-                    ? "Passed evaluator"
+                    ? "Passed fitness function"
                     : "Failed"}
               </strong>
             </div>

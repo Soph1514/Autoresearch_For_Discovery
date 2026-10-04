@@ -4,7 +4,7 @@ Usage:
     ANTHROPIC_API_KEY=... uv run python scripts/run_autocorrelation.py --seed 0
 
 Every attempt, including rejected ones, is appended to runs/<run-id>/attempts.jsonl.
-The final result is re-checked with the exact judge in runs/<run-id>/summary.json.
+The final result is re-checked with the exact fitness function in runs/<run-id>/summary.json.
 """
 
 from __future__ import annotations
@@ -22,16 +22,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from the_pigeon_holes.evaluation.production import AutocorrelationEvaluator  # noqa: E402
+from the_pigeon_holes.evaluation.production import SandboxCandidateEvaluator  # noqa: E402
 from the_pigeon_holes.evolution.loop import EvolutionLoop  # noqa: E402
 from the_pigeon_holes.evolution.models import EvolutionConfig, EvolutionLimits  # noqa: E402
 from the_pigeon_holes.execution.container_runner import ContainerLimits, run_candidate_async  # noqa: E402
-from the_pigeon_holes.judging.autocorrelation import (  # noqa: E402
-    JUDGE_VERSION,
+from the_pigeon_holes.fitness.autocorrelation import (  # noqa: E402
+    AutocorrelationFitnessFunction,
+    FITNESS_FUNCTION_VERSION,
     PUBLISHED_UPPER_BOUND,
     c1,
 )
-from the_pigeon_holes.judging.autocorrelation_problem import autocorrelation_contract  # noqa: E402
+from the_pigeon_holes.problems.autocorrelation import autocorrelation_contract  # noqa: E402
 from the_pigeon_holes.llm.budget import ProviderTokenBudget  # noqa: E402
 from the_pigeon_holes.llm.critic import AnthropicCritic, CriticConfig  # noqa: E402
 from the_pigeon_holes.llm.program_generator import (  # noqa: E402
@@ -109,7 +110,9 @@ async def main() -> int:
     run_dir = ROOT / "runs" / run_id
     contract = autocorrelation_contract(args.n, memory_mb=args.memory_mb)
     limits = ContainerLimits(memory_mb=args.memory_mb, timeout_seconds=contract.resource_limits.case_time_seconds)
-    evaluator = AutocorrelationEvaluator(limits, max_workers=4)
+    evaluator = SandboxCandidateEvaluator(
+        AutocorrelationFitnessFunction(), limits, max_workers=4
+    )
     provider_budget = ProviderTokenBudget(args.max_tokens)
     generator = AnthropicProgramGenerator(AnthropicGeneratorConfig(model=args.model, max_concurrency=4, max_attempts=1), budget=provider_budget)
     critic = AnthropicCritic(CriticConfig(model=args.model), budget=provider_budget)
@@ -142,7 +145,7 @@ async def main() -> int:
     summary = {
         "run_id": run_id,
         "seed": args.seed,
-        "judge_version": JUDGE_VERSION,
+        "fitness_function_version": FITNESS_FUNCTION_VERSION,
         "generator_model": args.model,
         "critic_model": args.model,
         "critic_prompt_version": "critic-v1",

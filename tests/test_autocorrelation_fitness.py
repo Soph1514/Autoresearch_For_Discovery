@@ -1,4 +1,4 @@
-"""Tests for the exact first autocorrelation judge.
+"""Tests for the exact first autocorrelation fitness function.
 
 The float reference below follows the verifier in google-deepmind/alphaevolve_results
 and the OpenEvolve examples (examples/alphaevolve_math_problems/first_autocorr_ineq),
@@ -11,8 +11,9 @@ from fractions import Fraction
 
 import pytest
 
-from the_pigeon_holes.judging.autocorrelation import (
-    JUDGE_VERSION,
+from the_pigeon_holes.fitness.autocorrelation import (
+    FITNESS_FUNCTION_ID,
+    FITNESS_FUNCTION_VERSION,
     SCALE,
     InvalidOutput,
     autoconvolution_peaks,
@@ -77,7 +78,7 @@ def test_exact_value_for_small_hand_case():
         [],
         [0, 0, 0],  # zero integral
         [1, -1, 2],  # negative
-        [1.0, 2, 3],  # float rejected: judge sees integers only
+        [1.0, 2, 3],  # float rejected: fitness sees integers only
         [1, True, 2],  # bool is not an integer output
         "1234",
         None,
@@ -148,7 +149,7 @@ def test_exact_value_agrees_with_float_reference():
 
 
 def test_planted_factor_bug_is_detected_by_known_answer():
-    # A judge that forgets the 2n factor reports 1/10 for constant f, not 2.
+    # A fitness function that forgets the 2n factor reports 1/10, not 2.
     values = [SCALE] * 10
     buggy = Fraction(max_autoconvolution(values), sum(values) ** 2)
     assert buggy != c1(values)
@@ -163,8 +164,9 @@ def test_repeated_calls_are_identical():
     assert c1(values) == c1(values)
 
 
-def test_version_is_pinned():
-    assert JUDGE_VERSION == "autocorrelation-exact-v1"
+def test_identity_and_version_are_pinned():
+    assert FITNESS_FUNCTION_ID == "autocorrelation"
+    assert FITNESS_FUNCTION_VERSION == "exact-v1"
 
 
 def test_descriptors_are_deterministic_and_bounded():

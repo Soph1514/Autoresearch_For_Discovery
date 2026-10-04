@@ -15,6 +15,7 @@ from the_pigeon_holes.evolution.novelty import source_fingerprint
 from the_pigeon_holes.models.problem_contract import (
     EvaluationCase,
     EvaluationSuite,
+    FitnessFunctionRef,
     InterfaceDefinition,
     MetricGoal,
     OptimisationGoal,
@@ -40,7 +41,7 @@ CONTRACT = ProblemContract(
     ),
     optimisation_goal=GOAL,
     resource_limits=ResourceLimits(1.0, 5.0, 128, 100),
-    evaluator_version="test-v1",
+    fitness_function=FitnessFunctionRef("test", "v1", "0" * 64),
 )
 
 

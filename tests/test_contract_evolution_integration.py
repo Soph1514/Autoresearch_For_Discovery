@@ -12,7 +12,9 @@ from the_pigeon_holes.evolution import (
     StopReason,
 )
 from the_pigeon_holes.llm import AnthropicGeneratorConfig, AnthropicProgramGenerator
-from the_pigeon_holes.models.problem_contract import ResourceLimits, build_problem_contract
+from the_pigeon_holes.models.problem_contract import (
+    FitnessFunctionRef, ResourceLimits, build_problem_contract,
+)
 
 
 def _extractor_client():
@@ -51,7 +53,7 @@ def test_structured_contract_reaches_generation_and_evaluation_ports():
             "case-b": {"items": [{"weight": 5, "label": "b"}]},
         },
         resource_limits=ResourceLimits(1.0, 5.0, 128, 100),
-        evaluator_version="structured-evaluator-v1",
+        fitness_function=FitnessFunctionRef("test", "v1", "0" * 64),
         model="test-model",
         client=_extractor_client(),
     )

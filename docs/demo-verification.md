@@ -1,7 +1,7 @@
 # Sidon-set demo verification — 4 October 2026
 
 The demo runs the actual hosted preparation → extracted contract → Anthropic evolution
-→ Docker execution → exact rational judging → advisory critic → durable lineage path.
+→ Docker execution → exact rational fitness → advisory critic → durable lineage path.
 This is numerical witness search, not a proof of the optimal constant.
 
 ## Open locally
@@ -36,7 +36,7 @@ integrals and a supremum, plus the finite feasibility and rational c1 objective.
 It does not prove the step-function reduction, Python correctness or optimality.
 For equally spaced step functions the convolution is piecewise linear; its knot
 values are the discrete convolution times the cell width. Consequently the exact
-ratio is `2*n*max(convolve(q,q))/sum(q)^2`. The host judge uses integers/Fraction.
+ratio is `2*n*max(convolve(q,q))/sum(q)^2`. The host fitness function uses integers/Fraction.
 
 ## Initial run
 

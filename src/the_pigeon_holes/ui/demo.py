@@ -5,9 +5,10 @@ LLM generator, sandbox, or Lean verifier.
 """
 import ast
 import asyncio
+import hashlib
 from the_pigeon_holes.models.problem_contract import (
     EvaluationCase, EvaluationSuite, InterfaceDefinition, MetricGoal,
-    OptimisationGoal, ProblemContract, ResourceLimits,
+    OptimisationGoal, ProblemContract, ResourceLimits, FitnessFunctionRef,
 )
 from the_pigeon_holes.evolution.models import (
     CandidateDraft, GenerationResult, TokenUsage, CandidateEvaluation,
@@ -27,7 +28,10 @@ def demo_contract():
         ),
         optimisation_goal=OptimisationGoal(MetricGoal("poa", "maximize"), "mean"),
         resource_limits=ResourceLimits(2, 10, 128, 20),
-        evaluator_version="pigou-analytic-demo-v1",
+        fitness_function=FitnessFunctionRef(
+            "pigou-demo", "analytic-v1",
+            hashlib.sha256(b"pigou-demo:analytic-v1").hexdigest(),
+        ),
     )
 
 

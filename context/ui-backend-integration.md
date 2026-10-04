@@ -11,7 +11,8 @@ The [API/event contract](../docs/api-events.md) defines the evolution wire forma
   metrics and elite selection. Render supplied evidence rather than inferring it.
 - Preparation uses attachment extraction and streamed formalization endpoints.
   Evolution uses custom or explicit demo run creation, snapshots, ordered SSE and
-  controls. The built-in Docker evaluator supports autocorrelation. The full hosted
+  controls. The generic Docker evaluator resolves the required autocorrelation
+  fitness function from the trusted registry. The full hosted
   Lean-to-evolution path still needs live verification; numerical benchmark runs
   using the CLI placeholder must not be labelled Lean-checked.
 - Preserve failed and inactive candidates, distinguish missing metrics from zero,

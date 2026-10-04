@@ -69,7 +69,18 @@ class LabRun:
         self.outcome = None
         self.evidence = {'candidates': {}, 'evaluations': {}, 'generation_failures': {}}
         self.generation_config = getattr(generator, 'config', None)
-        self.evaluator_config = {'image': getattr(evaluator, 'image', None), 'limits': getattr(evaluator, 'limits', None)}
+        fitness = getattr(evaluator, 'fitness_function', None)
+        reference = getattr(fitness, 'reference', None)
+        self.evaluator_config = {
+            'version': getattr(evaluator, 'version', None),
+            'image': getattr(evaluator, 'image', None),
+            'limits': getattr(evaluator, 'limits', None),
+            'fitness_function': ({
+                'id': reference.id,
+                'version': reference.version,
+                'implementation_sha256': reference.implementation_sha256,
+            } if reference is not None else None),
+        }
         self.wake = asyncio.Event()
         self.gate = asyncio.Event()
         self.gate.set()
@@ -81,7 +92,7 @@ class LabRun:
             "status": "running", "startedAt": now(), "metricName": "poa", "direction": "maximize",
             "backend": "python-demo", "contract": {
                 "evaluationSuiteId": "pigou-unit-demand",
-                "evaluatorVersion": "pigou-analytic-demo-v1",
+                "fitnessFunction": {"id": "pigou-demo", "version": "analytic-v1"},
                 "signature": "def solve() -> float:", "formalVerification": "Not performed",
                 "maxTokens": 160, "maxTimeSeconds": 60,
             }}, "ideas": [], "experiments": [], "elites": [], "logs": [], "assessments": [],
@@ -92,7 +103,11 @@ class LabRun:
                 backend='python', metricName=contract.optimisation_goal.primary.name,
                 direction=contract.optimisation_goal.primary.direction,
                 contract={'evaluationSuiteId': contract.evaluation_suite.id,
-                    'evaluatorVersion': contract.evaluator_version, 'signature': contract.solve_signature,
+                    'fitnessFunction': {
+                        'id': contract.fitness_function.id,
+                        'version': contract.fitness_function.version,
+                        'implementationSha256': contract.fitness_function.implementation_sha256,
+                    }, 'signature': contract.solve_signature,
                     'formalVerification': ('Lean specification checked; Python validity evaluated per candidate'
                         if provenance and provenance.get('check_artifact') else 'Not performed; numerical evaluation only'),
                     'maxTokens': self.limits.max_tokens, 'maxTimeSeconds': self.limits.max_time_seconds})

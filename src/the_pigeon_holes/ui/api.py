@@ -243,16 +243,27 @@ def paper_theme():
 @app.get('/api/capabilities')
 def capabilities():
     ready, error = True, None
-    if not os.environ.get('RESEARCH_EVALUATOR_FACTORY'):
-        from the_pigeon_holes.execution.container_runner import preflight
-        try:
-            preflight()
-        except RuntimeError as failure:
-            ready, error = False, str(failure)
+    from the_pigeon_holes.execution.container_runner import preflight
+    from the_pigeon_holes.fitness.registry import configured_registry
+    try:
+        preflight()
+    except RuntimeError as failure:
+        ready, error = False, str(failure)
+    try:
+        references = configured_registry().references()
+        fitness_functions = [
+            {'id': reference.id, 'version': reference.version,
+             'implementation_sha256': reference.implementation_sha256}
+            for reference in references
+        ]
+    except (RuntimeError, ImportError, AttributeError, TypeError, ValueError) as failure:
+        fitness_functions = []
+        ready, error = False, str(failure)
     return {'custom_evaluator_configured': True,
             'evaluator_ready': ready, 'evaluator_error': error,
             'model_configured': bool(os.environ.get('RESEARCH_MODEL')), 'persistent_history': True,
-            'builtin_evaluator': 'autocorrelation-exact-v1'}
+            'evaluator_version': 'sandbox-fitness-v1',
+            'fitness_functions': fitness_functions}
 
 
 @app.get('/api/runs')
@@ -287,6 +298,9 @@ async def create_contract(body: ContractInput):
     return {'id': identity, 'signature': contract.solve_signature,
         'metric': contract.optimisation_goal.primary.name,
         'direction': contract.optimisation_goal.primary.direction,
+        'fitness_function': {'id': contract.fitness_function.id,
+            'version': contract.fitness_function.version,
+            'implementation_sha256': contract.fitness_function.implementation_sha256},
         'seed_status': 'structurally_valid; behavioral evaluation required at run start'}
 
 

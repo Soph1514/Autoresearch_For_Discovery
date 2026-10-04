@@ -2,11 +2,12 @@
 export function mountCustomResearch(host: HTMLElement, formalizationId: string) {
   const controller = new AbortController();
   host.innerHTML = `<h3>Prepare algorithm research</h3>
-    <p>Provide a baseline implementation and fixed evaluation cases. The built-in evaluator supports autocorrelation: solve(n: int) → list[int], minimizing mean c1.</p>
+    <p>Provide a baseline implementation and fixed evaluation cases. A registered fitness function is required. The built-in autocorrelation function supports solve(n: int) → list[int], minimizing mean c1.</p>
     <label class="field">Seed Python<textarea data-field="seed" rows="8" aria-label="Seed Python"></textarea></label>
     <label class="field">Evaluation suite ID<input data-field="suite" aria-label="Evaluation suite ID"></label>
     <label class="field">Case inputs (JSON object keyed by case ID)<textarea data-field="cases" rows="6" aria-label="Case inputs" placeholder='{"case-1": {"parameter": 1}}'></textarea></label>
-    <label class="field">Evaluator version<input data-field="evaluator" aria-label="Evaluator version" placeholder="autocorrelation-exact-v1"></label>
+    <label class="field">Fitness function ID<input data-field="fitness-id" aria-label="Fitness function ID" value="autocorrelation"></label>
+    <label class="field">Fitness function version<input data-field="fitness-version" aria-label="Fitness function version" value="exact-v1"></label>
     <label><input type="checkbox" data-field="reviewed"> I reviewed the Lean statement against my problem.</label>
     <p><button type="button" data-action="prepare">Prepare contract</button></p>
     <p data-status role="status"></p><button type="button" data-action="refresh">Check evaluator availability</button>
@@ -54,7 +55,9 @@ export function mountCustomResearch(host: HTMLElement, formalizationId: string) 
     try {
       const result = await request('/api/contracts', {formalization_id: formalizationId,
         seed_program: field('seed').value, evaluation_suite_id: field('suite').value,
-        evaluation_cases: JSON.parse(field('cases').value), evaluator_version: field('evaluator').value,
+        evaluation_cases: JSON.parse(field('cases').value),
+        fitness_function_id: field('fitness-id').value,
+        fitness_function_version: field('fitness-version').value,
         alignment_reviewed: (field('reviewed') as HTMLInputElement).checked});
       contractId = result.id;
       const capabilities = await request('/api/capabilities');

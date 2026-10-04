@@ -108,7 +108,8 @@ checker-provided `check_artifact`, when available. `POST /api/contracts` accepts
   "seed_program": "def solve() -> float:\n    return 1.0\n",
   "evaluation_suite_id": "your-fixed-suite-v1",
   "evaluation_cases": {"case-1": {}},
-  "evaluator_version": "your-evaluator-v1",
+  "fitness_function_id": "autocorrelation",
+  "fitness_function_version": "exact-v1",
   "alignment_reviewed": true
 }
 ```
@@ -121,12 +122,14 @@ The response contains the contract `id`, signature, metric and direction.
 
 `POST /api/runs` accepts `{"mode":"custom", "contract_id":"...",
 "max_tokens":32768, "max_time_seconds":300}` or `{"mode":"demo"}`.
-Custom runs default to the autocorrelation factory and fail closed when the
-contract is unsupported or Docker/the worker image is unavailable. Backend `python` denotes
+Custom runs resolve the contract's required fitness function and fail closed
+when it is unregistered, its digest changed, the contract is incompatible, or
+Docker/the worker image is unavailable. Backend `python` denotes
 a custom run; `python-demo` denotes the analytic routing demo.
 
 `GET /api/capabilities` reports configuration availability and Docker/image readiness for the built-in evaluator
-(`evaluator_ready`, `evaluator_error`). Override factories are checked at run start. `GET /api/runs` lists saved runs. `GET /api/runs/{id}/artifact` exports
+(`evaluator_ready`, `evaluator_error`) plus registered `fitness_functions`.
+Operator registries are checked during preparation and at run start. `GET /api/runs` lists saved runs. `GET /api/runs/{id}/artifact` exports
 contracts, provenance, generation configuration, evidence, events and available
 outcomes. Evaluation inputs use tagged scalar/list/tuple/mapping nodes to preserve
 Python types across storage. This export includes hidden suite data and generation

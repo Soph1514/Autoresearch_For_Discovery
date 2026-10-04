@@ -1,15 +1,14 @@
-"""Problem contract for the first autocorrelation inequality (stage 0 family)."""
+"""Problem contract for the first autocorrelation inequality."""
 
 from __future__ import annotations
 
 from the_pigeon_holes.execution.signature_extractor import MetricGoal, OptimisationGoal, Parameter
-from the_pigeon_holes.judging.autocorrelation import JUDGE_VERSION, SCALE_BITS
+from the_pigeon_holes.fitness.autocorrelation import (
+    AUTOCORRELATION_FITNESS_REF,
+    SCALE_BITS,
+)
 from the_pigeon_holes.models.problem_contract import (
-    EvaluationCase,
-    EvaluationSuite,
-    InterfaceDefinition,
-    ProblemContract,
-    ResourceLimits,
+    EvaluationCase, EvaluationSuite, InterfaceDefinition, ProblemContract, ResourceLimits,
 )
 
 PROBLEM_TEXT = (
@@ -28,32 +27,24 @@ SEED_SOURCE = (
 )
 
 LEAN_PLACEHOLDER = (
-    "-- Formal statement pending review. The Python judge is checked against the "
-    "natural-language statement and the property tests in tests/test_autocorrelation_judge.py."
+    "-- Formal statement pending review. The Python fitness function is checked against the "
+    "natural-language statement and its property tests."
 )
 
 
-def autocorrelation_contract(
-    n: int = 600,
-    *,
-    case_time_seconds: float = 10.0,
-    candidate_time_seconds: float = 20.0,
-    memory_mb: int = 256,
-) -> ProblemContract:
-    """Build the fixed-instance contract: one case that fixes the output length n."""
+def autocorrelation_contract(n: int = 600, *, case_time_seconds: float = 10.0,
+                             candidate_time_seconds: float = 20.0,
+                             memory_mb: int = 256) -> ProblemContract:
     return ProblemContract(
         natural_language_spec=PROBLEM_TEXT,
         lean_specification=LEAN_PLACEHOLDER,
         interface=InterfaceDefinition(
-            "python-interface-v1",
-            (Parameter("n", "int"),),
-            "list[int]",
+            "python-interface-v1", (Parameter("n", "int"),), "list[int]",
             "def solve(n: int) -> list[int]:",
         ),
         seed_program=SEED_SOURCE,
         evaluation_suite=EvaluationSuite(
-            f"autocorr-n{n}",
-            (EvaluationCase(f"n-{n}", {"n": n}),),
+            f"autocorr-n{n}", (EvaluationCase(f"n-{n}", {"n": n}),)
         ),
         optimisation_goal=OptimisationGoal(MetricGoal("c1", "minimize"), "mean"),
         resource_limits=ResourceLimits(
@@ -62,5 +53,5 @@ def autocorrelation_contract(
             memory_mb=memory_mb,
             max_iterations=1,
         ),
-        evaluator_version=JUDGE_VERSION,
+        fitness_function=AUTOCORRELATION_FITNESS_REF,
     )

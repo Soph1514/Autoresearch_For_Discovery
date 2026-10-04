@@ -8,11 +8,13 @@ import asyncio
 
 import pytest
 
-from the_pigeon_holes.evaluation.production import AutocorrelationEvaluator
+from the_pigeon_holes.evaluation.production import SandboxCandidateEvaluator
 from the_pigeon_holes.evolution.models import EvolutionOperator, ProgramCandidate
 from the_pigeon_holes.execution.container_runner import ContainerLimits, preflight
 from the_pigeon_holes.execution.signature_extractor import MetricGoal, OptimisationGoal, Parameter
-from the_pigeon_holes.judging.autocorrelation import JUDGE_VERSION
+from the_pigeon_holes.fitness.autocorrelation import (
+    AUTOCORRELATION_FITNESS_REF, AutocorrelationFitnessFunction,
+)
 from the_pigeon_holes.models.problem_contract import (
     EvaluationCase,
     EvaluationSuite,
@@ -36,7 +38,7 @@ def contract(n=64):
         evaluation_suite=EvaluationSuite("autocorr", (EvaluationCase(f"n-{n}", {"n": n}),)),
         optimisation_goal=OptimisationGoal(MetricGoal("c1", "minimize"), "mean"),
         resource_limits=ResourceLimits(5.0, 10.0, 128, 1),
-        evaluator_version=JUDGE_VERSION,
+        fitness_function=AUTOCORRELATION_FITNESS_REF,
     )
 
 
@@ -63,7 +65,10 @@ def evaluator():
         preflight()
     except RuntimeError as error:
         pytest.skip(str(error))
-    return AutocorrelationEvaluator(ContainerLimits(memory_mb=128, timeout_seconds=3))
+    return SandboxCandidateEvaluator(
+        AutocorrelationFitnessFunction(),
+        ContainerLimits(memory_mb=128, timeout_seconds=3),
+    )
 
 
 def run(evaluator, sources, problem=None):
@@ -76,8 +81,8 @@ def test_seed_is_valid_with_exact_constant_score(evaluator):
     assert result.valid
     assert result.metrics["c1"] == pytest.approx(2.0)
     record = evaluator.evidence['c0']
-    assert record['mean_c1_exact'] == {'numerator': '2', 'denominator': '1'}
-    assert record['cases']['n-64']['output'] == [2**40] * 64
+    assert record['aggregate_metrics_exact']['c1'] == {'numerator': '2', 'denominator': '1'}
+    assert record['cases']['n-64']['fitness_evidence']['output'] == [2**40] * 64
 
 
 def test_failures_map_to_stages(evaluator):
@@ -190,7 +195,8 @@ def test_case_concurrency_is_globally_bounded_and_candidate_order_is_stable(monk
 
     monkeypatch.setattr(production, 'run_candidate_async', fake_run)
     monkeypatch.setattr(production.asyncio, 'to_thread', inline_score)
-    local = AutocorrelationEvaluator(
+    local = SandboxCandidateEvaluator(
+        AutocorrelationFitnessFunction(),
         ContainerLimits(memory_mb=128, timeout_seconds=3),
         max_workers=2,
         check_daemon=False,
@@ -201,9 +207,9 @@ def test_case_concurrency_is_globally_bounded_and_candidate_order_is_stable(monk
     assert peak == 2
     for candidate_id in ('c0', 'c1'):
         evidence = local.evidence[candidate_id]
-        assert evidence['mean_c1_exact'] == {'numerator': '2', 'denominator': '1'}
+        assert evidence['aggregate_metrics_exact']['c1'] == {'numerator': '2', 'denominator': '1'}
         assert list(evidence['cases']) == ['n-62', 'n-63', 'n-64']
-        assert all(case['ok'] and 'c1_exact' in case
+        assert all(case['ok'] and 'c1_exact' in case['fitness_evidence']
                    for case in evidence['cases'].values())
 
 
@@ -239,6 +245,6 @@ def test_real_evolution_persists_a_known_improving_fixture(evaluator, tmp_path):
         artifact = store.get('run', run.id)
         assert artifact['outcome']['best_candidate']['source_code'] == source
         assert artifact['evaluator_config']['image'] == evaluator.image
-        assert artifact['evidence']['numerical'][artifact['outcome']['best_candidate']['id']]['cases']['n-64']['c1_exact']
+        assert artifact['evidence']['numerical'][artifact['outcome']['best_candidate']['id']]['cases']['n-64']['fitness_evidence']['c1_exact']
         assert 'Not performed' in artifact['snapshot']['run']['contract']['formalVerification']
     asyncio.run(scenario())

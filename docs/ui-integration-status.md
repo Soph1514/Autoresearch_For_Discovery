@@ -52,17 +52,18 @@ in `arin06`. Credentials stay on the backend. For a classifier in another worksp
 configure `FIDELITY_ENDPOINT`, `FIDELITY_TOKEN_ID` and `FIDELITY_TOKEN_SECRET` there.
 
 After Lean preparation, both composers offer seed Python, evaluation suite ID,
-case inputs, evaluator version, and an alignment-review acknowledgement. Contract
+case inputs, fitness-function ID/version, and an alignment-review acknowledgement. Contract
 preparation validates the interface and case shapes without executing generated
 Python. Its saved ID can be used to start custom evolution; the seed must pass the
 evaluator before candidate generation. The UI reports missing evaluator configuration.
 The engine labels custom runs separately and offers a run-evidence download.
 
 `RESEARCH_MODEL` selects the Anthropic model for extraction and generation.
-The default factory connects `autocorrelation-exact-v1`: `solve(n: int) -> list[int]`,
-mean `c1` minimization, with case sizes from 2 to 4096. Build the Docker worker
-before starting. `RESEARCH_EVALUATOR_FACTORY=module:factory` overrides this for
-another trusted adapter; see [setup and remaining work](pipeline-next-steps.md). The checker must be redeployed
+The built-in registry provides `autocorrelation` version `exact-v1`:
+`solve(n: int) -> list[int]`, mean `c1` minimization, with case sizes from 2 to
+4096. Build the Docker worker before starting.
+`RESEARCH_FITNESS_REGISTRY=module:create_registry` supplies another
+operator-trusted registry; see [setup and remaining work](pipeline-next-steps.md). The checker must be redeployed
 with its provenance response before preparing custom contracts.
 
 `RESEARCH_STORE` defaults to `runs/research.sqlite3`. Contracts, formalizations,
@@ -79,7 +80,7 @@ is a shared-password lab service, without per-user isolation or multi-worker sch
 
 The evaluator now enforces bounded stdout/stderr, case and candidate-suite deadlines,
 and memory limits. Stop removes its container before cancellation completes. Numerical
-scores are judged independently on the host. The benchmark CLI uses a Lean placeholder;
+scores are computed independently by the host fitness function. The benchmark CLI uses a Lean placeholder;
 it does not bypass the custom UI's provenance requirements. Iteration counts and
 interruption of host arithmetic threads remain limitations.
 

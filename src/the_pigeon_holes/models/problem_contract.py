@@ -25,6 +25,7 @@ from the_pigeon_holes.execution.signature_extractor import (
 __all__ = [
     "EvaluationCase",
     "EvaluationSuite",
+    "FitnessFunctionRef",
     "InterfaceDefinition",
     "MetricGoal",
     "OptimisationGoal",
@@ -201,6 +202,28 @@ class ResourceLimits:
 
 
 @dataclass(frozen=True)
+class FitnessFunctionRef:
+    """Content-addressed reference to trusted problem-specific scoring logic."""
+
+    id: str
+    version: str
+    implementation_sha256: str
+
+    def __post_init__(self) -> None:
+        for name in ("id", "version"):
+            value = getattr(self, name)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"fitness function {name} cannot be empty")
+        digest = self.implementation_sha256
+        if (
+            not isinstance(digest, str)
+            or len(digest) != 64
+            or any(character not in "0123456789abcdef" for character in digest)
+        ):
+            raise ValueError("fitness function implementation_sha256 must be lowercase SHA-256")
+
+
+@dataclass(frozen=True)
 class ProblemContract:
     natural_language_spec: str
     lean_specification: str
@@ -209,10 +232,10 @@ class ProblemContract:
     evaluation_suite: EvaluationSuite
     optimisation_goal: OptimisationGoal
     resource_limits: ResourceLimits
-    evaluator_version: str
+    fitness_function: FitnessFunctionRef
 
     def __post_init__(self) -> None:
-        for name in ("natural_language_spec", "lean_specification", "evaluator_version"):
+        for name in ("natural_language_spec", "lean_specification"):
             value = getattr(self, name)
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"{name} cannot be empty")
@@ -224,6 +247,8 @@ class ProblemContract:
             raise ValueError("optimisation_goal must be an OptimisationGoal")
         if not isinstance(self.resource_limits, ResourceLimits):
             raise ValueError("resource_limits must be ResourceLimits")
+        if not isinstance(self.fitness_function, FitnessFunctionRef):
+            raise ValueError("fitness_function must be a FitnessFunctionRef")
         _verify_contract_interface(self.interface, self.optimisation_goal)
         validate_seed_program(self.seed_program, self.interface.solve_signature)
         parameters = tuple(
@@ -275,7 +300,7 @@ def build_problem_contract(
     evaluation_suite_id: str,
     evaluation_cases: Mapping[str, Mapping[str, Any]],
     resource_limits: ResourceLimits,
-    evaluator_version: str,
+    fitness_function: FitnessFunctionRef,
     model: str,
     client=None,
 ) -> ProblemContract:
@@ -296,5 +321,5 @@ def build_problem_contract(
         ),
         optimisation_goal=extracted.optimisation_goal,
         resource_limits=resource_limits,
-        evaluator_version=evaluator_version,
+        fitness_function=fitness_function,
     )

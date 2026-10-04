@@ -1,4 +1,4 @@
-# Autocorrelation evaluator: implemented behavior and remaining work
+# Sandbox evaluator and autocorrelation fitness: implemented behavior
 
 Merged from `origin/eo_loop` (`36fadc0`) into the custom-research integration on
 2026-10-04. The authoritative remaining-work list is
@@ -6,12 +6,15 @@ Merged from `origin/eo_loop` (`36fadc0`) into the custom-research integration on
 
 ## Implemented
 
-- `judging/autocorrelation.py`: exact integer validation and rational `c1` scoring.
+- `fitness/autocorrelation.py`: exact integer validation and rational `c1` scoring.
   Candidates return nonnegative integers representing `q_i / 2**40`. Length must
   be between 2 and 4096; bools/floats, all-zero and tiny-integral outputs fail.
-  `JUDGE_VERSION` remains `autocorrelation-exact-v1`; reconciliation does not alter
-  the scoring formula or validity rules.
-- `evaluation/production.py`: default UI factory plus async `CandidateEvaluator`.
+  Its registered identity is `autocorrelation` version `exact-v1`, with a source
+  digest that changes when its implementation changes.
+- `fitness/registry.py`: server-controlled registry. Only registered functions
+  can be referenced by a new problem contract; API clients cannot supply code or
+  Python import paths.
+- `evaluation/production.py`: generic sandbox `CandidateEvaluator`.
   Contracts must use `solve(n: int) -> list[int]`, mean `c1` minimization, no
   tie-breakers/supporting definitions, and valid `n` cases. Unsupported contracts
   fail before execution. Valid output must pass every suite case.
@@ -22,7 +25,7 @@ Merged from `origin/eo_loop` (`36fadc0`) into the custom-research integration on
   Per-case and candidate-suite deadlines are enforced. Stop waits for container
   removal. A failed/timed-out cleanup is surfaced rather than silently ignored.
 - `docker/worker/worker.py`: candidate module loading and `solve` run only inside
-  the worker. Normal prints from both stages are discarded. No judge code or
+  the worker. Normal prints from both stages are discarded. No fitness code or
   other suite cases are passed to the worker.
 - `evolution/engine.py`: bounded per-island behavioral-cell pools, one best
   representative per cell, seeded tournaments for parent selection, and separately
@@ -51,7 +54,8 @@ and a summary under `runs/`, then reruns the best candidate for an exact-score
 check. A numerical result does not imply Lean verification: the CLI contract
 contains a clearly labelled Lean placeholder. The custom UI retains its genuine
 checked-artifact requirement. The built-in UI factory needs no environment override;
-other families can use `RESEARCH_EVALUATOR_FACTORY=module:factory`.
+other families can provide an operator-installed registry through
+`RESEARCH_FITNESS_REGISTRY=module:create_registry`.
 
 ## Verification during reconciliation
 
@@ -76,7 +80,7 @@ Run checks with `PYTHONPATH=src .venv/bin/python -m pytest -q` and, in `frontend
    and verify a live hosted-preparation-to-Docker run.
 2. Enforce or explicitly redesign `max_iterations`; this worker currently enforces
    time and memory but has no independent iteration counter.
-3. Address float-based near-tie ordering in the engine. The judge computes exact
+3. Address float-based near-tie ordering in the engine. The fitness function computes exact
    fractions, but `CandidateEvaluation.metrics` exposes floats.
 4. Bound/interrupt host arithmetic independently. Scoring runs in a host thread;
    cancelling its await cannot stop an arithmetic job already in progress.

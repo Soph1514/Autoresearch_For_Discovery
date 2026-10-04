@@ -8,7 +8,7 @@ import json
 import urllib.request
 from pathlib import Path
 from fractions import Fraction
-from the_pigeon_holes.judging.autocorrelation import c1
+from the_pigeon_holes.fitness.autocorrelation import c1
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('run_id')

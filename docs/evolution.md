@@ -17,11 +17,12 @@ Evolution decides where to search next, which prior programs to use, which
 failures are worth repairing, and which distinct results deserve preservation.
 It does not establish mathematical validity, calculate trusted objective
 metrics, sandbox generated code, or change the problem specification or
-evaluator.
+fitness function or evaluator.
 
 The sub-loop uses injected generator and evaluator protocols and in-memory search
-state. Production adapters now include Anthropic generation and a Docker-backed
-autocorrelation evaluator; the UI persists evidence and outcomes in SQLite.
+state. Production adapters now include Anthropic generation, a generic
+Docker-backed evaluator, and a registered autocorrelation fitness function; the
+UI persists evidence and outcomes in SQLite.
 
 ## Input
 
@@ -34,10 +35,10 @@ Evolution receives the immutable `ProblemContract`, containing:
 - an immutable evaluation suite hidden from generation prompts;
 - the `OptimisationGoal`;
 - per-case and per-candidate resource limits; and
-- the evaluator version.
+- a content-addressed reference to a required trusted fitness function.
 
 Lean expresses the formal intent. It does not by itself prove that generated
-Python implements that intent. The deterministic evaluator remains
+Python implements that intent. The deterministic fitness function remains
 authoritative unless a returned proof or certificate is checked by a trusted
 formal checker.
 
@@ -99,7 +100,7 @@ elites are preserved. The initial implementation supports spawning and
 dormancy but defers automatic merging until stronger behavioral descriptors
 exist.
 
-Behavioral descriptors are optional. When an evaluator supplies a stable
+Behavioral descriptors are optional. When a fitness function supplies a stable
 descriptor, evolution uses it for novelty and island spawning. When absent,
 novelty falls back to mechanism tags, source structure, lineage, and failure
 signatures. No universal normalization contract is imposed in the first
@@ -150,11 +151,12 @@ LLM novelty judgments, code embeddings, and learned descriptors are deferred.
 ## Evaluation and update
 
 Evolution performs cheap syntax, exact-signature, and duplicate checks. The
-injected evaluator is responsible for sandboxing, source safety, mathematical
-validity, objective metrics, partial results, resource limits, repairability,
-and any behavioral descriptor.
+injected evaluator is responsible for sandbox execution, resource limits,
+suite aggregation, and returning evaluations. It delegates problem-specific
+validity, objective metrics, exact evidence, and behavioral descriptors to the
+trusted fitness function referenced by the contract.
 
-The initial evaluator interface is intentionally opaque: it returns one trusted
+The evolution-facing evaluator interface is intentionally opaque: it returns one trusted
 evaluation per candidate. Smoke, discovery, confirmation, and holdout stages
 may be internal to that evaluator and will be exposed only after their shared
 contracts are designed.
@@ -220,11 +222,11 @@ certificate checking and staged confirmation remain future work.
 
 ## Non-negotiable invariants
 
-- The problem specification, Lean formalization, optimization goal, and
-  evaluator version stay fixed during a run.
-- Generated programs cannot modify the evaluator or benchmark data.
+- The problem specification, Lean formalization, optimization goal, suite, and
+  content-addressed fitness function stay fixed during a run.
+- Generated programs cannot modify the evaluator, fitness function, or benchmark data.
 - Invalid candidates never become elites or returned solutions.
-- LLM judgments cannot override deterministic validity.
+- LLM criticism cannot override deterministic validity or measured fitness.
 - One active elite is preserved per island and the global best is preserved
   separately.
 - Island retirement never deletes evidence.

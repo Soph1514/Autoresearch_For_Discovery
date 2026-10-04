@@ -7,7 +7,7 @@ Applies to all four teammates and coding agents working on this hackathon reposi
 - **Never push directly to `main`.** Integrate changes through a reviewed pull request.
 - **Push only to your own `feat/feature-name` branch.** Use a descriptive feature name; do not push to another teammate's branch.
 - **Write only what is strictly necessary.** Do not bloat the code with speculative abstractions, unused helpers, extra dependencies, or unrelated refactors.
-- **Protect the evaluator.** Generated candidates must not modify scoring, validity checks, or benchmark data. Agree on and version evaluator changes separately.
+- **Protect evaluation and fitness.** Generated candidates must not modify scoring, validity checks, or benchmark data. Content-address and review fitness-function changes separately.
 - **Protect teammates' work.** Never overwrite another teammate's uncommitted changes or force-push shared branches.
 
 ## Working guidelines
