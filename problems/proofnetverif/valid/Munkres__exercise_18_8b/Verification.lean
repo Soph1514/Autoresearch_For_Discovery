@@ -7,15 +7,15 @@ universe u v
 
 def generated_statement : Prop :=
   ∀ {X : Type u} {Y : Type v} [TopologicalSpace X] [TopologicalSpace Y]
-    [LinearOrder Y] [OrderTopology Y] (f g : X → Y)
-    (_hf : Continuous f) (_hg : Continuous g),
+    [LinearOrder Y] [OrderTopology Y] (f g : X → Y), Continuous f →
+    Continuous g →
     Continuous (fun x => min (f x) (g x))
 
 def reference_statement : Prop :=
   ∀ {X : Type u} {Y : Type v} [TopologicalSpace X] [TopologicalSpace Y]
-    [LinearOrder Y] [OrderTopology Y] {f g : X → Y}
-    (_hf : Continuous f) (_hg : Continuous g),
-    Continuous (fun x => min (f x) (g x))
+  [LinearOrder Y] [OrderTopology Y] {f g : X → Y},
+  Continuous f → Continuous g →
+  Continuous (λ x => min (f x) (g x))
 
 theorem generated_iff_reference : generated_statement.{u, v} ↔ reference_statement.{u, v} := by
   constructor

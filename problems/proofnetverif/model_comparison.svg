@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" role="img" aria-labelledby="title description">
+  <title id="title">Claude and fine-tuned Qwen benchmark comparison</title>
+  <desc id="description">Fine-tuned Qwen scored 90 percent and generated ten solutions in 1.973 seconds. Claude scored 80 percent and generated ten solutions in 259.751 seconds. Claude generation cost 0.4374 dollars; Qwen training and fine-tuning cost 4.67 dollars.</desc>
+  <rect width="1200" height="760" fill="#f7f8fb"/>
+  <text x="60" y="58" font-family="system-ui, sans-serif" font-size="30" font-weight="700" fill="#172033">Claude vs fine-tuned Qwen</text>
+  <text x="60" y="88" font-family="system-ui, sans-serif" font-size="16" fill="#667085">10-problem semantic-equivalence benchmark</text>
+
+  <rect x="50" y="120" width="1100" height="170" rx="14" fill="#fff" stroke="#e0e4eb"/>
+  <text x="78" y="157" font-family="system-ui, sans-serif" font-size="20" font-weight="700" fill="#172033">Quality · semantically correct</text>
+  <text x="78" y="202" font-family="system-ui, sans-serif" font-size="15" fill="#475467">Claude</text>
+  <rect x="270" y="181" width="660" height="28" rx="5" fill="#d97757"/>
+  <text x="946" y="202" font-family="system-ui, sans-serif" font-size="16" font-weight="700" fill="#172033">80% · 8/10</text>
+  <text x="78" y="252" font-family="system-ui, sans-serif" font-size="15" fill="#475467">Fine-tuned Qwen</text>
+  <rect x="270" y="231" width="742" height="28" rx="5" fill="#35a174"/>
+  <text x="1028" y="252" font-family="system-ui, sans-serif" font-size="16" font-weight="700" fill="#172033">90% · 9/10</text>
+
+  <rect x="50" y="310" width="1100" height="170" rx="14" fill="#fff" stroke="#e0e4eb"/>
+  <text x="78" y="347" font-family="system-ui, sans-serif" font-size="20" font-weight="700" fill="#172033">Generation time · all 10 problems</text>
+  <text x="78" y="392" font-family="system-ui, sans-serif" font-size="15" fill="#475467">Claude</text>
+  <rect x="270" y="371" width="742" height="28" rx="5" fill="#d97757"/>
+  <text x="1028" y="392" font-family="system-ui, sans-serif" font-size="16" font-weight="700" fill="#172033">259.751 s</text>
+  <text x="78" y="442" font-family="system-ui, sans-serif" font-size="15" fill="#475467">Fine-tuned Qwen</text>
+  <rect x="270" y="421" width="16" height="28" rx="5" fill="#35a174"/>
+  <text x="302" y="442" font-family="system-ui, sans-serif" font-size="16" font-weight="700" fill="#172033">1.973 s</text>
+
+  <rect x="50" y="500" width="1100" height="170" rx="14" fill="#fff" stroke="#e0e4eb"/>
+  <text x="78" y="537" font-family="system-ui, sans-serif" font-size="20" font-weight="700" fill="#172033">Cost</text>
+  <text x="78" y="582" font-family="system-ui, sans-serif" font-size="15" fill="#475467">Claude</text>
+  <text x="270" y="582" font-family="system-ui, sans-serif" font-size="20" font-weight="700" fill="#d05f3f">$0.4374 per run</text>
+  <text x="78" y="632" font-family="system-ui, sans-serif" font-size="15" fill="#475467">Fine-tuned Qwen</text>
+  <text x="270" y="632" font-family="system-ui, sans-serif" font-size="20" font-weight="700" fill="#25815e">$4.67 once</text>
+
+  <rect x="50" y="694" width="1100" height="42" rx="9" fill="#eef1f6"/>
+  <text x="70" y="720" font-family="system-ui, sans-serif" font-size="14" fill="#475467">Generation time excludes checking. Qwen inference cost was not measured.</text>
+</svg>

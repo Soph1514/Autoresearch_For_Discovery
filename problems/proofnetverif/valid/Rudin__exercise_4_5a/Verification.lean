@@ -13,9 +13,9 @@ def reference_statement : Prop :=
 
 theorem generated_iff_reference : generated_statement ↔ reference_statement := by
   constructor
-  · intro h f E h1 h2
-    exact h f E h2 h1
-  · intro h f E h1 h2
-    exact h f E h2 h1
+  · intro h f E h₁ h₂
+    exact h f E h₂ h₁
+  · intro h f E h₁ h₂
+    exact h f E h₂ h₁
 
 #print axioms generated_iff_reference

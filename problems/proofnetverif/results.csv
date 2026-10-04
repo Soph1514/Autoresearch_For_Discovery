@@ -1,15 +1,11 @@
 problem_id,generation_success,generation_seconds,generation_input_tokens,generation_output_tokens,generation_total_tokens,generation_cost_usd,generation_error,verification_generation_success,verification_generation_seconds,verification_generation_input_tokens,verification_generation_output_tokens,verification_generation_total_tokens,verification_generation_cost_usd,verification_generation_error,lean_verification_success,lean_verification_seconds,lean_verification_error,result,total_seconds,total_tokens,total_cost_usd
-Artin|exercise_3_5_6,True,27.427,20722,1532,22254,0.0568,,True,45.137,31554,3507,35061,0.0982,,True,4.701,,equivalent,77.265,57315,0.155000
-Dummit-Foote|exercise_3_4_5a,True,21.257,14769,704,15473,0.0366,,True,26.454,21168,1213,22381,0.0545,,True,4.056,,equivalent,51.767,37854,0.091100
-Dummit-Foote|exercise_7_3_37,True,23.353,14962,911,15873,0.039,,True,36.823,39370,2953,42323,0.1083,,True,4.484,,equivalent,64.660,58196,0.147300
-<<<<<<< Updated upstream
-Ireland-Rosen|exercise_3_5,True,19.937,14691,600,15291,0.0354,,True,26.445,21533,1034,22567,0.0534,,True,4.162,,equivalent,50.544,37858,0.088800
-=======
-Ireland-Rosen|exercise_3_5,True,19.937,14691,600,15291,0.0354,,True,26.445,21533,1034,22567,0.0534,,False,4.162,,equivalent,50.544,37858,0.088800
->>>>>>> Stashed changes
-Munkres|exercise_13_4b1,True,28.516,14978,1217,16195,0.0421,,True,97.114,126292,10330,136622,0.3559,,True,4.127,,equivalent,129.757,152817,0.398000
-Munkres|exercise_13_6,True,27.666,14927,1616,16543,0.046,,False,131.224,84320,16337,100657,0.332,Lea produced invalid Verification.lean; see lean_check.log,True,6.413,,not_equivalent,165.303,117200,0.378000
-Munkres|exercise_18_8b,True,22.078,14547,814,15361,0.0372,,True,28.448,21742,1360,23102,0.0571,,True,4.104,,equivalent,54.630,38463,0.094300
-Munkres|exercise_33_8,True,27.889,20183,1485,21668,0.0552,,True,52.395,35567,4378,39945,0.1149,,False,4.539,unapproved axiom or missing #print axioms,not_proven,84.823,61613,0.170100
-Rudin|exercise_1_18a,True,26.75,20836,1356,22192,0.0552,,True,26.23,21857,1231,23088,0.056,,True,4.659,,equivalent,57.639,45280,0.111200
-Rudin|exercise_4_5a,True,22.28,14935,799,15734,0.0379,,True,26.087,21629,1019,22648,0.0534,,True,4.203,,equivalent,52.570,38382,0.091300
+Artin|exercise_3_5_6,True,29.891,25649,1721,27370,0.0685,,False,60.988,79717,5397,85114,0.2134,Lea produced invalid Verification.lean; see lean_check.log,True,4.814,,equivalent,95.693,112484,0.281900
+Dummit-Foote|exercise_3_4_5a,True,24.735,14727,646,15373,0.0359,,True,25.907,21107,1110,22217,0.0533,,True,4.151,,equivalent,54.793,37590,0.089200
+Dummit-Foote|exercise_7_3_37,True,23.679,9956,1072,11028,0.0306,,True,28.967,22063,1552,23615,0.0596,,True,4.374,,equivalent,57.020,34643,0.090200
+Ireland-Rosen|exercise_3_5,True,20.73,14661,585,15246,0.0352,,True,23.548,20833,919,21752,0.0509,,True,4.027,,equivalent,48.305,36998,0.086100
+Munkres|exercise_13_4b1,True,38.359,14978,1232,16210,0.0423,,True,51.584,52434,4941,57375,0.1543,,True,4.061,,equivalent,94.004,73585,0.196600
+Munkres|exercise_13_6,True,24.916,14875,1301,16176,0.0428,,True,160.037,72268,18153,90421,0.3261,,False,4.829,unapproved axiom or missing #print axioms,not_proven,189.782,106597,0.368900
+Munkres|exercise_18_8b,True,22.595,19956,788,20744,0.0478,,True,26.445,21683,1279,22962,0.0562,,True,4.055,,equivalent,53.095,43706,0.104000
+Munkres|exercise_33_8,True,28.645,15019,1758,16777,0.0476,,True,84.048,76069,8314,84383,0.2353,,False,4.500,unapproved axiom or missing #print axioms,not_proven,117.193,101160,0.282900
+Rudin|exercise_1_18a,True,24.279,19610,923,20533,0.0484,,True,25.772,21789,1302,23091,0.0566,,True,4.709,,equivalent,54.760,43624,0.105000
+Rudin|exercise_4_5a,True,21.922,14836,864,15700,0.0383,,True,25.664,21619,1129,22748,0.0545,,True,4.555,,equivalent,52.141,38448,0.092800

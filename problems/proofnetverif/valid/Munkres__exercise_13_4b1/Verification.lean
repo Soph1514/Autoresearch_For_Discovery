@@ -12,49 +12,56 @@ def is_topology (X : Type*) (T : Set (Set X)) :=
 
 def generated_statement : Prop :=
   ∀ {X : Type u} {ι : Type v} (T : ι → TopologicalSpace X),
-    ∃! t : TopologicalSpace X,
-      (∀ i, {s : Set X | IsOpen[T i] s} ⊆ {s : Set X | IsOpen[t] s}) ∧
-      ∀ t' : TopologicalSpace X,
-        (∀ i, {s : Set X | IsOpen[T i] s} ⊆ {s : Set X | IsOpen[t'] s}) →
-        {s : Set X | IsOpen[t] s} ⊆ {s : Set X | IsOpen[t'] s}
+    ∃! T' : TopologicalSpace X,
+      (∀ i, {s : Set X | IsOpen[T i] s} ⊆ {s : Set X | IsOpen[T'] s}) ∧
+      ∀ T'' : TopologicalSpace X,
+        (∀ i, {s : Set X | IsOpen[T i] s} ⊆ {s : Set X | IsOpen[T''] s}) →
+        {s : Set X | IsOpen[T'] s} ⊆ {s : Set X | IsOpen[T''] s}
 
 def reference_statement : Prop :=
   ∀ (X : Type u) (I : Type v) (T : I → Set (Set X)) (h : ∀ i, is_topology X (T i)),
   ∃! T', is_topology X T' ∧ (∀ i, T i ⊆ T') ∧
   ∀ T'', is_topology X T'' → (∀ i, T i ⊆ T'') → T' ⊆ T''
 
-theorem generated_true : generated_statement.{u,v} := by
-  intro X ι T
-  have key : ∀ (a b : TopologicalSpace X),
-      a ≤ b ↔ {s : Set X | IsOpen[b] s} ⊆ {s : Set X | IsOpen[a] s} := fun a b => Iff.rfl
-  refine ⟨⨅ i, T i, ⟨?_, ?_⟩, ?_⟩
-  · intro i
-    exact (key _ _).1 (iInf_le T i)
-  · intro t' ht'
-    exact (key _ _).1 (le_iInf (fun i => (key _ _).2 (ht' i)))
-  · rintro t ⟨h1, h2⟩
-    have b : (⨅ i, T i) ≤ t := (key _ _).2 (h2 _ (fun i => (key _ _).1 (iInf_le T i)))
-    have a : t ≤ (⨅ i, T i) := le_iInf (fun i => (key _ _).2 (h1 i))
-    exact le_antisymm a b
+theorem is_top_of {X : Type u} (t : TopologicalSpace X) :
+    is_topology X {s : Set X | IsOpen[t] s} :=
+  ⟨@isOpen_univ _ t, fun s u hs hu => by letI := t; exact IsOpen.inter hs hu,
+    fun s hs => @isOpen_sUnion _ t s hs⟩
 
-theorem reference_true : reference_statement.{u,v} := by
-  intro X I T h
-  let T' : Set (Set X) := {s | ∀ T'', is_topology X T'' → (∀ i, T i ⊆ T'') → s ∈ T''}
-  have hT' : is_topology X T' := by
-    refine ⟨?_, ?_, ?_⟩
-    · intro T'' hT'' _; exact hT''.1
-    · intro s t hs ht T'' hT'' hi
-      exact hT''.2.1 s t (hs T'' hT'' hi) (ht T'' hT'' hi)
-    · intro S hS T'' hT'' hi
-      exact hT''.2.2 S (fun t ht => hS t ht T'' hT'' hi)
-  have hmin : ∀ T'', is_topology X T'' → (∀ i, T i ⊆ T'') → T' ⊆ T'' :=
-    fun T'' h1 h2 s hs => hs T'' h1 h2
-  have hsub : ∀ i, T i ⊆ T' := fun i s hs T'' _ hi => hi i hs
-  refine ⟨T', ⟨hT', hsub, hmin⟩, ?_⟩
-  rintro T2 ⟨h1, h2, h3⟩
-  exact Set.Subset.antisymm (h3 T' hT' hsub) (hmin T2 h1 h2)
+def mkTop {X : Type u} (S : Set (Set X)) (h : is_topology X S) : TopologicalSpace X where
+  IsOpen s := s ∈ S
+  isOpen_univ := h.1
+  isOpen_inter := h.2.1
+  isOpen_sUnion := h.2.2
 
-theorem generated_iff_reference : generated_statement.{u,v} ↔ reference_statement.{u,v} :=
-  ⟨fun _ => reference_true, fun _ => generated_true⟩
+theorem generated_iff_reference : generated_statement.{u, v} ↔ reference_statement.{u, v} := by
+  constructor
+  · intro G X I T h
+    obtain ⟨t', ⟨h1, h2⟩, uniq⟩ := G (fun i => mkTop (T i) (h i))
+    refine ⟨{s : Set X | IsOpen[t'] s}, ⟨is_top_of t', ?_, ?_⟩, ?_⟩
+    · intro i s hs
+      exact h1 i hs
+    · intro T'' hT'' hT
+      exact h2 (mkTop T'' hT'') (fun i => hT i)
+    · intro y ⟨hy, hy1, hy2⟩
+      have := uniq (mkTop y hy) ⟨fun i => hy1 i, fun T'' hT'' =>
+        hy2 {s : Set X | IsOpen[T''] s} (is_top_of T'') hT''⟩
+      rw [← this]
+      rfl
+  · intro R X ι T
+    obtain ⟨S, ⟨hS, h1, h2⟩, uniq⟩ := R X ι (fun i => {s : Set X | IsOpen[T i] s})
+      (fun i => is_top_of (T i))
+    refine ⟨mkTop S hS, ⟨fun i => h1 i, ?_⟩, ?_⟩
+    · intro T'' hT''
+      exact h2 _ (is_top_of T'') hT''
+    · intro y ⟨hy1, hy2⟩
+      have := uniq {s : Set X | IsOpen[y] s}
+        ⟨is_top_of y, hy1, fun T'' hT'' hT => hy2 (mkTop T'' hT'') hT⟩
+      apply TopologicalSpace.ext
+      funext s
+      apply propext
+      show IsOpen[y] s ↔ s ∈ S
+      rw [← this]
+      rfl
 
 #print axioms generated_iff_reference
