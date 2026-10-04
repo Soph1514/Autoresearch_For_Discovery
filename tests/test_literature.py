@@ -27,3 +27,24 @@ def test_review_requires_actual_search_and_retains_citations():
     assert 'unchanged contract' in research_context(review)
     with pytest.raises(ValueError, match='incomplete'):
         asyncio.run(review_literature(None, Budget(NS(content=blocks[-1:], stop_reason='end_turn')), 'problem'))
+
+
+def test_truncated_review_has_one_bounded_synthesis_without_more_searches():
+    blocks = [Block(type='server_tool_use', name='web_search', input={'query': 'prior work'}),
+              Block(type='web_search_tool_result', content=[{'url': 'https://example.org/paper', 'title': 'Paper'}]),
+              Block(type='text', text='Partial notes', citations=[])]
+    class SynthesisBudget:
+        def __init__(self): self.calls = []
+        async def create(self, client, **kwargs):
+            self.calls.append(kwargs)
+            if len(self.calls) == 1:
+                return NS(content=blocks, stop_reason='max_tokens')
+            assert 'tools' not in kwargs
+            assert kwargs['max_tokens'] == 2400
+            return NS(content=[NS(type='text', text='Complete review with uncertainties.')], stop_reason='end_turn')
+    budget = SynthesisBudget()
+    result = asyncio.run(review_literature(None, budget, 'problem'))
+    assert result['initial_stop_reason'] == 'max_tokens'
+    assert result['text'] == 'Complete review with uncertainties.'
+    assert len(budget.calls) == 2
+    assert result['sources'][0]['url'] == 'https://example.org/paper'
