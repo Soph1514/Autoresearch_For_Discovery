@@ -1,14 +1,27 @@
 # Fitness function synthesis and qualification
 
-Implementation update: the requested [Lean fitness compiler](fitness-compiler.md)
-now executes an accepted Lean specification directly. The Python scorer synthesis
-proposal below remains unimplemented; it is not the architecture used by the fallback.
+Status: the synthesis half is **implemented** on `feat/hitl`; see
+[fitness-synthesis.md](fitness-synthesis.md) for what was built and what was not.
+The rest of this document remains a proposal and still requires team review
+before implementation, and separate review before any reported result depends on
+a synthesised fitness function. This document does not change
+[shared-semantics.md](shared-semantics.md) or [evolution.md](evolution.md).
 
-Status: proposed 4 October 2026, revised against `main` at `ee70270`. Not
-accepted. Requires team review before implementation, and separate review before
-any reported result depends on a synthesised fitness function. This document does
-not change [shared-semantics.md](shared-semantics.md) or
-[evolution.md](evolution.md).
+Three deviations from the proposal below, taken deliberately:
+
+1. **Fallback only.** Synthesis runs solely when `compile_fitness` reports
+   `unsupported_formalization`. The deterministic compiler landed after this
+   document was written and is stronger evidence than two model guesses.
+2. **No qualification harness.** The battery in "Qualification checks" was
+   replaced by a critic that recommends one of the two candidates and a human who
+   accepts or rejects it with feedback, capped at three rounds and failing
+   closed. Differential execution of the two candidates was scoped out for time,
+   so the critic argues from reading rather than from measured disagreement —
+   a weaker position than this document assumes, and disclosed as such.
+3. **Four evidence tiers, not two.** `lean_compiled`, `trusted_handwritten`,
+   `lean_checked_synthesised`, `prose_reviewed`. The synthesised path here has a
+   *checked* Lean statement that the compiler could not express, which is not the
+   same as the prose-only case.
 
 ## Problem
 

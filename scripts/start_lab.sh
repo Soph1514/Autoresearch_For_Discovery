@@ -2,6 +2,12 @@
 # Run from any directory; never silently attach to a different checkout's server.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+if [ -f .env ]; then
+  set -a
+  . ./.env
+  set +a
+fi
+export PATH="$HOME/.elan/bin:$PATH"
 export MODAL_PROFILE="${MODAL_PROFILE:-arin06}"
 export RESEARCH_MODEL="${RESEARCH_MODEL:-claude-sonnet-4-6}"
 export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"

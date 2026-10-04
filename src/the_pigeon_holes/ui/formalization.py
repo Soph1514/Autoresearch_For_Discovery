@@ -1,5 +1,10 @@
 """UI preparation pipeline. Model credentials remain in the Python service."""
 import asyncio
+import hashlib
+import os
+import re
+import subprocess
+from pathlib import Path
 from typing import Literal
 from pydantic import BaseModel, Field, model_validator
 
@@ -52,8 +57,89 @@ class HostedTools:
                 return response.json()
         return await remote_call(modal.Cls.from_name('lean-fidelity-api', 'Fidelity')().score, payload)
 
+
+# Lean sources that would let a "check" pass without proving anything, or run
+# arbitrary code. Mirrors the hosted checker's admission policy.
+UNSAFE_LEAN = re.compile(r'\b(sorry|admit|axiom|unsafe)\b|#(eval|extern)|run_(tac|elab)|\bIO\.')
+
+
+def lean_project() -> Path:
+    return Path(os.environ.get('RESEARCH_LEAN_PROJECT') or
+                Path(__file__).resolve().parents[3] / 'problems' / 'lean')
+
+
+class LocalTools:
+    """Check Lean with the local pinned project instead of the hosted service.
+
+    The hosted checker is `lake env lean` against mathlib in a container, so this
+    runs the same command against `problems/lean` and records the same provenance
+    shape. It removes the dependency on a teammate's Modal workspace for local
+    work, and unlike a stub it produces a real check.
+
+    Generation and fidelity scoring stay hosted; there is no local Qwen.
+    """
+
+    def __init__(self, project: Path | None = None, timeout: float = 240.0):
+        self.project = (project or lean_project()).resolve()
+        self.timeout = timeout
+
+    async def generate(self, problem, feedback=''):
+        raise RuntimeError(
+            'Local Lean mode cannot generate a formalization. Paste Lean in formal '
+            'mode, or configure Modal for the hosted Qwen generator.')
+
+    async def score(self, problem, source):
+        raise RuntimeError('Local Lean mode has no fidelity model.')
+
+    async def repair(self, problem, original_source, source, diagnostics):
+        raise RuntimeError(
+            'Local Lean mode cannot repair a formalization. Correct the Lean source '
+            'using the checker diagnostics, or configure the hosted repair service.\n'
+            + diagnostics)
+
+    async def check(self, source):
+        return await asyncio.to_thread(self._check, source)
+
+    def _check(self, source: str) -> dict:
+        if len(source) > 32000:
+            return {'valid': False, 'diagnostics': 'Lean source exceeds 32000 characters.'}
+        if UNSAFE_LEAN.search(source):
+            return {'valid': False,
+                    'diagnostics': 'Unsupported proof placeholder, axiom, or executable command.'}
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'Generated.lean'
+            path.write_text(source)
+            try:
+                result = subprocess.run(['lake', 'env', 'lean', str(path)], cwd=self.project,
+                                        capture_output=True, text=True, timeout=self.timeout)
+            except subprocess.TimeoutExpired:
+                return {'valid': False,
+                        'diagnostics': f'Lean check exceeded {self.timeout:.0f} seconds.'}
+            except OSError as error:
+                return {'valid': False, 'diagnostics': f'Local Lean unavailable: {error}'}
+            diagnostics = (result.stdout + result.stderr)[-12000:]
+            version = subprocess.run(['lake', 'env', 'lean', '--version'], cwd=self.project,
+                                     capture_output=True, text=True).stdout.strip()
+            return {'valid': result.returncode == 0, 'diagnostics': diagnostics,
+                    'check_artifact': {
+                        'source_sha256': hashlib.sha256(source.encode()).hexdigest(),
+                        'toolchain': (self.project / 'lean-toolchain').read_text().strip(),
+                        'lean_version': version,
+                        'dependencies': {'lake_manifest':
+                                         (self.project / 'lake-manifest.json').read_text()},
+                        'command': ['lake', 'env', 'lean', 'Generated.lean'],
+                        'exit_code': result.returncode, 'diagnostics': diagnostics,
+                        'checker': 'local'}}
+
+
+def default_tools():
+    """Hosted unless RESEARCH_LOCAL_LEAN is set, so deployed behaviour is unchanged."""
+    return LocalTools() if os.environ.get('RESEARCH_LOCAL_LEAN') else HostedTools()
+
+
 async def prepare(body: FormalizationInput, tools=None, progress=None):
-    tools = tools or HostedTools()
+    tools = tools or default_tools()
     generated_by_qwen = body.mode == "natural"
     repaired_by_opus = False
     async def emit(**event):

@@ -295,11 +295,20 @@ def build_problem_contract(
     evaluation_cases: Mapping[str, Mapping[str, Any]],
     resource_limits: ResourceLimits,
     fitness_function: FitnessFunctionRef,
-    model: str,
+    model: str | None = None,
     client=None,
+    extracted: ExtractedInterface | None = None,
 ) -> ProblemContract:
-    """Extract the interface and prepare an immutable, validated evaluation suite."""
-    extracted = extract_signature(lean_specification, model=model, client=client)
+    """Extract the interface and prepare an immutable, validated evaluation suite.
+
+    `extracted` lets a caller that already holds a reviewed interface reuse it, so
+    the interface a human approved is byte-identical to the one frozen here. Without
+    it the interface is extracted from the Lean statement with a model call.
+    """
+    if extracted is None:
+        if model is None:
+            raise ValueError("build_problem_contract needs either a model or an extracted interface")
+        extracted = extract_signature(lean_specification, model=model, client=client)
     verify_interface_syntax(extracted)
     return ProblemContract(
         natural_language_spec=natural_language_spec,
