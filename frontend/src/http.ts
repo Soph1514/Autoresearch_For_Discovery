@@ -1,6 +1,5 @@
 import type {
   ResearchClient,
-  ProblemInput,
   Run,
   Snapshot,
   ResearchEvent,
@@ -25,13 +24,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 export class HttpResearchClient implements ResearchClient {
-  async startRun(input: ProblemInput): Promise<Run> {
-    if (
-      input.mode !== "demo" ||
-      input.attachments.length ||
-      input.resultFiles.length
-    )
-      throw Error("Use the problem composer to prepare and start custom research.");
+  async startDemo(): Promise<Run> {
     return request("/runs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

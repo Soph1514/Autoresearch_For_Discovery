@@ -20,18 +20,15 @@ class ContractInput(BaseModel):
     max_iterations: int = Field(default=100000, gt=0)
 
 
-def evaluator_factory():
+def make_evaluator(contract):
     """Only the operator's environment may name executable adapter code."""
     target = os.environ.get('RESEARCH_EVALUATOR_FACTORY')
-    if not target:
-        from the_pigeon_holes.evaluation.production import create_evaluator
-        return create_evaluator
-    module, name = target.split(':', 1)
-    return getattr(importlib.import_module(module), name)
-
-
-def make_evaluator(contract):
-    evaluator = evaluator_factory()(contract)
+    if target:
+        module, name = target.split(':', 1)
+        factory = getattr(importlib.import_module(module), name)
+    else:
+        from the_pigeon_holes.evaluation.production import create_evaluator as factory
+    evaluator = factory(contract)
     if not callable(getattr(evaluator, 'evaluate', None)):
         raise ValueError('Evaluator factory must return an async CandidateEvaluator.')
     return evaluator

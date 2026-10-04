@@ -27,8 +27,9 @@ Vite proxies `/api` to port 8000. For another backend port, set
 See [current behavior and limitations](../docs/ui-integration-status.md).
 
 The workbench and demos share `src/paper-theme.css`. The engine graph uses React
-Flow and Dagre; backend snapshots and SSE drive its state. `mock.ts` is only a test
-fixture. Auto overview yields to manual pan/zoom; faded candidates stay inspectable.
+Flow and Dagre; backend snapshots and SSE drive its state. Frontend tests exercise
+the HTTP client and event reducer; lifecycle behavior is tested against the Python
+engine. Auto overview yields to manual pan/zoom; faded candidates stay inspectable.
 
 ```sh
 npm test

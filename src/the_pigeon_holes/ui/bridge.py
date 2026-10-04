@@ -320,9 +320,7 @@ class LabRun:
             self.log("complete", f"Stopped: {outcome.stop_reason.value}; {outcome.tokens_used} reported tokens, {outcome.generations_completed} generations.")
             self.emit("run_status_changed", {"status": "failed" if outcome.stop_reason.value in ('invalid_seed', 'generation_failed') else "completed", "endedAt": now()})
         except asyncio.CancelledError:
-            for experiment in list(self.snapshot["experiments"]):
-                if experiment["status"] == "running":
-                    self.emit("experiment_updated", {**experiment, "status": "cancelled", "feedback": "Run stopped."})
+            self.cancel_pending("Run stopped.")
             self.emit("run_status_changed", {"status": "stopped", "endedAt": now()})
         except Exception as error:
             self.cancel_pending("Run failed before evaluation completed.")

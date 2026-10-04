@@ -20,7 +20,7 @@ h1{font:500 27px/1.2 var(--code);letter-spacing:-1px;max-width:720px}.intro{padd
 :root{font-family:var(--code);color:var(--ink);background:var(--paper)}
 button,input,textarea,select{font:inherit}h2,.stats strong{font-family:var(--code)}
 .wordmark{font-size:19px;letter-spacing:-.5px}.demo-label,.muted,.source,.stats span,.graph-caption,.node-meta,.node-operation,.node-score,.wave-label,footer{color:var(--muted)}
-.workspace,.idea-box,.research-log,.empty,dialog,.field textarea,.notice,.feedback,.attachment img{border-radius:0}
+.workspace,.idea-box,.research-log,.empty,dialog,.field textarea,.notice,.feedback{border-radius:0}
 .graph-toolbar,.log-heading{background:#f2ede3;border-color:var(--line);color:var(--muted)}
 .graph-toolbar strong,.legend,.metric strong,.log-category{color:var(--ink)}
 .graph-canvas{background-color:#faf7f0;background-image:linear-gradient(#b4a38c15 1px,transparent 1px),linear-gradient(90deg,#b4a38c15 1px,transparent 1px);background-size:24px 24px}

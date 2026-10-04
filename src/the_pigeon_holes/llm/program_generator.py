@@ -193,16 +193,13 @@ class AnthropicProgramGenerator:
                 raise ValueError(f"missing field {field!r}")
             if not isinstance(data[field], str):
                 raise ValueError(f"{field} must be a string")
-        try:
-            return CandidateDraft(
-                hypothesis=data["hypothesis"],
-                predicted_effect=data["predicted_effect"],
-                falsification_condition=data["falsification_condition"],
-                mechanism_tags=tuple(tags),
-                source_code=data["source_code"],
-            )
-        except KeyError as exc:  # defensive if the schema changes independently
-            raise ValueError(f"missing field {exc.args[0]!r}") from exc
+        return CandidateDraft(
+            hypothesis=data["hypothesis"],
+            predicted_effect=data["predicted_effect"],
+            falsification_condition=data["falsification_condition"],
+            mechanism_tags=tuple(tags),
+            source_code=data["source_code"],
+        )
 
     @staticmethod
     def _add_usage(current: TokenUsage, response: Any) -> TokenUsage:
