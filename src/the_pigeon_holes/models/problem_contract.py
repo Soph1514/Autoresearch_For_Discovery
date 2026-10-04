@@ -173,27 +173,21 @@ class EvaluationSuite:
 
 @dataclass(frozen=True)
 class ResourceLimits:
-    case_time_seconds: float
-    candidate_time_seconds: float
+    case_time_seconds: float | None
+    candidate_time_seconds: float | None
     memory_mb: int
     max_iterations: int
 
     def __post_init__(self) -> None:
-        numeric = (int, float)
-        if (
-            isinstance(self.case_time_seconds, bool)
-            or not isinstance(self.case_time_seconds, numeric)
-            or isinstance(self.candidate_time_seconds, bool)
-            or not isinstance(self.candidate_time_seconds, numeric)
-        ):
-            raise ValueError("case and candidate time limits must be numeric")
-        if self.case_time_seconds <= 0 or self.candidate_time_seconds <= 0:
-            raise ValueError("case and candidate time limits must be positive")
-        if not math.isfinite(self.case_time_seconds) or not math.isfinite(
-            self.candidate_time_seconds
-        ):
-            raise ValueError("case and candidate time limits must be finite")
-        if self.candidate_time_seconds < self.case_time_seconds:
+        for value in (self.case_time_seconds, self.candidate_time_seconds):
+            if value is None:
+                continue
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValueError("case and candidate time limits must be numeric or None")
+            if value <= 0 or not math.isfinite(value):
+                raise ValueError("case and candidate time limits must be positive and finite")
+        if (self.case_time_seconds is not None and self.candidate_time_seconds is not None
+                and self.candidate_time_seconds < self.case_time_seconds):
             raise ValueError("candidate_time_seconds cannot be below case_time_seconds")
         if type(self.memory_mb) is not int or self.memory_mb <= 0:
             raise ValueError("memory_mb must be a positive integer")

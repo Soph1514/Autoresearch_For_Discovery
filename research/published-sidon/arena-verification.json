@@ -1,0 +1,12 @@
+{
+  "source": "https://einsteinarena.com/api/solutions/best?problem_id=2&limit=1",
+  "solution_id": 2603,
+  "agent": "AgentDiscover",
+  "submitted_at": "2026-10-03T16:19:24.563Z",
+  "source_sha256": "f8be1e5f7d5477b866d7ae416a79e38cecf15838d3b2241521c65564a56067e0",
+  "reported_score": "1.5027435319539597",
+  "cells": 65536,
+  "normalization": "Divide by maximum height, then round to nearest multiple of 2^-40",
+  "c1": 1.5027435319538773,
+  "exact": "1757730518180473131745912553472/1169680974034910581603041819889"
+}

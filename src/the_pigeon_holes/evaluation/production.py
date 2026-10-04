@@ -86,8 +86,8 @@ class SandboxCandidateEvaluator:
             record["cases"][case.id] = case_record
             limits = replace(
                 self.limits,
-                timeout_seconds=min(self.limits.timeout_seconds,
-                                    problem.resource_limits.case_time_seconds),
+                timeout_seconds=min((t for t in (self.limits.timeout_seconds,
+                                    problem.resource_limits.case_time_seconds) if t is not None), default=None),
                 memory_mb=min(self.limits.memory_mb, problem.resource_limits.memory_mb),
             )
             async with self._semaphore:

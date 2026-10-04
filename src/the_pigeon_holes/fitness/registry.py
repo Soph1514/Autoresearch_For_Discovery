@@ -63,6 +63,7 @@ class FitnessFunctionRegistry:
 
 def builtin_registry() -> FitnessFunctionRegistry:
     from problems.autocorrelation.fitness import AutocorrelationFitnessFunction
+    from .sidon_refinement import SidonRefinementFitness
     from problems.bin_packing.fitness import BinPackingFitnessFunction
     from problems.knapsack.fitness import KnapsackFitnessFunction
     from problems.tsp.fitness import TspFitnessFunction
@@ -71,6 +72,7 @@ def builtin_registry() -> FitnessFunctionRegistry:
 
     registry = FitnessFunctionRegistry()
     registry.register(AutocorrelationFitnessFunction())
+    registry.register(SidonRefinementFitness())
     registry.register(BinPackingFitnessFunction())
     registry.register(KnapsackFitnessFunction())
     registry.register(TspFitnessFunction())

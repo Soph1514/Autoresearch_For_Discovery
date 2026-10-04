@@ -122,6 +122,11 @@ The response contains the contract `id`, signature, metric and direction.
 
 `POST /api/runs` accepts `{"mode":"custom", "contract_id":"...",
 "max_tokens":32768, "max_time_seconds":300}` or `{"mode":"demo"}`.
+Custom runs default to no overall or candidate execution time cap. Set
+`max_time_seconds` and/or `enforce_execution_time_limits: true` to opt into
+time limits. `max_output_tokens: null` uses the model maximum (128000 for
+Opus 5.5, 64000 for Sonnet 4.6); a numeric value requests a smaller cap.
+The default $50 cost ceiling, sandbox isolation and manual Stop remain active.
 Custom runs resolve the contract's required fitness function and fail closed
 when it is unregistered, its digest changed, the contract is incompatible, or
 Docker/the worker image is unavailable. Backend `python` denotes

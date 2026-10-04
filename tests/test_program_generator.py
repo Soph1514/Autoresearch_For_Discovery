@@ -246,3 +246,12 @@ def test_reasoning_uses_auto_tool_choice_and_passes_literature_as_evidence():
     assert calls[0]['output_config'] == {'effort': 'high'}
     assert calls[0]['thinking'] == {'type': 'adaptive'}
     assert 'LITERATURE EVIDENCE' in calls[0]['messages'][0]['content']
+
+
+def test_generation_prompt_includes_actual_execution_limits():
+    from the_pigeon_holes.llm.prompts import render_solve_contract
+    from the_pigeon_holes.problems.autocorrelation import autocorrelation_contract
+    prompt = render_solve_contract(autocorrelation_contract(case_time_seconds=15, candidate_time_seconds=90, memory_mb=512))
+    assert '15 seconds per call' in prompt
+    assert '90 seconds for the whole suite' in prompt
+    assert '512 MiB memory' in prompt

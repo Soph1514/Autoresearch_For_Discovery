@@ -1,0 +1,7 @@
+{
+  "repository": "https://github.com/test-time-training/discover",
+  "commit": "6c40e82dab9d5de7416ac873ad5cd3106084aaed",
+  "path": "results/mathematics/ttt_ac1_sequence.json",
+  "sha256": "ccb00dad316aef984812f538b8ce0a5eac3ccbf379d9265788d6d3c8626715e6",
+  "paper": "https://arxiv.org/abs/2601.16175"
+}

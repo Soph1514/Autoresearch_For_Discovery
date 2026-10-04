@@ -130,9 +130,15 @@ def test_streaming_output_limit_is_enforced(evaluator):
     assert 'too large' in result.failure_reasons[0]
 
 
-def test_stop_waits_for_container_removal(evaluator, monkeypatch):
+@pytest.mark.parametrize("uncapped", [False, True])
+def test_stop_waits_for_container_removal(evaluator, monkeypatch, uncapped):
     from the_pigeon_holes.execution import container_runner as runner
     import subprocess
+    from dataclasses import replace
+    problem = contract()
+    if uncapped:
+        problem = replace(problem, resource_limits=replace(problem.resource_limits, case_time_seconds=None, candidate_time_seconds=None))
+        evaluator = SandboxCandidateEvaluator(AutocorrelationFitnessFunction(), ContainerLimits(memory_mb=128, timeout_seconds=None))
     created = []
     original = runner.run_arguments
     def arguments(name, limits, image):
@@ -141,7 +147,7 @@ def test_stop_waits_for_container_removal(evaluator, monkeypatch):
     monkeypatch.setattr(runner, 'run_arguments', arguments)
     async def scenario():
         task = asyncio.create_task(evaluator.evaluate([
-            candidate(99, 'def solve(n: int) -> list[int]:\n    while True: pass\n')], contract()))
+            candidate(99, 'def solve(n: int) -> list[int]:\n    while True: pass\n')], problem))
         for _ in range(100):
             if created:
                 result = await asyncio.to_thread(subprocess.run, ['docker', 'inspect', created[0]], capture_output=True)
