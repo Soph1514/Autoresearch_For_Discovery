@@ -70,6 +70,7 @@ async def optional_auth(request, call_next):
 class StartInput(BaseModel):
     mode: Literal['demo', 'custom']
     contract_id: str | None = None
+    max_critic_calls: int = Field(default=0, ge=0, le=100)
     max_tokens: int = Field(default=32768, gt=0, le=1000000)
     max_time_seconds: float = Field(default=300, gt=0, le=3600, allow_inf_nan=False)
 
@@ -108,8 +109,10 @@ async def start_run(body: StartInput):
         if any(r.task and not r.task.done() for r in runs.values()):
             await generator.aclose()
             raise HTTPException(409, 'Stop the active local run before starting another.')
-        run = LabRun(contract=contract, generator=generator, evaluator=evaluator,
-            config=EvolutionConfig(), limits=EvolutionLimits(max_tokens=body.max_tokens, max_time_seconds=body.max_time_seconds),
+        from the_pigeon_holes.llm.critic import AnthropicCritic, CriticConfig
+        critic = AnthropicCritic(CriticConfig(model=model), budget=generator.budget) if body.max_critic_calls else None
+        run = LabRun(contract=contract, generator=generator, evaluator=evaluator, critic=critic,
+            config=EvolutionConfig(), limits=EvolutionLimits(max_tokens=body.max_tokens, max_time_seconds=body.max_time_seconds, max_critic_calls=body.max_critic_calls),
             store=store, provenance=artifact['provenance'])
     else:
         run = LabRun(store=store)
@@ -285,3 +288,32 @@ async def create_contract(body: ContractInput):
         'metric': contract.optimisation_goal.primary.name,
         'direction': contract.optimisation_goal.primary.direction,
         'seed_status': 'structurally_valid; behavioral evaluation required at run start'}
+
+
+@app.get('/api/formalizations/{identity}')
+def saved_formalization(identity: str):
+    artifact = store.get('formalization', identity)
+    if artifact is None:
+        raise HTTPException(404, 'Formalization not found.')
+    return artifact
+
+
+@app.get('/api/runs/{run_id}/numerical/{candidate_id}')
+def numerical_evidence(run_id: str, candidate_id: str):
+    record = get_run(run_id).evidence.get('numerical', {}).get(candidate_id)
+    if record is None:
+        raise HTTPException(404, 'No numerical witness recorded for this candidate.')
+    return record
+
+
+@app.get('/api/runs/{run_id}/summary')
+def run_summary(run_id: str):
+    run = get_run(run_id)
+    from .storage import encode
+    generation = encode(run.generation_config) or {}
+    outcome = run.outcome or {}
+    return {'formalization_id': (run.provenance or {}).get('formalization_id'),
+        'model': generation.get('model'), 'reported_tokens': outcome.get('tokens_used'),
+        'generations': outcome.get('generations_completed'), 'stop_reason': outcome.get('stop_reason'),
+        'active_seconds': outcome.get('elapsed_seconds'),
+        'scope': 'Reported evolution tokens exclude preparation and unknown in-flight billing.'}

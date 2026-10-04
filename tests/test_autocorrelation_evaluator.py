@@ -75,6 +75,9 @@ def test_seed_is_valid_with_exact_constant_score(evaluator):
     (result,) = run(evaluator, [SEED])
     assert result.valid
     assert result.metrics["c1"] == pytest.approx(2.0)
+    record = evaluator.evidence['c0']
+    assert record['mean_c1_exact'] == {'numerator': '2', 'denominator': '1'}
+    assert record['cases']['n-64']['output'] == [2**40] * 64
 
 
 def test_failures_map_to_stages(evaluator):
@@ -192,5 +195,6 @@ def test_real_evolution_persists_a_known_improving_fixture(evaluator, tmp_path):
         artifact = store.get('run', run.id)
         assert artifact['outcome']['best_candidate']['source_code'] == source
         assert artifact['evaluator_config']['image'] == evaluator.image
+        assert artifact['evidence']['numerical'][artifact['outcome']['best_candidate']['id']]['cases']['n-64']['c1_exact']
         assert 'Not performed' in artifact['snapshot']['run']['contract']['formalVerification']
     asyncio.run(scenario())

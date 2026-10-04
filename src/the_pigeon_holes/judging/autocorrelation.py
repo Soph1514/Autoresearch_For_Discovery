@@ -32,7 +32,7 @@ MAX_POINTS = 4096
 # Integral threshold from the upstream verifier: integral**2 must be at least 1e-8.
 MIN_INTEGRAL_SQUARED = Fraction(1, 10**8)
 
-# Best-known upper bound used as the comparison point. The float literal is
+# Historical 2025 upper-bound comparator, not the current best-known bound. The float literal is
 # converted exactly, so comparisons against it are exact. The bound itself is
 # a published float value, not a certified one.
 PUBLISHED_UPPER_BOUND = Fraction(1.5052939684401607)

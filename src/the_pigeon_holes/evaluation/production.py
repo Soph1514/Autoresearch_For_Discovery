@@ -53,6 +53,7 @@ class AutocorrelationEvaluator:
         self.limits = limits
         self.image = image
         self._semaphore = asyncio.Semaphore(max_workers)
+        self.evidence: dict[str, dict] = {}
 
     async def evaluate(
         self,
@@ -89,6 +90,8 @@ class AutocorrelationEvaluator:
         if signature_error:
             return _invalid(candidate, "static_validation", signature_error, total)
 
+        record = {"image": self.image, "cases": {}}
+        self.evidence[candidate.id] = record
         values: list[Fraction] = []
         cells: list[tuple[int, int]] = []
         for case in problem.evaluation_suite.cases:
@@ -99,6 +102,8 @@ class AutocorrelationEvaluator:
             result = await run_candidate_async(
                 candidate.source_code, ENTRY_POINT, args, limits, self.image
             )
+            record['cases'][case.id] = {'inputs': args,
+                'ok': result.ok, 'failure_stage': result.failure_stage, 'failure_reason': result.failure_reason}
             if not result.ok:
                 return _invalid(candidate, result.failure_stage, result.failure_reason, total)
             try:
@@ -107,13 +112,16 @@ class AutocorrelationEvaluator:
                     raise InvalidOutput(
                         f"expected length {args['n']}, got {len(output)}"
                     )
+                record['cases'][case.id]['output'] = output
                 value, cell = await asyncio.to_thread(_score, output)
+                record['cases'][case.id]['c1_exact'] = {'numerator': str(value.numerator), 'denominator': str(value.denominator)}
                 values.append(value)
                 cells.append(cell)
             except InvalidOutput as error:
                 return _invalid(candidate, "invalid_output", str(error), total)
 
         mean = sum(values, Fraction(0)) / len(values)
+        record['mean_c1_exact'] = {'numerator': str(mean.numerator), 'denominator': str(mean.denominator)}
         return CandidateEvaluation(
             candidate_id=candidate.id,
             valid=True,

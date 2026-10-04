@@ -53,12 +53,13 @@ class ActiveRunClock:
 
 
 class LabRun:
-    def __init__(self, delay=.8, *, contract=None, generator=None, evaluator=None, limits=None, config=None, store=None, provenance=None):
+    def __init__(self, delay=.8, *, contract=None, generator=None, evaluator=None, limits=None, config=None, store=None, provenance=None, critic=None):
         self.delay = delay
         self.contract = contract or demo_contract()
         self.custom = contract is not None
         if self.custom and (generator is None or evaluator is None):
             raise ValueError("Custom runs require a generator and evaluator.")
+        self.critic = critic
         self.generator = generator
         self.evaluator = evaluator
         self.limits = limits or EvolutionLimits(max_tokens=160, max_time_seconds=60)
@@ -189,6 +190,9 @@ class LabRun:
 
     def evaluation(self, result: CandidateEvaluation):
         self.evidence['evaluations'][result.candidate_id] = result
+        numerical = getattr(self.evaluator, 'evidence', {}).get(result.candidate_id)
+        if numerical is not None:
+            self.evidence.setdefault('numerical', {})[result.candidate_id] = numerical
         record = {"id": "eval-"+result.candidate_id, "ideaId": result.candidate_id,
             "status": "completed" if result.valid else "failed", "valid": result.valid,
             "metrics": dict(result.metrics), "feedback": "; ".join(result.failure_reasons) if not result.valid
@@ -312,7 +316,7 @@ class LabRun:
             loop = EvolutionLoop(config=self.config, limits=self.limits,
                 generator=self.generator if self.custom else DemoGenerator(self.log, self.delay),
                 evaluator=self.evaluator if self.custom else DemoEvaluator(self.delay), observer=self,
-                checkpoint=self.checkpoint, clock=self.active_clock, require_valid_seed=self.custom)
+                checkpoint=self.checkpoint, clock=self.active_clock, require_valid_seed=self.custom, critic=self.critic)
             outcome = await loop.run(self.contract)
             from .storage import encode
             self.outcome = encode(outcome)
@@ -331,3 +335,5 @@ class LabRun:
                 close = getattr(self.generator, 'aclose', None)
                 if close:
                     await close()
+                if self.critic is not None:
+                    await self.critic.aclose()

@@ -187,3 +187,22 @@ def test_api_custom_contract_to_completed_run_and_replay(tmp_path, monkeypatch):
     monkeypatch.setattr(api, 'runs', {})
     with TestClient(api.app) as client:
         assert client.get(f'/api/runs/{identity}').json() == snapshot
+
+
+def test_saved_preparation_and_numerical_witness_routes(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from the_pigeon_holes.ui import api
+    monkeypatch.setattr(api, 'store', ArtifactStore(tmp_path / 'saved.sqlite3'))
+    monkeypatch.setattr(api, 'runs', {})
+    monkeypatch.delenv('RESEARCH_API_PASSWORD', raising=False)
+    artifact = {'input': {'problem': 'test'}, 'result': {'lean_checked': True}}
+    api.store.put('formalization', 'saved', artifact)
+    with TestClient(api.app) as client:
+        assert client.get('/api/formalizations/saved').json() == artifact
+        assert client.get('/api/formalizations/missing').status_code == 404
+        run = LabRun(store=api.store)
+        run.evidence['numerical'] = {'candidate': {'cases': {'n-2': {'output':[2**40, 2**40],
+            'c1_exact': {'numerator':'2','denominator':'1'}}}}}
+        api.runs[run.id] = run
+        assert client.get(f'/api/runs/{run.id}/numerical/candidate').json() == run.evidence['numerical']['candidate']
+        assert client.get(f'/api/runs/{run.id}/numerical/missing').status_code == 404
