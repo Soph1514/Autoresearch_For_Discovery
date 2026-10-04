@@ -1,0 +1,13 @@
+{
+  "revision": "2709009dca410c1fc4d8de55f4e272f715b18334",
+  "model": "anthropic/claude-sonnet-4-6",
+  "max_turns": 12,
+  "timeout_seconds": 600,
+  "elapsed_seconds": 34.811,
+  "total_tokens": 40828,
+  "input_tokens": 39199,
+  "output_tokens": 1629,
+  "cost_usd": 0.142,
+  "lea_success": true,
+  "note": "Unedited live Lea output for problem.txt; compilation does not prove English fidelity."
+}
