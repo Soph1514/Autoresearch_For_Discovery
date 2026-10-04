@@ -70,6 +70,8 @@ class LabRun:
         self.evidence = {'candidates': {}, 'evaluations': {}, 'generation_failures': {}}
         self.generation_config = getattr(generator, 'config', None)
         fitness = getattr(evaluator, 'fitness_function', None)
+        from the_pigeon_holes.fitness.compiler import LeanFitnessFunction
+        self.require_valid_seed = self.custom and not isinstance(fitness, LeanFitnessFunction)
         reference = getattr(fitness, 'reference', None)
         self.evaluator_config = {
             'version': getattr(evaluator, 'version', None),
@@ -110,6 +112,7 @@ class LabRun:
                     }, 'signature': contract.solve_signature,
                     'formalVerification': ('Lean specification checked; Python validity evaluated per candidate'
                         if provenance and provenance.get('check_artifact') else 'Not performed; numerical evaluation only'),
+                    'fitnessSource': ('Lean compiler' if isinstance(fitness, LeanFitnessFunction) else 'Registered scorer'),
                     'maxTokens': self.limits.max_tokens, 'maxTimeSeconds': self.limits.max_time_seconds})
         self.persist()
 
@@ -326,12 +329,13 @@ class LabRun:
 
     async def run(self):
         try:
-            self.log("start", "Custom evolution; seed must pass the configured evaluator before generation." if self.custom else
+            self.log("start", ("Custom evolution; seed must pass the configured evaluator before generation."
+                     if self.require_valid_seed else "Custom evolution; frozen Lean scorer; infeasible seed may be repaired.") if self.custom else
                      "Real evolution engine; deterministic demo generator and analytic demo evaluator. No LLM calls.")
             loop = EvolutionLoop(config=self.config, limits=self.limits,
                 generator=self.generator if self.custom else DemoGenerator(self.log, self.delay),
                 evaluator=self.evaluator if self.custom else DemoEvaluator(self.delay), observer=self,
-                checkpoint=self.checkpoint, clock=self.active_clock, require_valid_seed=self.custom, critic=self.critic)
+                checkpoint=self.checkpoint, clock=self.active_clock, require_valid_seed=self.require_valid_seed, critic=self.critic)
             outcome = await loop.run(self.contract)
             from .storage import encode
             self.outcome = encode(outcome)

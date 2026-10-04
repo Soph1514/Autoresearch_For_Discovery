@@ -9,6 +9,22 @@ see [integration status](docs/ui-integration-status.md) for remaining gaps.
 
 The Lea CLI path below supports 0/1 knapsack specification validation.
 
+For problems without a registered scorer, the [Lean fitness compiler](docs/fitness-compiler.md)
+formalizes once, compiles a verified evaluator, and scores candidates directly in
+Lean with kernel checks. Existing scorers take precedence. Both frontend composers
+expose this through **Prepare research**: choose a known problem family or
+**New problem — Lean compiler**, enter cases, then start research with the saved scorer. Replay the
+saved subset-sum example without API calls:
+
+```sh
+uv run python scripts/run_lean_fitness.py
+```
+
+The end-to-end Python entry point is
+`the_pigeon_holes.pipeline.runner.autoresearch`: it takes the problem name,
+statement, instance, run directory, Lean project and search model. The fallback
+does not prove that generated Lean faithfully translates the English statement.
+
 Generate its formalisation with:
 
 ```python

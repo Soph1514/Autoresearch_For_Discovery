@@ -4,7 +4,7 @@ import { IdeaGraph, operationLabel } from "./IdeaGraph";
 import { Composer } from "./Composer";
 import type { Run, Snapshot } from "./contracts";
 function RunProvenance({runId, status}: {runId: string; status: string}) {
-  const [summary, setSummary] = useState<{formalization_id?: string; model?: string; reported_tokens?: number; generations?: number; stop_reason?: string} | null>(null);
+  const [summary, setSummary] = useState<{formalization_id?: string; contract_id?: string; compiler?: {status: string}; model?: string; reported_tokens?: number; generations?: number; stop_reason?: string} | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     fetch(`/api/runs/${runId}/summary`, {signal: controller.signal}).then(r => r.ok ? r.json() : null)
@@ -14,6 +14,7 @@ function RunProvenance({runId, status}: {runId: string; status: string}) {
   if (!summary) return null;
   return <div className="run-summary">
     {summary.formalization_id && <a href={`/?formalization=${summary.formalization_id}`}>Checked specification & alignment review ↗</a>}
+    {summary.compiler && summary.contract_id && <a href={`/api/contracts/${encodeURIComponent(summary.contract_id)}/compiler`} target="_blank" rel="noopener">Compiled scorer & verification ↗</a>}
     {summary.model && <span>Model: {summary.model}</span>}
     {summary.reported_tokens != null && <span>{summary.reported_tokens.toLocaleString()} reported evolution tokens · {summary.generations} generations · {summary.stop_reason?.replaceAll('_', ' ')}</span>}
   </div>;
@@ -40,6 +41,14 @@ function Witness({runId, candidateId, metric}: {runId: string; candidateId: stri
   if (!record || !metric) return null;
   return <section><h3>Constructed witnesses</h3>{Object.entries(record.cases).map(([id, c]) => {
     const witness = c.fitness_evidence;
+    if (witness?.kernel_checked && typeof witness.lean_certificate === 'string') {
+      return <div key={id} className="witness">
+        <p>{id} · Checked by the Lean kernel</p>
+        <details><summary>Lean certificate</summary>
+          <pre style={{whiteSpace: 'pre-wrap', overflowWrap: 'anywhere'}}>{witness.lean_certificate}</pre>
+        </details>
+      </div>;
+    }
     const exact = witness && rationalFor(witness, metric);
     if (!witness?.output || !exact) return null;
     const q = witness.output, n = q.length;
@@ -361,7 +370,7 @@ export default function App() {
           <div>
             <div className="eyebrow">{custom ? "ALGORITHM RESEARCH" : "ROUTING GAMES / LOWER-BOUND SEARCH"}</div>
             <h1>{snapshot?.run.title ?? "A space for branching ideas."}</h1>
-            {custom && <p className="muted">Exact numerical evaluation · lower c1 is better. A checked specification is not a proof of the optimal constant.</p>}
+            {custom && <p className="muted">Deterministic evaluation · {snapshot?.run.direction === 'maximize' ? 'higher' : 'lower'} {snapshot?.run.metricName || 'objective'} is better. Candidate scores do not prove global optimality.</p>}
             {!custom && <><p className="muted">
               Pigou network · unit demand · route delays ℓ₁(x) = x and ℓ₂(x) = c
             </p>
@@ -450,7 +459,7 @@ export default function App() {
             {Object.entries(snapshot.run.contract).map(([key, value]) => (
               <div className="metric" key={key}>
                 <span>{key}</span>
-                <strong>{value}</strong>
+                <strong>{typeof value === 'object' ? JSON.stringify(value) : String(value ?? '')}</strong>
               </div>
             ))}
           </details>

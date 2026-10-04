@@ -3,7 +3,8 @@
 The AntiAI workbench prepares Lean and can bind it to a custom research contract.
 The engine page displays either the explicit routing demo or a custom run. The built-in
 Docker evaluator supports the six registered families in
-[known-problems.md](known-problems.md); additional families need a trusted fitness function.
+[known-problems.md](known-problems.md). New families can use the
+[Lean fitness compiler](fitness-compiler.md) for supported specifications.
 
 ## Problem preparation
 
@@ -52,12 +53,22 @@ Use the [frontend setup](../frontend/README.md) to run locally and the
 in `arin06`. Credentials stay on the backend. For a classifier in another workspace,
 configure `FIDELITY_ENDPOINT`, `FIDELITY_TOKEN_ID` and `FIDELITY_TOKEN_SECRET` there.
 
-After Lean preparation, both composers offer seed Python, evaluation suite ID,
-case inputs, fitness-function ID/version, and an alignment-review acknowledgement. Contract
-preparation validates the interface and case shapes without executing generated
-Python. Its saved ID can be used to start custom evolution; the seed must pass the
-evaluator before candidate generation. The UI reports missing evaluator configuration.
-The engine labels custom runs separately and offers a run-evidence download.
+After Lean preparation, both composers offer a problem-family selector, fixed
+case inputs and an optional seed. Known families use their registered scorer;
+**New problem — Lean compiler** compiles the saved checked Lean through
+`ui/preparation.py` and `POST /api/contracts`, without another model call.
+The UI shows compiler progress, failures and a link to the saved compiler result.
+Source-hash and alignment-review checks still apply. An omitted seed uses the
+known family baseline or the compiler's typed initial candidate.
+
+Compiler artifacts are recorded in the existing SQLite store and in a sibling
+`fitness/` directory. On **Start research**, the backend reloads the exact frozen
+scorer and checks its hashes. This works after a restart and does not recompile.
+The engine labels the scorer source; numerical results carry Lean certificates.
+A compiler seed that fails feasibility may be repaired during evolution. Trusted
+scorers still require a valid seed. The local compiler needs Lean/Lake and
+`problems/lean` (override with `RESEARCH_LEAN_PROJECT`); Docker/model readiness is
+checked separately when starting search.
 
 `RESEARCH_MODEL` selects the Anthropic model for extraction and generation.
 The built-in registry provides `autocorrelation`, `bin-packing`, `knapsack`,
@@ -120,3 +131,13 @@ Validation: ten frontend tests pass, including burst ordering, two-parent merges
 stable positions, and unresolved/cyclic ancestry. Production build passes.
 Browser QA on the 18-node Sidon run checked two-second arrivals, pause holding the
 node count, one-step advancement, full-tree restoration, and no console errors.
+
+## Frontend compiler verification
+
+The compiler path was exercised through both browser composers. A saved,
+locally checked subset-sum specification was compiled, research started from the
+engine composer, and the real Docker worker executed a scripted dynamic-programming
+proposal. The frozen Lean scorer returned objective 7; the engine displayed the
+certificate and compiler-provenance link. No new hosted formalization or candidate
+model calls were made. The contract panel now handles structured fitness metadata,
+and the objective caption follows the run's metric and direction.

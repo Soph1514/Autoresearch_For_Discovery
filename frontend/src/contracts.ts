@@ -15,7 +15,7 @@ export interface Run {
   metricName?: string;
   direction?: "maximize" | "minimize";
   backend?: "python-demo" | "python";
-  contract?: Record<string, string | number>;
+  contract?: Record<string, unknown>;
 }
 export interface Idea {
   id: string;

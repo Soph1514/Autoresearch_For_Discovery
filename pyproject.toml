@@ -19,7 +19,8 @@ include = ["the_pigeon_holes*", "problems", "problems.*"]
 namespaces = false
 
 [tool.setuptools.package-data]
-problems = ["*/problem.txt", "*/instances.json"]
+problems = ["*/problem.txt", "*/instances.json", "subset_sum/*.json", "subset_sum/*.lean"]
+the_pigeon_holes = ["fitness/lean/*.lean"]
 
 [dependency-groups]
 dev = [

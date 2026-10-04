@@ -57,6 +57,13 @@ active time and token limits remain `EvolutionLimits`, outside this contract.
 
 ## Preparation
 
+The optional [Lean compiler preparation](fitness-compiler.md) constructs this same
+contract through the compiler using elaborated Lean parameter types and the objective
+comparison. It registers a frozen `LeanFitnessFunction` before entering the loop;
+it does not call the model-based interface extractor below. Trusted built-in
+contracts keep their registered scorers. The UI routes new problems through
+this compiler in its existing `ui/preparation.py` contract preparation.
+
 ```python
 build_problem_contract(
     natural_language_spec=...,
@@ -120,6 +127,8 @@ requires matching source-hash and checker provenance, stored beside the frozen
 contract. Behavioral checking belongs to the registered deterministic fitness
 function, while the generic evaluator owns sandbox execution and aggregation.
 Custom runs reject an invalid seed before generating candidates.
+The new Lean fallback starts from a typed zero/empty seed and permits the existing
+loop to repair an infeasible seed; such a seed never receives a valid score.
 
 ## Tests
 

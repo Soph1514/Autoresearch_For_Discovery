@@ -1,5 +1,9 @@
 # Fitness function synthesis and qualification
 
+Implementation update: the requested [Lean fitness compiler](fitness-compiler.md)
+now executes an accepted Lean specification directly. The Python scorer synthesis
+proposal below remains unimplemented; it is not the architecture used by the fallback.
+
 Status: proposed 4 October 2026, revised against `main` at `ee70270`. Not
 accepted. Requires team review before implementation, and separate review before
 any reported result depends on a synthesised fitness function. This document does

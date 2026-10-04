@@ -104,7 +104,7 @@ export function Composer({ onClose }: { onClose: () => void }) {
         {result.fidelity && <p>Fidelity score: {result.fidelity.p_faithful === null ? "Unavailable" : `${(result.fidelity.p_faithful * 100).toFixed(1)}%`} · {result.fidelity.reason_code}</p>}
         <label className="field">Lean source<textarea readOnly rows={12} value={result.lean} /></label>
         {result.diagnostics && <pre style={{ whiteSpace: "pre-wrap" }}>{result.diagnostics}</pre>}
-        <p className="notice">Lean checking does not prove natural-language equivalence. Review the formulation before using it. Prepare the seed and fixed evaluation suite below to continue.</p>
+        <p className="notice">Lean checking does not prove natural-language equivalence. Review the formulation before using it. Choose a problem family or compile a scorer, then provide fixed case inputs below to continue.</p>
       {result.formalization_id && result.lean_checked && <CustomResearch id={result.formalization_id} />}
       </section>}
       <div className="dialog-actions"><button type="button" disabled={busy} onClick={onClose}>Close</button>

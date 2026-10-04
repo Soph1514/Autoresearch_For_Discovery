@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from fractions import Fraction
 from pathlib import Path
 from typing import Callable, Mapping
@@ -19,13 +19,15 @@ from the_pigeon_holes.evolution.loop import EvolutionLoop
 from the_pigeon_holes.evolution.models import EvolutionConfig, EvolutionLimits
 from the_pigeon_holes.execution.container_runner import ContainerLimits, run_candidate_async
 from the_pigeon_holes.fitness.base import FitnessFunction
+from the_pigeon_holes.fitness.registry import FitnessFunctionRegistry, configured_registry
 from the_pigeon_holes.llm.budget import ProviderTokenBudget
 from the_pigeon_holes.llm.critic import AnthropicCritic, CriticConfig
 from the_pigeon_holes.llm.program_generator import (
     AnthropicGeneratorConfig,
     AnthropicProgramGenerator,
 )
-from the_pigeon_holes.models.problem_contract import ProblemContract
+from the_pigeon_holes.models.problem_contract import EvaluationCase, EvaluationSuite, ProblemContract
+from the_pigeon_holes.fitness.compiler import Formalizer, formalize_and_compile, lea_formalizer
 from the_pigeon_holes.problems import autocorrelation_contract, bin_packing_contract
 from the_pigeon_holes.problems.bin_packing import BEST_KNOWN as BIN_PACKING_BEST_KNOWN
 from the_pigeon_holes.problems.knapsack import knapsack_contract, BEST_KNOWN as KNAPSACK_BEST_KNOWN
@@ -190,11 +192,14 @@ async def run_problem(
     max_critic_calls: int = 200,
     memory_mb: int = 256,
     contract_kwargs: Mapping[str, object] | None = None,
+    registry: FitnessFunctionRegistry | None = None,
+    require_valid_seed: bool = True,
+    lean_checked: bool = False,
 ) -> dict:
     """Run the loop on one built-in problem and return its summary."""
     contract = problem.contract(memory_mb=memory_mb, **(contract_kwargs or {}))
     # Resolving through the registry applies the content-addressed digest check.
-    evaluator = create_evaluator(contract)
+    evaluator = create_evaluator(contract, registry=registry)
     fitness_function = evaluator.fitness_function
     provider_budget = ProviderTokenBudget(max_tokens)
     generator = AnthropicProgramGenerator(
@@ -217,7 +222,7 @@ async def run_problem(
         evaluator=evaluator,
         observer=JsonlObserver(run_dir / "attempts.jsonl"),
         critic=critic,
-        require_valid_seed=True,
+        require_valid_seed=require_valid_seed,
     )
     try:
         outcome = await loop.run(contract)
@@ -243,7 +248,7 @@ async def run_problem(
         "generator_model": model,
         "critic_model": model,
         "critic_prompt_version": "critic-v1",
-        "lean_checked": False,
+        "lean_checked": lean_checked,
         "worker_image": evaluator.image,
         "stop_reason": outcome.stop_reason.value,
         "generations": outcome.generations_completed,
@@ -265,3 +270,67 @@ async def run_problem(
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "summary.json").write_text(json.dumps(summary, indent=2, default=str) + "\n")
     return summary
+
+
+@dataclass(frozen=True)
+class PreparedResearch:
+    name: str
+    contract: ProblemContract
+    fitness: FitnessFunction
+    registry: FitnessFunctionRegistry
+    used_lean_fallback: bool
+
+
+def prepare_autoresearch(*, problem_name: str, statement: str,
+                        instance: Mapping[str, object], artifacts: Path,
+                        lean_project: Path,
+                        formalizer: Formalizer = lea_formalizer,
+                        registry: FitnessFunctionRegistry | None = None,
+                        trusted_contract: ProblemContract | None = None) -> PreparedResearch:
+    """Resolve trusted fitness first. Unknown problems get one frozen Lean scorer.
+
+    ``instance`` is a JSON object keyed by the specification's instance parameters.
+    Custom operator registries can supply their existing ``trusted_contract``.
+    An invalid trusted contract never silently switches to generated fitness.
+    """
+    active = registry if registry is not None else configured_registry()
+    name = problem_name.replace("_", "-")
+    known = PROBLEMS.get(name)
+    if trusted_contract is not None or known is not None:
+        contract = trusted_contract if trusted_contract is not None else known.contract()
+        fitness = active.resolve(contract.fitness_function)
+        contract = replace(contract, evaluation_suite=EvaluationSuite(
+            "requested-instance", (EvaluationCase("instance", instance),)))
+        fitness.validate_contract(contract)
+        return PreparedResearch(name, contract, fitness, active, False)
+    if any(ref.id.replace("_", "-") == name for ref in active.references()):
+        raise ValueError("a trusted scorer exists: supply its trusted_contract to bind the instance")
+    fitness = formalize_and_compile(statement=statement, instance=instance,
+                               lean_project=lean_project, artifacts=artifacts, formalizer=formalizer)
+    contract = fitness.contract()
+    fitness.validate_contract(contract)
+    active.register(fitness)
+    return PreparedResearch(name, contract, fitness, active, True)
+
+
+async def run_prepared(prepared: PreparedResearch, *, run_dir: Path, model: str,
+                       **run_options) -> dict:
+    """Use the same frozen evaluator for the seed, all descendants and recheck."""
+    problem = BuiltInProblem(prepared.name, lambda **_: prepared.contract)
+    summary = await run_problem(problem, run_dir=run_dir, run_id=run_dir.name,
+                               model=model, registry=prepared.registry,
+                               require_valid_seed=not prepared.used_lean_fallback,
+                               lean_checked=prepared.used_lean_fallback, **run_options)
+    return summary
+
+
+async def autoresearch(*, problem_name: str, statement: str, instance: Mapping[str, object],
+                      run_dir: Path, lean_project: Path, model: str,
+                      formalizer: Formalizer = lea_formalizer, **run_options) -> dict:
+    """End-to-end entry point. Initialization finishes before any search starts."""
+    import asyncio
+
+    prepared = await asyncio.to_thread(prepare_autoresearch, problem_name=problem_name,
+        statement=statement, instance=instance, artifacts=run_dir / "fitness",
+        lean_project=lean_project, formalizer=formalizer)
+    return await run_prepared(prepared, run_dir=run_dir, model=model, **run_options)

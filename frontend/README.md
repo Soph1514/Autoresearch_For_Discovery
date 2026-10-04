@@ -38,16 +38,25 @@ npm run build
 
 ## Custom research
 
-Set `RESEARCH_MODEL` and `ANTHROPIC_API_KEY` on the backend. The built-in evaluator supports autocorrelation. Build its worker with
+Set `RESEARCH_MODEL` and `ANTHROPIC_API_KEY` on the backend. The built-in registry supports six problem families; new problems can use the Lean compiler. Build its worker with
 `docker build -t the-pigeon-holes/candidate-worker:v1 docker/worker` from the
 repository root. No factory environment variable is needed for this family;
 see [setup and remaining work](../docs/pipeline-next-steps.md) for custom adapters. Redeploy the updated
 `research/lean-fidelity/modal_checker.py` so successful checks include provenance.
 
-After formalization, fill the seed, suite and evaluator fields and prepare the
-contract. Review its extracted signature and objective before starting research.
-The seed is evaluated first; a failed seed stops generation. Docker/image preflight failures are shown explicitly, and **Check evaluator availability** refreshes
-readiness without repeating extraction.
+After formalization, choose the problem family, enter fixed case inputs, and click
+**Prepare research**. A known family reuses its scorer; **New problem — compile
+Lean scorer** compiles the saved checked source without further model calls.
+The seed is optional: known families supply a baseline, while the compiler
+supplies a typed initial candidate that can be repaired if infeasible.
+Review the signature and objective, or open **View compiler result**, then click
+**Start research**. Compiler errors are shown with their failure stage.
+
+Compilation requires local Lean/Lake and the dependencies in `problems/lean`
+(override with `RESEARCH_LEAN_PROJECT`). Compiled scorers are stored beside the
+SQLite database in `fitness/`; preserve both across restarts. Starting research
+reloads and verifies the saved scorer without recompiling. Docker/image preflight
+failures remain visible, and **Check evaluator availability** refreshes readiness.
 
 Run history is stored in `runs/research.sqlite3` (override with `RESEARCH_STORE`).
 Use a single backend worker. Download evidence from the engine page. For optional
