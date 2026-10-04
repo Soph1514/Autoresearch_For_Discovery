@@ -63,9 +63,11 @@ class FitnessFunctionRegistry:
 
 def builtin_registry() -> FitnessFunctionRegistry:
     from .autocorrelation import AutocorrelationFitnessFunction
+    from .bin_packing import BinPackingFitnessFunction
 
     registry = FitnessFunctionRegistry()
     registry.register(AutocorrelationFitnessFunction())
+    registry.register(BinPackingFitnessFunction())
     return registry
 
 

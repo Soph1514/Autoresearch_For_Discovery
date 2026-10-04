@@ -18,8 +18,17 @@ function RunProvenance({runId, status}: {runId: string; status: string}) {
     {summary.reported_tokens != null && <span>{summary.reported_tokens.toLocaleString()} reported evolution tokens · {summary.generations} generations · {summary.stop_reason?.replaceAll('_', ' ')}</span>}
   </div>;
 }
-function Witness({runId, candidateId}: {runId: string; candidateId: string}) {
-  const [record, setRecord] = useState<{cases: Record<string, {output?: number[]; c1_exact?: {numerator: string; denominator: string}}> } | null>(null);
+type Rational = {numerator: string; denominator: string};
+type CaseWitness = {output?: number[]; lower_bound?: number} & Record<string, unknown>;
+
+function rationalFor(witness: CaseWitness, metric: string): Rational | undefined {
+  // Every fitness function records its metric under "<metric>_exact".
+  const value = witness[`${metric}_exact`] as Rational | undefined;
+  return value && value.numerator !== undefined ? value : undefined;
+}
+
+function Witness({runId, candidateId, metric}: {runId: string; candidateId: string; metric?: string}) {
+  const [record, setRecord] = useState<{cases: Record<string, {fitness_evidence?: CaseWitness}>} | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     setRecord(null);
@@ -27,20 +36,38 @@ function Witness({runId, candidateId}: {runId: string; candidateId: string}) {
       .then(r => r.ok ? r.json() : null).then(setRecord).catch(() => {});
     return () => controller.abort();
   }, [runId, candidateId]);
-  if (!record) return null;
+  // Without the run's metric name there is no witness key to look up.
+  if (!record || !metric) return null;
   return <section><h3>Constructed witnesses</h3>{Object.entries(record.cases).map(([id, c]) => {
-    if (!c.output || !c.c1_exact) return null;
-    const q = c.output, peak = Math.max(...q), n = q.length;
-    const path = q.map((x,i) => `${i ? 'L' : 'M'} ${10 + 280*i/n} ${90-75*x/peak} H ${10+280*(i+1)/n}`).join(' ');
+    const witness = c.fitness_evidence;
+    const exact = witness && rationalFor(witness, metric);
+    if (!witness?.output || !exact) return null;
+    const q = witness.output, n = q.length;
+    const approx = Number(exact.numerator) / Number(exact.denominator);
     return <div key={id} className="witness">
-      <p>{id} · {n} cells · c1 ≈ {(Number(c.c1_exact.numerator)/Number(c.c1_exact.denominator)).toFixed(8)}</p>
-      <svg viewBox="0 0 300 112" role="img" aria-label={`Step function witness for ${id}, heights normalized for display`}>
-        <path d="M10 90H290" stroke="#bcb5a9"/><path d={path} fill="none" stroke="#655d52" strokeWidth="1.5"/>
-        <text x="10" y="108" fontSize="10">−1/4</text><text x="267" y="108" fontSize="10">1/4</text>
-      </svg>
-      <details><summary>Exact rational certificate</summary><p className="exact-score">{c.c1_exact.numerator} / {c.c1_exact.denominator}</p><p className="muted">Computed independently with integer arithmetic. Full integer heights are included in the evidence download.</p></details>
+      <p>{id} · {n} values · {metric} ≈ {Number.isInteger(approx) ? approx : approx.toFixed(8)}
+        {witness.lower_bound !== undefined && <> · proven bound {witness.lower_bound}</>}</p>
+      {/* The step-function plot only means anything for the autocorrelation family. */}
+      {metric === "c1" ? <StepFunction id={id} values={q} /> : <OutputPreview values={q} />}
+      <details><summary>Exact rational certificate</summary><p className="exact-score">{exact.numerator} / {exact.denominator}</p><p className="muted">Computed independently with integer arithmetic. The full witness is included in the evidence download.</p></details>
     </div>;
   })}</section>;
+}
+
+function StepFunction({id, values}: {id: string; values: number[]}) {
+  const peak = Math.max(...values), n = values.length;
+  const path = values.map((x,i) => `${i ? 'L' : 'M'} ${10 + 280*i/n} ${90-75*x/peak} H ${10+280*(i+1)/n}`).join(' ');
+  return <svg viewBox="0 0 300 112" role="img" aria-label={`Step function witness for ${id}, heights normalized for display`}>
+    <path d="M10 90H290" stroke="#bcb5a9"/><path d={path} fill="none" stroke="#655d52" strokeWidth="1.5"/>
+    <text x="10" y="108" fontSize="10">−1/4</text><text x="267" y="108" fontSize="10">1/4</text>
+  </svg>;
+}
+
+function OutputPreview({values}: {values: number[]}) {
+  const shown = values.slice(0, 48);
+  return <p className="exact-score">
+    {shown.join(", ")}{values.length > shown.length && ` … (${values.length} values)`}
+  </p>;
 }
 function Inspector({
   snapshot,
@@ -75,7 +102,7 @@ function Inspector({
           {e.current ? "★ Elite" : "Former elite"} · {e.niche}
         </span>
       ))}
-      {snapshot.run.backend === "python" && <Witness runId={snapshot.run.id} candidateId={idea.id} />}
+      {snapshot.run.backend === "python" && <Witness runId={snapshot.run.id} candidateId={idea.id} metric={snapshot.run.metricName} />}
       <h3>Candidate hypothesis</h3>
       <p className="muted">Proposed by the generator. Only the recorded test cases were evaluated.</p>
       <ul className="idea-points">{idea.description.split(/(?<=\.)\s+(?=[A-Z])/).map((point, i) => <li key={i}>{point}</li>)}</ul>
