@@ -185,7 +185,11 @@ def test_case_concurrency_is_globally_bounded_and_candidate_order_is_stable(monk
         finally:
             active -= 1
 
+    async def inline_score(function, *args, **kwargs):
+        return function(*args, **kwargs)
+
     monkeypatch.setattr(production, 'run_candidate_async', fake_run)
+    monkeypatch.setattr(production.asyncio, 'to_thread', inline_score)
     local = AutocorrelationEvaluator(
         ContainerLimits(memory_mb=128, timeout_seconds=3),
         max_workers=2,
@@ -195,6 +199,12 @@ def test_case_concurrency_is_globally_bounded_and_candidate_order_is_stable(monk
     assert [result.candidate_id for result in results] == ['c0', 'c1']
     assert all(result.valid and result.passing_cases == 3 for result in results)
     assert peak == 2
+    for candidate_id in ('c0', 'c1'):
+        evidence = local.evidence[candidate_id]
+        assert evidence['mean_c1_exact'] == {'numerator': '2', 'denominator': '1'}
+        assert list(evidence['cases']) == ['n-62', 'n-63', 'n-64']
+        assert all(case['ok'] and 'c1_exact' in case
+                   for case in evidence['cases'].values())
 
 
 def test_factory_rejects_unsupported_contract_before_docker():

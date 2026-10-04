@@ -89,8 +89,15 @@ class AutocorrelationEvaluator:
         if signature_error:
             return _invalid(candidate, "static_validation", signature_error, total)
 
+        # Each case owns a distinct record, so concurrent case tasks can publish
+        # partial evidence without contending on the same nested mapping.
+        record = {"image": self.image, "cases": {}}
+        self.evidence[candidate.id] = record
+
         async def evaluate_case(case):
             args = case.materialize_inputs()
+            case_record = {"inputs": args}
+            record["cases"][case.id] = case_record
             limits = replace(self.limits,
                 timeout_seconds=min(self.limits.timeout_seconds, problem.resource_limits.case_time_seconds),
                 memory_mb=min(self.limits.memory_mb, problem.resource_limits.memory_mb))
@@ -98,17 +105,33 @@ class AutocorrelationEvaluator:
                 result = await run_candidate_async(
                     candidate.source_code, ENTRY_POINT, args, limits, self.image
                 )
-            if not result.ok:
-                return _invalid(candidate, result.failure_stage, result.failure_reason, total), None
-            try:
-                output = validate_output(result.output)
-                if len(output) != args["n"]:
-                    raise InvalidOutput(
-                        f"expected length {args['n']}, got {len(output)}"
+                case_record.update(
+                    ok=result.ok,
+                    failure_stage=result.failure_stage,
+                    failure_reason=result.failure_reason,
+                )
+                if not result.ok:
+                    return _invalid(candidate, result.failure_stage, result.failure_reason, total), None
+                try:
+                    output = validate_output(result.output)
+                    if len(output) != args["n"]:
+                        raise InvalidOutput(
+                            f"expected length {args['n']}, got {len(output)}"
+                        )
+                    value, cell = await asyncio.to_thread(_score, output)
+                    case_record["output"] = output
+                    case_record["c1_exact"] = {
+                        "numerator": str(value.numerator),
+                        "denominator": str(value.denominator),
+                    }
+                    return None, (value, cell)
+                except InvalidOutput as error:
+                    case_record.update(
+                        ok=False,
+                        failure_stage="invalid_output",
+                        failure_reason=str(error),
                     )
-                return None, await asyncio.to_thread(_score, output)
-            except InvalidOutput as error:
-                return _invalid(candidate, "invalid_output", str(error), total), None
+                    return _invalid(candidate, "invalid_output", str(error), total), None
 
         tasks = [asyncio.create_task(evaluate_case(case))
                  for case in problem.evaluation_suite.cases]
