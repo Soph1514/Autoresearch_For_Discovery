@@ -10,7 +10,7 @@ export function contractInput(formalizationId: string, fields: PreparationFields
     formalization_id: formalizationId,
     seed_program: fields.seed.trim() ? fields.seed : null,
     evaluation_suite_id: fields.suite,
-    evaluation_cases: JSON.parse(fields.cases),
+    evaluation_cases: fields.cases.trim() ? JSON.parse(fields.cases) : null,
     fitness_function_id: fields.fitness?.id ?? null,
     fitness_function_version: fields.fitness?.version ?? null,
     alignment_reviewed: fields.reviewed,
@@ -31,7 +31,8 @@ export function mountCustomResearch(host: HTMLElement, formalizationId: string) 
     <p>Select an existing problem family to reuse its scorer. For a new problem, the compiler builds a scorer from the checked Lean. Compilation does not prove that Lean matches your description.</p>
     <label class="field">Problem family<select data-field="fitness" aria-label="Problem family"><option value="">New problem — Lean compiler</option></select></label>
     <label class="field">Evaluation suite ID<input data-field="suite" aria-label="Evaluation suite ID" value="instance"></label>
-    <label class="field">Case inputs (JSON object keyed by case ID)<textarea data-field="cases" rows="6" aria-label="Case inputs" placeholder='{"case-1": {"parameter": 1}}'></textarea></label>
+    <label class="field">Evaluation cases (editable)<textarea data-field="cases" rows="6" aria-label="Case inputs" placeholder="Generated when you prepare a new Lean problem. You can also enter your own cases."></textarea></label>
+    <p>Cases are the concrete inputs used to compare algorithms. For compiled Lean problems, leave this empty to generate small feasible cases. Review or edit them, then prepare again after edits. These starter cases do not prove correctness on every input.</p>
     <label class="field">Seed Python (optional)<textarea data-field="seed" rows="6" aria-label="Seed Python"></textarea></label>
     <p>Leave the seed empty to use the family baseline or the compiler’s initial candidate. The compiler’s candidate can be repaired during search.</p>
     <label><input type="checkbox" data-field="reviewed"> I reviewed the Lean statement against my problem.</label>
@@ -110,10 +111,12 @@ export function mountCustomResearch(host: HTMLElement, formalizationId: string) 
         reviewed: (field('reviewed') as HTMLInputElement).checked,
       }));
       contractId = result.id;
+      field('cases').value = JSON.stringify(result.evaluation_cases, null, 2);
       compilerLink.hidden = !result.compiler;
       compilerLink.href = `/api/contracts/${encodeURIComponent(result.id)}/compiler`;
       const compiled = result.compiler ? 'Lean scorer compiled, verified and frozen. ' : 'Using the registered scorer. ';
       status.textContent = `${compiled}${result.signature} · ${result.direction} ${result.metric}. ${result.seed_status}.`;
+      if (result.cases_generated) status.textContent += ' Generated feasible starter cases above; you can edit them before starting.';
       try {
         const ready = await capabilities();
         if (!evaluatorConfigured) status.textContent += ` ${ready.evaluator_error || 'Configure the research model before starting.'}`;

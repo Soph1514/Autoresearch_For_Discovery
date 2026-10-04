@@ -17,8 +17,14 @@ npm run dev
 
 Open the URL Vite prints (normally http://127.0.0.1:5173).
 The workbench accepts natural-language or existing Lean problems, with optional
-attachments. Hosted preparation requires Modal access to `arin06` and its
-[deployed services](../research/lean-fidelity/README.md).
+attachments. Hosted preparation uses Modal access to `arin06` and its
+[deployed services](../research/lean-fidelity/README.md). If Qwen is unavailable,
+generation and repairs fall back to Claude using `ANTHROPIC_API_KEY` (default
+`claude-sonnet-4-6`; override with `FORMALIZATION_FALLBACK_MODEL`). If the hosted
+checker is unavailable, local Lean checks ordinary definitions and term proofs
+after the compiler's source-admission gate; tactics are unsupported on this path.
+An unavailable fidelity model leaves the checked formulation for manual alignment
+review. The actual generator and fallback are recorded with the formalization.
 **Open demo page** opens `/engine.html`; its **Run routing demo** needs no model
 credentials. The original scripted demo remains at `/api/demo`.
 

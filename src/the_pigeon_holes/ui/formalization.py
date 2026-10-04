@@ -1,5 +1,7 @@
 """UI preparation pipeline. Model credentials remain in the Python service."""
 import asyncio
+import logging
+import os
 import re
 from typing import Literal
 from pydantic import BaseModel, Field, model_validator
@@ -26,13 +28,65 @@ async def remote_call(function, *args):
         raise
 
 class HostedTools:
-    async def generate(self, problem, feedback=''):
+    def __init__(self):
+        self.generator = 'Qwen/Qwen3-4B-Instruct-2507'
+        self.generation_calls = []
+        self.fallback_reason = None
+        self.local_checker = False
+
+    async def _qwen(self, problem, feedback):
         import modal
         return await remote_call(modal.Cls.from_name('lean-generation', 'Generator')().generate, problem, feedback)
 
+    async def _claude(self, problem, feedback):
+        import anthropic
+        model = os.environ.get('FORMALIZATION_FALLBACK_MODEL', 'claude-sonnet-4-6')
+        async with anthropic.AsyncAnthropic(timeout=120, max_retries=0) as client:
+            response = await client.messages.create(model=model, max_tokens=6000,
+                system=('Return only a complete Lean 4.19 file using Mathlib, without markdown. '
+                    'Preserve the problem, all constraints, and the objective. '
+                    'For optimization/construction problems define feasibility and optimality; '
+                    'do not claim to solve the problem or prove an optimum exists. '
+                    'Use ordinary definitions and term proofs, no tactics (by), sorry, admit, axioms, '
+                    'metaprogramming, noncomputable definitions, or IO. '
+                    'For an optimization predicate, place instance parameters before the candidate, '
+                    'and express optimality as feasibility and comparison with every feasible alternative. '
+                    'Do not simplify or change the mathematics to fit an interface.'),
+                messages=[{'role': 'user', 'content': problem +
+                    ('\nRepair the previous Lean using this checker feedback:\n' + feedback if feedback else '')}])
+        if response.stop_reason == 'max_tokens':
+            raise RuntimeError('Claude formalization was truncated; shorten the problem and retry.')
+        source = '\n'.join(block.text for block in response.content if block.type == 'text').strip()
+        if source.startswith('```'):
+            source = source.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+        if not source:
+            raise RuntimeError('Claude returned no Lean source.')
+        self.generator = model
+        self.generation_calls.append({'model': model, 'input_tokens': response.usage.input_tokens,
+                                      'output_tokens': response.usage.output_tokens})
+        return source
+
+    async def generate(self, problem, feedback=''):
+        if self.fallback_reason is None:
+            try:
+                source = await self._qwen(problem, feedback)
+                self.generator = 'Qwen/Qwen3-4B-Instruct-2507'
+                return source
+            except Exception as error:
+                self.fallback_reason = f'Qwen unavailable ({type(error).__name__})'
+                logging.getLogger(__name__).warning('%s; using Claude', self.fallback_reason)
+        return await self._claude(problem, feedback)
+
     async def check(self, source):
-        import modal
-        return await remote_call(modal.Function.from_name('lean-checker', 'check'), source)
+        if not self.local_checker:
+            try:
+                import modal
+                return await remote_call(modal.Function.from_name('lean-checker', 'check'), source)
+            except Exception as error:
+                logging.getLogger(__name__).warning('Hosted checker unavailable (%s); using local Lean', type(error).__name__)
+                self.local_checker = True
+        from .local_lean import check
+        return await asyncio.to_thread(check, source)
 
     async def score(self, problem, source):
         import os
@@ -51,7 +105,7 @@ class HostedTools:
 
 async def prepare(body: FormalizationInput, tools=None, progress=None):
     tools = tools or HostedTools()
-    generated_by_qwen = body.mode == "natural"
+    generated_by_model = body.mode == "natural"
     async def emit(**event):
         if progress:
             await progress(event)
@@ -82,7 +136,7 @@ async def prepare(body: FormalizationInput, tools=None, progress=None):
         if body.mode == 'formal':
             feedback += '\nOriginal user formulation (preserve its statement):\n' + body.lean
         source = await tools.generate(body.problem, feedback)
-        generated_by_qwen = True
+        generated_by_model = True
     await emit(stage='scoring', attempt=attempts, lean=source)
     fidelity = None
     fidelity_error = None
@@ -95,5 +149,7 @@ async def prepare(body: FormalizationInput, tools=None, progress=None):
             'attempts': attempts, 'fidelity': fidelity, 'fidelity_error': fidelity_error,
             'status': ('checked' if fidelity and fidelity['fidelity_decision'] == 'accept'
                        else 'review' if checked['valid'] else 'invalid'),
-            'generator': 'user' if not generated_by_qwen else 'Qwen/Qwen3-4B-Instruct-2507',
+            'generator': 'user' if not generated_by_model else getattr(tools, 'generator', 'Qwen/Qwen3-4B-Instruct-2507'),
+            'generation_fallback': getattr(tools, 'fallback_reason', None),
+            'generation_calls': getattr(tools, 'generation_calls', []),
             'generation_fine_tuned': False}

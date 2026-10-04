@@ -41,7 +41,7 @@ export function Composer({ onClose }: { onClose: () => void }) {
         <button type="button" disabled={busy} onClick={onClose} aria-label="Close problem composer">×</button></div>
       <label className="field">Starting point (optional · defaults to natural language)
         <select disabled={busy} value={mode} onChange={(e) => { setMode(e.target.value as typeof mode); setResult(null); }}>
-          <option value="natural">Describe a problem — Qwen generates Lean</option>
+          <option value="natural">Describe a problem — generate Lean</option>
           <option value="formal">I already have a Lean formulation</option>
         </select>
       </label>
@@ -90,7 +90,7 @@ export function Composer({ onClose }: { onClose: () => void }) {
       </label>
       <p className="muted">Photos, PDFs (up to 10 pages), and text files · 10 MB each. Review extracted text; OCR can misread handwriting and mathematical symbols.</p>
       {attachmentStatus && <p role="status">{attachmentStatus}</p>}
-      <p className="muted">Qwen generates a formulation; Lean checks it, then our fine-tuned Qwen model scores its alignment with your problem.</p>
+      <p className="muted">Qwen generates Lean, with Claude as a fallback. Lean checks it; the fine-tuned alignment model adds a review when available.</p>
       {busy && !attachmentStatus.startsWith("Reading") && <p role="status">Generating and checking Lean… Hosted models may take a few minutes to start.</p>}
       {error && <p role="alert" className="notice">{error}</p>}
       {controller.current && <button type="button" onClick={() => controller.current?.abort()}>Stop</button>}

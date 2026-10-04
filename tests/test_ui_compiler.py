@@ -159,6 +159,33 @@ def test_registered_family_skips_compiler_and_uses_baseline(client, monkeypatch)
     assert client.post('/api/contracts', json=body).status_code == 422
 
 
+def test_missing_cases_are_generated_and_edits_are_preserved(client):
+    body = request_body()
+    del body['evaluation_cases']
+    response = client.post('/api/contracts', json=body)
+    assert response.status_code == 201, response.text
+    data = response.json()
+    assert data['cases_generated']
+    cases = data['evaluation_cases']
+    assert len(cases) == 5
+    assert any(inputs['weights'] for inputs in cases.values())
+    saved = api.store.get('contract', data['id'])
+    contract = contract_from_dict(saved['contract'])
+    artifact = api.store.get('fitness', contract.fitness_function.id)
+    assert artifact['manifest']['generated_cases'] == cases
+    certificate = Path(artifact['artifact']) / 'GeneratedCases.lean'
+    assert certificate.is_file() and 'by decide' in certificate.read_text()
+    # The returned cases are exactly the frozen suite. Editing requires a new contract.
+    assert {c.id: c.materialize_inputs() for c in contract.evaluation_suite.cases} == cases
+    cases['case-1'] = {'weights': [10, 20], 'capacity': 20}
+    body['evaluation_cases'] = cases
+    response = client.post('/api/contracts', json=body)
+    assert response.status_code == 201, response.text
+    assert not response.json()['cases_generated']
+    assert response.json()['evaluation_cases'] == cases
+    assert api.store.get('contract', data['id']) == saved
+
+
 def test_compiler_rejection_reaches_frontend_with_stage(client):
     api.store.put('formalization', 'unsupported', formalization('def scalar : Nat := 7'))
     response = client.post('/api/contracts', json=request_body('unsupported'))

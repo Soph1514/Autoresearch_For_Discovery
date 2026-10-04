@@ -2,6 +2,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { contractInput, preparationError } from './customResearch';
 
+test('blank cases request automatic generation; supplied edits are preserved', () => {
+  const fields = {seed: '', suite: 'instance', cases: '  ', reviewed: true, fitness: null};
+  assert.equal(contractInput('saved', fields).evaluation_cases, null);
+  fields.cases = '{"edited":{"capacity":17}}';
+  assert.deepEqual(contractInput('saved', fields).evaluation_cases, {edited: {capacity: 17}});
+});
+
 test('new problem requests compilation of saved Lean without a seed or scorer ID', () => {
   const body = contractInput('saved-lean', {seed: '', suite: 'instance',
     cases: '{"one":{"weights":[3,4,5],"capacity":7}}', reviewed: true, fitness: null});

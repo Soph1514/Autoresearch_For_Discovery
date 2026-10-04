@@ -16,7 +16,7 @@ class ContractInput(BaseModel):
     formalization_id: str
     seed_program: str | None = Field(default=None, max_length=64000)
     evaluation_suite_id: str = Field(min_length=1, max_length=200)
-    evaluation_cases: dict[str, dict] = Field(min_length=1, max_length=1000)
+    evaluation_cases: dict[str, dict] | None = Field(default=None, min_length=1, max_length=1000)
     fitness_function_id: str | None = Field(default=None, min_length=1, max_length=200)
     fitness_function_version: str | None = Field(default=None, min_length=1, max_length=200)
     alignment_reviewed: bool = False
@@ -73,19 +73,23 @@ async def prepare_contract(body, artifact, *, builder=build_problem_contract, re
                        Path(__file__).resolve().parents[3] / 'problems' / 'lean')
         def compile_contract():
             fitness = compile_fitness(statement=artifact['input']['problem'],
-                instance=next(iter(body.evaluation_cases.values())), lean_source=result['lean'],
+                instance=next(iter(body.evaluation_cases.values())) if body.evaluation_cases is not None else None,
+                lean_source=result['lean'],
                 lean_project=project, artifacts=store.path.parent / 'fitness',
                 provenance={'formalization_id': body.formalization_id,
                             'check_artifact': provenance, 'fidelity': result.get('fidelity'),
                             'alignment_reviewed': body.alignment_reviewed})
+            cases = body.evaluation_cases if body.evaluation_cases is not None else fitness.manifest['generated_cases']
             contract = replace(fitness.contract(seed_program=body.seed_program or None, limits=limits),
                 evaluation_suite=EvaluationSuite(body.evaluation_suite_id, tuple(
-                    EvaluationCase(identity, inputs) for identity, inputs in body.evaluation_cases.items())))
+                    EvaluationCase(identity, inputs) for identity, inputs in cases.items())))
             fitness.validate_contract(contract)
             store.put('fitness', fitness.reference.id,
                       {'artifact': str(fitness.artifact), 'manifest': fitness.manifest})
             return contract
         return await asyncio.to_thread(compile_contract)
+    if body.evaluation_cases is None:
+        raise ValueError('Provide case inputs for the registered fitness function.')
     fitness_function = active_registry.find(
         body.fitness_function_id, body.fitness_function_version
     )

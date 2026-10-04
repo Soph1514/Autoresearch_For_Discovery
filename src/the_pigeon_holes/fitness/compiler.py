@@ -178,7 +178,8 @@ class LeanFitnessFunction:
         return ProblemContract(
             natural_language_spec=manifest["statement"], lean_specification=manifest["lean_source"],
             interface=interface, seed_program=seed_program or interface.solve_signature + f"\n    return {default}\n",
-            evaluation_suite=EvaluationSuite("lean-instance", (EvaluationCase("instance", manifest["instance"]),)),
+            evaluation_suite=EvaluationSuite("lean-instance", tuple(EvaluationCase(name, inputs)
+                for name, inputs in manifest.get("generated_cases", {"instance": manifest["instance"]}).items())),
             optimisation_goal=OptimisationGoal(MetricGoal("objective", self.direction), "mean"),
             resource_limits=limits or ResourceLimits(5, 120, 256, 10), fitness_function=self.reference,
         )
@@ -232,7 +233,40 @@ class LeanFitnessFunction:
             return CaseFitness(False, failure_reason=str(exc))
 
 
-def compile_fitness(*, statement: str, instance: Mapping[str, object],
+def _generate_cases(project, workspace, ir, timeout):
+    from .cases import instance_samples, witness_samples
+    instances = instance_samples(ir['parameters'])
+    pools = [witness_samples(ir['candidate_type'], inputs) for inputs in instances]
+    def arguments(inputs):
+        return ' '.join(_literal(inputs[p['name']], p['type']) for p in ir['parameters'])
+    lines = ['import CompiledFitness']
+    for i, (inputs, pool) in enumerate(zip(instances, pools)):
+        literals = ', '.join(_literal(c, ir['candidate_type']) for c in pool)
+        lines.append(f'def samples{i} : List ({ir["candidate_type"]}) := [{literals}]')
+        lines.append(f'#eval match (List.range {len(pool)}).find? (fun j => '
+                     f'decide (frozenFitnessFeasible {arguments(inputs)} samples{i}[j]!)) with\n'
+                     f'  | some j => "CASE:{i}:" ++ toString j\n  | none => "NONE"')
+    query = workspace / 'CaseSearch.lean'
+    query.write_text('\n'.join(lines) + '\n')
+    log = _run(project, workspace, query, timeout=timeout, stage='test_case_generation_failed')
+    selected = []
+    for line in log.splitlines():
+        if line.startswith('"CASE:'):
+            _, i, j = line.strip('"').split(':')
+            selected.append((instances[int(i)], pools[int(i)][int(j)]))
+    if not selected:
+        raise LeanFitnessError('test_case_generation_failed',
+            'No feasible starter instances found in the bounded search. Enter case inputs manually.', workspace)
+    selected = selected[:5]
+    certificate = workspace / 'GeneratedCases.lean'
+    certificate.write_text('import CompiledFitness\nset_option Elab.async false\n' + ''.join(
+        f'example : frozenFitnessFeasible {arguments(inputs)} {_literal(witness, ir["candidate_type"])} := by decide\n'
+        for inputs, witness in selected))
+    _run(project, workspace, certificate, timeout=timeout, stage='test_case_generation_failed')
+    return {f'case-{i + 1}': inputs for i, (inputs, _) in enumerate(selected)}
+
+
+def compile_fitness(*, statement: str, instance: Mapping[str, object] | None = None,
                       lean_source: str, lean_project: Path, artifacts: Path,
                       provenance: Mapping[str, object] | None = None,
                       timeout: float = 60.0) -> LeanFitnessFunction:
@@ -240,7 +274,7 @@ def compile_fitness(*, statement: str, instance: Mapping[str, object],
     project = lean_project.resolve()
     workspace = artifacts.resolve() / uuid4().hex
     workspace.mkdir(parents=True)
-    manifest = {"version": VERSION, "statement": statement, "instance": dict(instance),
+    manifest = {"version": VERSION, "statement": statement, "instance": dict(instance) if instance is not None else None,
                 "lean_source": lean_source, "formalizer": dict(provenance or {}),
                 "timeout_seconds": timeout, "english_fidelity": "not_proven",
                 "implementation_sha256": _implementation_hash()}
@@ -282,6 +316,11 @@ def compile_fitness(*, statement: str, instance: Mapping[str, object],
         executable.write_text("import CompiledFitness\n" +
             f"def frozen_decidable {binders} (c : {ir['candidate_type']}) : Bool := decide (frozenFitnessFeasible {args} c)\n")
         _run(project, workspace, executable, timeout=timeout, stage="unsupported_formalization")
+        if instance is None:
+            cases = _generate_cases(project, workspace, ir, timeout)
+            instance = next(iter(cases.values()))
+            manifest.update(instance=instance, generated_cases=cases,
+                            case_generation='bounded deterministic search; Lean-certified feasibility')
         version = subprocess.run(["lake", "env", "lean", "--version"], cwd=project,
                                  capture_output=True, text=True, check=True, timeout=timeout).stdout.strip()
         manifest.update(lean_version=version, lean_project=str(project),

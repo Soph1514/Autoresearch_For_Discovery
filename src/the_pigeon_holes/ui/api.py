@@ -206,7 +206,7 @@ async def formalize_problem(body: FormalizationInput, request: Request, stream: 
             except Exception:
                 import logging
                 logging.getLogger(__name__).exception('Hosted formalization failed')
-                yield json.dumps({'type': 'error', 'message': 'Hosted Lean/Qwen service unavailable. The latest source and diagnostics are preserved.'}) + '\n'
+                yield json.dumps({'type': 'error', 'message': 'Formalization unavailable. Check model credentials and Lean setup. The latest source and diagnostics are preserved.'}) + '\n'
             finally:
                 task.cancel()
                 with anyio.CancelScope(shield=True):
@@ -229,7 +229,7 @@ async def formalize_problem(body: FormalizationInput, request: Request, stream: 
     except Exception:
         import logging
         logging.getLogger(__name__).exception('Hosted formalization failed')
-        raise HTTPException(503, 'Hosted Lean/Qwen service unavailable. Check backend Modal authentication and deployments.')
+        raise HTTPException(503, 'Formalization unavailable. Check model credentials and Lean checker setup.')
     finally:
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
@@ -317,6 +317,8 @@ async def create_contract(body: ContractInput):
         provenance['compiler'] = compiler
     store.put('contract', identity, {'contract': contract, 'provenance': provenance})
     return {'id': identity, 'signature': contract.solve_signature, 'compiler': compiler,
+        'evaluation_cases': {case.id: case.materialize_inputs() for case in contract.evaluation_suite.cases},
+        'cases_generated': body.evaluation_cases is None,
         'metric': contract.optimisation_goal.primary.name,
         'direction': contract.optimisation_goal.primary.direction,
         'fitness_function': {'id': contract.fitness_function.id,

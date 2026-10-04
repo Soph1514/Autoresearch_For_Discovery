@@ -6,6 +6,7 @@ dependencies = [
     "anthropic>=1.11.0",
     "datasets>=4.0.0",
     "lean-interact>=0.11.5",
+    "modal>=1.6.1",
     "pydantic>=2.13.5",
 ]
 

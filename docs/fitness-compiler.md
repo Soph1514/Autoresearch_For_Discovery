@@ -167,9 +167,23 @@ The local wheel build includes the compiler and example data without warnings.
 After formalization/checking, choose a **Problem family** in either composer.
 Existing families use the registered scorer (and its baseline if no seed is
 provided). **New problem — Lean compiler** sends the saved formalization
-ID and fixed case inputs to `POST /api/contracts`. This route compiles that exact
+ID and optional case inputs to `POST /api/contracts`. This route compiles that exact
 checked source; it never repeats a model call. All existing source-hash and
 alignment-review gates still apply.
+
+Leave **Evaluation cases** empty to generate up to five starter instances during
+preparation. A deterministic, bounded search proposes small inputs from the Lean
+parameter types. Only instances with a Lean-certified feasible witness are kept;
+the certificates are saved in `GeneratedCases.lean`. No model call is used. The
+returned cases populate the editable form. Edits invalidate the prepared contract;
+prepare again to save the edited suite before starting research. Registered
+scorers still require their own case inputs.
+
+Cases supply concrete inputs on which candidate algorithms are executed and
+compared; they do not prove correctness for all inputs. The generated suite is a
+starter suite, not a representative benchmark or proof of optimality. If the
+bounded search finds no feasible instance, preparation reports
+`test_case_generation_failed` and accepts manually supplied cases instead.
 
 The compiler creates and freezes the evaluator before the contract is saved.
 The form shows success or a structured compiler failure, the solve signature,

@@ -68,7 +68,7 @@ form.onsubmit = async (event) => {
   element('stop-formalization').hidden = false;
   element<HTMLButtonElement>('upload').disabled = true;
   element('problem-title').textContent = problem.value.split('\n')[0].slice(0, 120);
-  element('problem-sub').textContent = mode.value === 'formal' ? 'Existing Lean formulation' : 'Qwen3-4B-Instruct · generation + repair until Lean passes';
+  element('problem-sub').textContent = mode.value === 'formal' ? 'Existing Lean formulation' : 'Qwen / Claude fallback · generation + repair until Lean passes';
   element('validation-status').textContent = 'Processing…';
   element('run-state').textContent = 'Running';
   element('best').textContent = '—'; element('count').textContent = '0';
@@ -106,6 +106,7 @@ form.onsubmit = async (event) => {
 };
 
 function renderResult(result: Awaited<ReturnType<typeof formalize>>) {
+    element('problem-sub').textContent = `${result.generator} · ${result.generation_fallback || 'Lean checked'}`;
     element('lean-output').textContent = result.lean;
     element('count').textContent = String(result.attempts);
     element('best').textContent = result.fidelity?.p_faithful == null ? '—' : `${(result.fidelity.p_faithful * 100).toFixed(1)}%`;
