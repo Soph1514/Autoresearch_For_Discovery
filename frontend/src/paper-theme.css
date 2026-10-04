@@ -36,3 +36,8 @@ button,input,textarea,select{font:inherit}h2,.stats strong{font-family:var(--cod
 .field textarea,.field select{background:#fffcf6;color:var(--ink);border:1px solid #bcb5a9;border-radius:0}.field select{display:block;width:100%;padding:10px;margin-top:8px}
 #stage:has(#lean-output){min-width:0;height:auto;min-height:605px}
 .idea-points{padding-left:18px}.idea-points li+li{margin-top:8px}
+
+/* Custom contract inputs share the existing paper controls. */
+[data-field] { max-width: 100%; box-sizing: border-box; }
+textarea[data-field], input[data-field]:not([type="checkbox"]) { display: block; width: 100%; margin: 6px 0 12px; padding: 8px; font: inherit; color: inherit; background: var(--paper, #fcfaf6); border: 1px solid #dedbd5; border-radius: 6px; }
+[data-status] { overflow-wrap: anywhere; margin: 12px 0; }

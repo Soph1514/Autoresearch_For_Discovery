@@ -212,3 +212,21 @@ def test_generator_propagates_cancellation():
             await task
 
     asyncio.run(scenario())
+
+
+def test_shared_budget_reserves_prompt_and_output_before_concurrent_calls():
+    called = []
+    async def count_tokens(**kwargs):
+        return SimpleNamespace(input_tokens=10)
+    async def create(**kwargs):
+        called.append(kwargs)
+        await asyncio.sleep(.01)
+        return _response(1)
+    client = _Client(create)
+    client.messages.count_tokens = count_tokens
+    generator = AnthropicProgramGenerator(AnthropicGeneratorConfig(
+        model='test', max_output_tokens=20, token_budget=30, max_attempts=1), client=client)
+    results = asyncio.run(generator.generate((_request(1), _request(2))))
+    assert len(called) == 1
+    assert results[0].draft is not None
+    assert 'token budget' in results[1].error

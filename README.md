@@ -2,7 +2,8 @@
 
 Algorithm autoresearch framework based on [the agreed design](context/agents.md).
 The AntiAI UI supports hosted Lean generation, checking/repair and fidelity review,
-plus a separate evolution demo. Start with the [UI setup](frontend/README.md);
+plus custom evolution through the built-in autocorrelation Docker evaluator and
+a separate routing demo. Start with the [UI setup](frontend/README.md);
 see [integration status](docs/ui-integration-status.md) for remaining gaps.
 
 The Lea CLI path below supports 0/1 knapsack specification validation.
@@ -141,3 +142,22 @@ Run tests, including real Lean checks after setup:
 ```sh
 LEAN_TEST_LAKE=lake PYTHONPATH=src:. uv run python -m unittest discover -v
 ```
+
+
+## Autocorrelation evaluator
+
+The merged evaluator executes candidates in Docker and scores their integer
+outputs with an exact rational judge. It supports `solve(n: int) -> list[int]`,
+mean `c1` minimization and evaluator version `autocorrelation-exact-v1`.
+
+```sh
+docker build -t the-pigeon-holes/candidate-worker:v1 docker/worker
+PYTHONPATH=src .venv/bin/python scripts/run_autocorrelation.py \
+  --model "$RESEARCH_MODEL" --n 64 --max-tokens 32768 --max-minutes 5 \
+  --max-critic-calls 0
+```
+
+Set `ANTHROPIC_API_KEY` and select a model first. This CLI is a numerical benchmark:
+its Lean contract is a placeholder. The custom UI requires real checked Lean with
+provenance. See [current evaluator status](docs/candidate-evaluator-plan.md) and
+[the reconciled TODO list](docs/pipeline-next-steps.md).

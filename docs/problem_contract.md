@@ -107,8 +107,10 @@ does not establish that:
 - the seed is mathematically correct; or
 - generated candidate code is safe or correct.
 
-Lean checking belongs to the formalization artifact, and behavioral checking
-belongs to the versioned sandbox evaluator.
+Lean checking belongs to the persisted formalization artifact. Custom preparation
+requires matching source-hash and checker provenance, stored beside the frozen
+contract. Behavioral checking belongs to the versioned sandbox evaluator, and
+custom runs reject an invalid seed before generating candidates.
 
 ## Tests
 

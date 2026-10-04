@@ -21,7 +21,7 @@ export interface Run {
   endedAt?: string;
   metricName?: string;
   direction?: "maximize" | "minimize";
-  backend?: "python-demo";
+  backend?: "python-demo" | "python";
   contract?: Record<string, string | number>;
 }
 export interface Idea {
@@ -74,6 +74,15 @@ export interface GenerationFailure {
   inputTokens: number;
   outputTokens: number;
 }
+export interface Assessment {
+  candidateId: string;
+  promiseRating: number;
+  approachSummary: string;
+  noveltyNote: string;
+  riskFlags: string[];
+  model: string;
+  promptVersion: string;
+}
 export interface ControlAcknowledgement {
   schemaVersion: 1;
   runId: string;
@@ -82,6 +91,7 @@ export interface ControlAcknowledgement {
   status: Status;
 }
 export type Update =
+  | { type: "assessment_recorded"; payload: Assessment }
   | { type: "idea_created"; payload: Idea }
   | { type: "experiment_updated"; payload: Experiment }
   | { type: "elite_changed"; payload: Elite }
@@ -106,6 +116,7 @@ export interface Snapshot {
   elites: Elite[];
   logs: Log[];
   generationFailures: GenerationFailure[];
+  assessments?: Assessment[];
   sequence: number;
 }
 export interface ResearchClient {
@@ -126,6 +137,8 @@ export function applyEvent(s: Snapshot, e: ResearchEvent): Snapshot {
   if (e.sequence !== s.sequence + 1) throw Error("Event sequence gap");
   const n = { ...s, sequence: e.sequence };
   switch (e.type) {
+    case "assessment_recorded":
+      return {...n, assessments: [...(s.assessments || []).filter(a => a.candidateId !== e.payload.candidateId), e.payload]};
     case "idea_created":
       return {
         ...n,

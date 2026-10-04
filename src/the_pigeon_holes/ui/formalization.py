@@ -91,7 +91,7 @@ async def prepare(body: FormalizationInput, tools=None, progress=None):
             fidelity = await tools.score(body.problem, source)
         except Exception:
             fidelity_error = 'Fidelity service unavailable; Lean output is preserved for review.'
-    return {'lean': source, 'lean_checked': checked['valid'], 'diagnostics': checked['diagnostics'],
+    return {'check_artifact': checked.get('check_artifact'), 'lean': source, 'lean_checked': checked['valid'], 'diagnostics': checked['diagnostics'],
             'attempts': attempts, 'fidelity': fidelity, 'fidelity_error': fidelity_error,
             'status': ('checked' if fidelity and fidelity['fidelity_decision'] == 'accept'
                        else 'review' if checked['valid'] else 'invalid'),

@@ -31,7 +31,7 @@ export class HttpResearchClient implements ResearchClient {
       input.attachments.length ||
       input.resultFiles.length
     )
-      throw Error("Only the explicit routing demo is connected.");
+      throw Error("Use the problem composer to prepare and start custom research.");
     return request("/runs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -61,7 +61,7 @@ export class HttpResearchClient implements ResearchClient {
     stream.onopen = () => onConnection?.(null);
     stream.onerror = () =>
       onConnection?.(
-        "Research stream disconnected; reconnecting. If the backend restarted, start a new demo.",
+        "Research stream disconnected; reconnecting to saved evidence.",
       );
     stream.onmessage = (message) => {
       try {
@@ -78,6 +78,7 @@ export class HttpResearchClient implements ResearchClient {
             "elite_changed",
             "log_added",
             "generation_failed",
+            "assessment_recorded",
             "run_status_changed",
           ].includes(event.type)
         )

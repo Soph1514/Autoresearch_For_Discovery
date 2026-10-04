@@ -1,12 +1,18 @@
+import { mountCustomResearch } from './customResearch';
 import { formalize, type Progress } from './formalizationClient';
 import { attachmentAccept, readAttachment } from "./attachments";
 import { useEffect, useRef, useState } from "react";
 
 type Result = {
-  lean: string; lean_checked: boolean; diagnostics: string; status: string;
+  formalization_id?: string; lean: string; lean_checked: boolean; diagnostics: string; status: string;
   attempts: number; generator: string; fidelity_error: string | null;
   fidelity: null | { p_faithful: number | null; fidelity_decision: string; reason_code: string };
 };
+function CustomResearch({id}: {id: string}) {
+  const host = useRef<HTMLDivElement>(null);
+  useEffect(() => mountCustomResearch(host.current!, id), [id]);
+  return <div ref={host} />;
+}
 export function Composer({ onClose }: { onClose: () => void }) {
   const controller = useRef<AbortController | null>(null);
   const [progress, setProgress] = useState<Progress | null>(null);
@@ -98,7 +104,8 @@ export function Composer({ onClose }: { onClose: () => void }) {
         {result.fidelity && <p>Fidelity score: {result.fidelity.p_faithful === null ? "Unavailable" : `${(result.fidelity.p_faithful * 100).toFixed(1)}%`} · {result.fidelity.reason_code}</p>}
         <label className="field">Lean source<textarea readOnly rows={12} value={result.lean} /></label>
         {result.diagnostics && <pre style={{ whiteSpace: "pre-wrap" }}>{result.diagnostics}</pre>}
-        <p className="notice">Lean checking does not prove natural-language equivalence. Review the formulation before using it. Automated research for custom problems still requires a prepared evaluator and problem contract.</p>
+        <p className="notice">Lean checking does not prove natural-language equivalence. Review the formulation before using it. Prepare the seed and fixed evaluation suite below to continue.</p>
+      {result.formalization_id && result.lean_checked && <CustomResearch id={result.formalization_id} />}
       </section>}
       <div className="dialog-actions"><button type="button" disabled={busy} onClick={onClose}>Close</button>
         <button className="primary" disabled={busy || !problem.trim() || (mode === "formal" && !lean.trim())}>

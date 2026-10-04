@@ -36,7 +36,8 @@ evaluator must request an isolated materialized copy before sandbox execution.
 ## Limits and run controls
 
 - `ResourceLimits.case_time_seconds`, `memory_mb`, and `max_iterations` apply
-  to one sandboxed `solve(...)` case.
+  to one sandboxed `solve(...)` case. The current Docker adapter enforces time
+  and memory; independent iteration counting is still unimplemented.
 - `ResourceLimits.candidate_time_seconds` caps the complete suite evaluation
   for one candidate.
 - `EvolutionLimits.max_time_seconds` caps active run time; time spent fully
@@ -49,8 +50,11 @@ evaluator must request an isolated materialized copy before sandbox execution.
 Pause stops new scheduling at a batch boundary and retains completed evidence.
 Stop requests cancel in-flight adapter work; a partially completed batch is not
 committed. Adapters must propagate cancellation rather than convert it into a
-valid result. Concrete production enforcement remains part of adapter and API
-work, while the development bridge already uses an active-time clock.
+valid result. The loop enforces active-time deadlines around generation, evaluation and critic awaits.
+Adapters must honor cancellation to terminate actual worker execution. The bridge
+uses an active-time clock. The built-in evaluator removes its named Docker
+containers when cancelled; host arithmetic already running in a thread may finish
+after its await is cancelled.
 
 ## Meaning of checked Lean
 

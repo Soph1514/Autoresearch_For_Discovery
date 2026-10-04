@@ -34,6 +34,9 @@ Version 1 event types are:
 - `generation_failed`: request ID, generation, sanitized error, and measured
   input/output token usage. The generation prompt is retained in evolution
   state but is not put on the UI wire.
+- `assessment_recorded`: advisory critic output keyed by `candidateId`; includes
+  promise rating, approach, novelty note, risks, model and prompt version. It never
+  changes validity or metric scores. Older snapshots may omit `assessments`.
 - `log_added`: an append-only research log record.
 - `run_status_changed`: an authoritative status transition.
 
@@ -57,7 +60,9 @@ Negative/future cursors are rejected rather than silently losing evidence.
 All pending events after the cursor are replayed in order. The stream sends
 heartbeats while active and closes after terminal evidence has drained. The
 browser closes its stream when it receives the terminal status event.
-Development history is in memory; durable replay is step 11 of the pipeline.
+Snapshots and events are persisted transactionally in SQLite. Restart marks
+interrupted runs stopped and appends ordered recovery events; completed history
+remains replayable.
 
 ## Run states and controls
 
@@ -90,3 +95,39 @@ is retained, running evaluations are marked cancelled, and the final state is
 `stopped`. Production adapters must not swallow `CancelledError`. Paused time
 is excluded from the run clock; draining in-flight work before `paused` is not.
 
+
+## Custom preparation and run routes
+
+Preparation request bodies use snake_case (the event wire remains camelCase).
+`POST /api/formalizations` now returns a persisted `formalization_id` and the
+checker-provided `check_artifact`, when available. `POST /api/contracts` accepts:
+
+```json
+{
+  "formalization_id": "server-issued-id",
+  "seed_program": "def solve() -> float:\n    return 1.0\n",
+  "evaluation_suite_id": "your-fixed-suite-v1",
+  "evaluation_cases": {"case-1": {}},
+  "evaluator_version": "your-evaluator-v1",
+  "alignment_reviewed": true
+}
+```
+
+The example is structural; the seed and inputs must match the interface extracted
+from the actual saved Lean statement. Resource fields are `case_time_seconds`,
+`candidate_time_seconds`, `memory_mb`, and `max_iterations`. Defaults are 5, 60,
+512, and 100000 respectively. A matching successful check artifact is mandatory.
+The response contains the contract `id`, signature, metric and direction.
+
+`POST /api/runs` accepts `{"mode":"custom", "contract_id":"...",
+"max_tokens":32768, "max_time_seconds":300}` or `{"mode":"demo"}`.
+Custom runs default to the autocorrelation factory and fail closed when the
+contract is unsupported or Docker/the worker image is unavailable. Backend `python` denotes
+a custom run; `python-demo` denotes the analytic routing demo.
+
+`GET /api/capabilities` reports configuration availability and Docker/image readiness for the built-in evaluator
+(`evaluator_ready`, `evaluator_error`). Override factories are checked at run start. `GET /api/runs` lists saved runs. `GET /api/runs/{id}/artifact` exports
+contracts, provenance, generation configuration, evidence, events and available
+outcomes. Evaluation inputs use tagged scalar/list/tuple/mapping nodes to preserve
+Python types across storage. This export includes hidden suite data and generation
+prompts and belongs to the trusted operator, not the candidate sandbox.

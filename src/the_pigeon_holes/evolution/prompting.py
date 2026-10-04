@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from the_pigeon_holes.llm.prompts import render_solve_contract
 from the_pigeon_holes.models.problem_contract import ProblemContract
 
 from .models import (
+    Assessment,
     CandidateEvaluation,
     EvolutionOperator,
     IslandState,
@@ -16,10 +17,22 @@ from .models import (
 )
 
 
+def _render_assessment(assessment: Assessment | None) -> str:
+    if assessment is None:
+        return ""
+    flags = ", ".join(assessment.risk_flags) or "none"
+    return (
+        "Critic assessment (advisory; measured evidence above is authoritative): "
+        f"promise {assessment.promise_rating}/5. Approach: {assessment.approach_summary} "
+        f"Novelty: {assessment.novelty_note} Risks: {flags}."
+    )
+
+
 def _render_candidate(
     heading: str,
     candidate: ProgramCandidate,
     evaluation: CandidateEvaluation | None,
+    assessment: Assessment | None = None,
 ) -> str:
     if evaluation is None:
         evidence = "No evaluation is available."
@@ -32,17 +45,17 @@ def _render_candidate(
             f"Reasons: {evaluation.failure_reasons!r}. "
             f"Partial metrics are not valid fitness: {dict(evaluation.partial_metrics)!r}."
         )
-    return "\n".join(
-        [
-            heading,
-            f"Candidate ID: {candidate.id}",
-            f"Original hypothesis: {candidate.hypothesis}",
-            f"Measured evidence: {evidence}",
-            "```python",
-            candidate.source_code.rstrip(),
-            "```",
-        ]
-    )
+    lines = [
+        heading,
+        f"Candidate ID: {candidate.id}",
+        f"Original hypothesis: {candidate.hypothesis}",
+        f"Measured evidence: {evidence}",
+    ]
+    critic = _render_assessment(assessment)
+    if critic:
+        lines.append(critic)
+    lines += ["```python", candidate.source_code.rstrip(), "```"]
+    return "\n".join(lines)
 
 
 def render_generation_prompt(
@@ -53,6 +66,7 @@ def render_generation_prompt(
     mutation_strength: MutationStrength,
     parents: Sequence[tuple[ProgramCandidate, CandidateEvaluation | None]],
     inspirations: Sequence[tuple[ProgramCandidate, CandidateEvaluation | None]],
+    assessments: Mapping[str, Assessment] | None = None,
 ) -> str:
     """Render all fixed constraints and selected evidence into one request."""
     sections = [
@@ -69,11 +83,16 @@ def render_generation_prompt(
         ),
     ]
 
+    notes = assessments or {}
     for index, (candidate, evaluation) in enumerate(parents, start=1):
-        sections.append(_render_candidate(f"DIRECT PARENT {index}", candidate, evaluation))
+        sections.append(
+            _render_candidate(f"DIRECT PARENT {index}", candidate, evaluation, notes.get(candidate.id))
+        )
     for index, (candidate, evaluation) in enumerate(inspirations, start=1):
         label = "UNVERIFIED INSPIRATION" if evaluation and not evaluation.valid else "INSPIRATION"
-        sections.append(_render_candidate(f"{label} {index}", candidate, evaluation))
+        sections.append(
+            _render_candidate(f"{label} {index}", candidate, evaluation, notes.get(candidate.id))
+        )
 
     sections.append(
         "OUTPUT REQUIREMENTS\n"
