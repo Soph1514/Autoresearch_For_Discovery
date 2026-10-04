@@ -16,16 +16,24 @@ from the_pigeon_holes.ui.storage import contract_from_dict
 def recheck_witnesses(artifact):
     """Rescore every saved witness and return how many cases were rechecked.
 
-    The run's own contract names the metric and aggregation, and its recorded
-    digest resolves the registered fitness function, so this works for any problem
-    without knowing anything about it. Per-case scoring is nested under
+    The run's own contract names the metric and aggregation. Historical
+    autocorrelation exports are rescored with the current trusted implementation,
+    as before; other scorers must match the recorded digest. Per-case scoring is nested under
     `fitness_evidence` and the aggregate under `aggregate_metrics_exact`; runs
     saved before that restructure hold both flat, so each is read with a fallback
     to keep older artifacts verifiable. A mismatch raises rather than exporting
     evidence that was never verified.
     """
     contract = contract_from_dict(artifact['contract'])
-    fitness_function = configured_registry().resolve(contract.fitness_function)
+    registry = configured_registry()
+    reference = contract.fitness_function
+    if (reference.id, reference.version) == ('autocorrelation', 'exact-v1'):
+        # Moving the scorer changed its source hash. Keep main's historical
+        # witness recheck; this does not authorize restarting a run with a new scorer.
+        from problems.autocorrelation.fitness import AutocorrelationFitnessFunction
+        fitness_function = AutocorrelationFitnessFunction()
+    else:
+        fitness_function = registry.resolve(reference)
     goal = contract.optimisation_goal
     metric = goal.primary.name
     cases = {case.id: case for case in contract.evaluation_suite.cases}
@@ -82,14 +90,23 @@ def main():
     with (folder / 'lineage.csv').open('w') as f:
         writer = csv.DictWriter(f, fieldnames=['id','generation','operation','parents','hypothesis','valid',metric,'failure'])
         writer.writeheader(); writer.writerows(rows)
-    best = (artifact.get('outcome') or {}).get('best_candidate')
+    outcome = artifact.get('outcome') or {}
+    best = outcome.get('best_candidate')
+    best_evaluation = outcome.get('best_evaluation')
+    if best is None:
+        # A stopped run has no EvolutionOutcome, but its verified elite is durable.
+        winner_id = next((e['ideaId'] for e in artifact['snapshot']['elites']
+                          if e['current'] and e['niche'] == 'Global best'), None)
+        best = artifact['evidence']['candidates'].get(winner_id)
+        best_evaluation = artifact['evidence']['evaluations'].get(winner_id)
     if best:
         (folder / 'best.py').write_text(best['source_code'])
         (folder / 'best-witnesses.json').write_text(json.dumps(artifact['evidence']['numerical'].get(best['id']), indent=2))
     summary = {'run_id': args.run_id, 'status': artifact['snapshot']['run']['status'], 'candidates':len(rows),
         'events': len(artifact['events']), 'independently_rechecked_witnesses':verified,
-        'best': (artifact.get('outcome') or {}).get('best_evaluation'),
-        'reported_tokens': (artifact.get('outcome') or {}).get('tokens_used')}
+        'best': best_evaluation,
+        'reported_tokens': outcome.get('tokens_used'),
+        'budget': artifact.get('budget'), 'literature': artifact.get('literature')}
     (folder / 'summary.json').write_text(json.dumps(summary, indent=2))
     print(json.dumps(summary, indent=2))
     print(folder.resolve())

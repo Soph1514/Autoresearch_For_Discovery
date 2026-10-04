@@ -124,7 +124,7 @@ async def _remove_container(name):
     try:
         _, diagnostics = await asyncio.wait_for(process.communicate(), timeout=10)
         if process.returncode != 0 and b'No such container' not in diagnostics:
-            raise RuntimeError(f'Could not confirm removal of container {name}; check Docker.')
+            raise RuntimeError(f'Could not confirm removal of container {name}; check Docker. {diagnostics.decode(errors="replace")}')
     except TimeoutError:
         process.kill()
         await process.wait()

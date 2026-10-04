@@ -4,17 +4,26 @@ import { IdeaGraph, operationLabel } from "./IdeaGraph";
 import { Composer } from "./Composer";
 import type { Run, Snapshot } from "./contracts";
 function RunProvenance({runId, status}: {runId: string; status: string}) {
-  const [summary, setSummary] = useState<{formalization_id?: string; contract_id?: string; compiler?: {status: string}; model?: string; reported_tokens?: number; generations?: number; stop_reason?: string} | null>(null);
+  const [summary, setSummary] = useState<{formalization_id?: string; contract_id?: string; compiler?: {status: string}; model?: string; reported_tokens?: number; generations?: number; stop_reason?: string;
+    budget?: {max_cost_usd: number; estimated_cost_usd: number; committed_cost_usd: number};
+    literature?: {text: string; sources: {url: string; title: string}[]; queries: string[]}} | null>(null);
   useEffect(() => {
     const controller = new AbortController();
-    fetch(`/api/runs/${runId}/summary`, {signal: controller.signal}).then(r => r.ok ? r.json() : null)
+    const refresh = () => fetch(`/api/runs/${runId}/summary`, {signal: controller.signal}).then(r => r.ok ? r.json() : null)
       .then(setSummary).catch(() => {});
-    return () => controller.abort();
+    void refresh();
+    const timer = ["completed", "failed", "stopped"].includes(status) ? undefined : setInterval(refresh, 5000);
+    return () => { controller.abort(); clearInterval(timer); };
   }, [runId, status]);
   if (!summary) return null;
   return <div className="run-summary">
     {summary.formalization_id && <a href={`/?formalization=${summary.formalization_id}`}>Checked specification & alignment review ↗</a>}
     {summary.compiler && summary.contract_id && <a href={`/api/contracts/${encodeURIComponent(summary.contract_id)}/compiler`} target="_blank" rel="noopener">Compiled scorer & verification ↗</a>}
+    {summary.budget && <span>API estimate ${summary.budget.estimated_cost_usd.toFixed(2)} / ${summary.budget.max_cost_usd.toFixed(2)} cap · ${summary.budget.committed_cost_usd.toFixed(2)} including reservations</span>}
+    {summary.literature && <details className="literature-review"><summary>Opening literature review · {summary.literature.sources.length} sources</summary>
+      <p style={{whiteSpace: 'pre-wrap'}}>{summary.literature.text}</p>
+      <ul>{summary.literature.sources.filter(s => /^https?:\/\//.test(s.url)).map(s => <li key={s.url}><a href={s.url} target="_blank" rel="noreferrer">{s.title}</a></li>)}</ul>
+      <p>Source claims guide exploration; only the fixed evaluator decides validity and scores.</p></details>}
     {summary.model && <span>Model: {summary.model}</span>}
     {summary.reported_tokens != null && <span>{summary.reported_tokens.toLocaleString()} reported evolution tokens · {summary.generations} generations · {summary.stop_reason?.replaceAll('_', ' ')}</span>}
   </div>;
@@ -29,7 +38,7 @@ function rationalFor(witness: CaseWitness, metric: string): Rational | undefined
 }
 
 function Witness({runId, candidateId, metric}: {runId: string; candidateId: string; metric?: string}) {
-  const [record, setRecord] = useState<{cases: Record<string, {fitness_evidence?: CaseWitness}>} | null>(null);
+  const [record, setRecord] = useState<{cases: Record<string, CaseWitness & {fitness_evidence?: CaseWitness}>} | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     setRecord(null);
@@ -40,7 +49,7 @@ function Witness({runId, candidateId, metric}: {runId: string; candidateId: stri
   // Without the run's metric name there is no witness key to look up.
   if (!record || !metric) return null;
   return <section><h3>Constructed witnesses</h3>{Object.entries(record.cases).map(([id, c]) => {
-    const witness = c.fitness_evidence;
+    const witness = c.fitness_evidence ?? c;
     if (witness?.kernel_checked && typeof witness.lean_certificate === 'string') {
       return <div key={id} className="witness">
         <p>{id} · Checked by the Lean kernel</p>
@@ -296,6 +305,10 @@ export default function App() {
       ? Math.min(...values)
       : Math.max(...values)
     : null;
+  const winner = snapshot?.experiments.find(e => e.valid && e.metrics[metric] === best);
+  useEffect(() => {
+    if (status && ['completed', 'stopped', 'failed'].includes(status) && winner) setSelected(winner.ideaId);
+  }, [snapshot?.run.id, status]);
   const baseline = snapshot?.experiments.find(e => e.ideaId === 'candidate-000000' && e.valid)?.metrics[metric];
   const improvement = best !== null && baseline && baseline !== 0 ?
     100 * (snapshot?.run.direction === 'minimize' ? baseline-best : best-baseline) / Math.abs(baseline) : null;
@@ -362,7 +375,7 @@ export default function App() {
           <label htmlFor="run-history">Saved runs</label>
           <select id="run-history" value={snapshot?.run.id || ''} onChange={e => window.location.assign(`/engine.html?run=${encodeURIComponent(e.target.value)}`)}>
             <option value="" disabled>Select a research run</option>
-            {[...history].reverse().map(run => <option key={run.id} value={run.id}>{run.title} · {run.status} · {new Date(run.startedAt).toLocaleString('en-GB')}</option>)}
+            {[...history].reverse().map(run => <option key={run.id} value={run.id}>{run.title} · {run.id.slice(0, 8)} · {run.status} · {new Date(run.startedAt).toLocaleString('en-GB')}</option>)}
           </select>
           {snapshot && <span className="badge">{snapshot.run.status} · {snapshot.sequence} saved events</span>}
         </nav>}
@@ -403,19 +416,21 @@ export default function App() {
             </div>
           </div>
         </section>
-        {active && snapshot && <p className="activity" role="status">{status === 'paused' ? 'Paused between batches. Resume to continue.' : status === 'pausing' ? 'Finishing the active batch before pausing…' : status === 'stopping' ? 'Cancelling active work…' : snapshot.experiments.some(e => e.status === 'running') ? 'Evaluating candidate programs in the isolated worker…' : 'Research engine active · generating and reviewing the next batch. Model calls can take a few minutes.'}</p>}
+        {active && snapshot && <p className="activity" role="status">{status === 'paused' ? 'Paused between batches. Resume to continue.' : status === 'pausing' ? 'Finishing the active batch before pausing…' : status === 'stopping' ? 'Cancelling active work…' : snapshot.experiments.some(e => e.status === 'running') ? 'Evaluating candidate programs in the isolated worker…' : snapshot.ideas.length === 0 ? 'Searching and reviewing prior work before evolution…' : 'Research engine active · generating and reviewing the next batch. Model calls can take a few minutes.'}</p>}
         {snapshot && best !== null && <div className="run-summary">
           {improvement !== null && <span><strong>{improvement.toFixed(1)}%</strong> improvement over this run’s seed</span>}
           <span><strong>{snapshot.experiments.filter(e => e.valid).length}</strong> valid candidates</span>
           <span><strong>{snapshot.experiments.filter(e => e.valid === false).length}</strong> rejected attempts</span>
           <span><strong>{new Set(snapshot.elites.filter(e => e.current).map(e => e.ideaId)).size}</strong> current elites</span>
           <span><strong>{snapshot.generationFailures.length}</strong> generation failures</span>
-          <button onClick={() => { const winner = snapshot.experiments.find(e => e.valid && e.metrics[metric] === best); if (winner) setSelected(winner.ideaId); }}>Inspect best candidate ↗</button>
+          {!active && <strong>Final best in this run: {best.toFixed(6)} · {winner?.ideaId}</strong>}
+          <button onClick={() => { if (winner) setSelected(winner.ideaId); }}>Inspect best candidate ↗</button>
         </div>}
         {snapshot ? (
           <>
             <div className="workspace">
               <IdeaGraph
+                winnerId={winner?.ideaId}
                 snapshot={snapshot}
                 selected={selected}
                 onSelect={setSelected}

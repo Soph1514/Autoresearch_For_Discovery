@@ -71,6 +71,14 @@ def test_pre_restructure_evidence_stays_verifiable():
     assert exporter.recheck_witnesses(autocorrelation_artifact(nested=False)) == 1
 
 
+def test_main_historical_scorer_hash_stays_exportable():
+    artifact = autocorrelation_artifact()
+    artifact['contract']['fitness_function']['implementation_sha256'] = (
+        '5ff3185e8a5cebb0a0920e3cbab0b3d83cfd937e3bbd6a46cc5b871b19ee7a5f'
+    )
+    assert exporter.recheck_witnesses(artifact) == 1
+
+
 def test_absent_evidence_rechecks_nothing():
     contract = autocorrelation_contract(n=2)
     assert exporter.recheck_witnesses(artifact_for(contract, {})) == 0

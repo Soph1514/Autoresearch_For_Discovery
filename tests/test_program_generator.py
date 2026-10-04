@@ -230,3 +230,19 @@ def test_shared_budget_reserves_prompt_and_output_before_concurrent_calls():
     assert len(called) == 1
     assert results[0].draft is not None
     assert 'token budget' in results[1].error
+
+
+def test_reasoning_uses_auto_tool_choice_and_passes_literature_as_evidence():
+    calls = []
+    async def create(**kwargs):
+        calls.append(kwargs)
+        return _response(1)
+    generator = AnthropicProgramGenerator(AnthropicGeneratorConfig(
+        model='claude-opus-5-5', reasoning_effort='high', max_attempts=1), client=_Client(create))
+    generator.literature_context = '\nLITERATURE EVIDENCE: example.org'
+    result = asyncio.run(generator.generate((_request(1),)))[0]
+    assert result.draft is not None
+    assert calls[0]['tool_choice']['type'] == 'auto'
+    assert calls[0]['output_config'] == {'effort': 'high'}
+    assert calls[0]['thinking'] == {'type': 'adaptive'}
+    assert 'LITERATURE EVIDENCE' in calls[0]['messages'][0]['content']

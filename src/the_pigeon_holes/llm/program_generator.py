@@ -56,6 +56,7 @@ _SUBMIT_CANDIDATE_TOOL = {
 class AnthropicGeneratorConfig:
     model: str
     token_budget: int | None = None
+    reasoning_effort: str | None = None
     max_output_tokens: int = 4_096
     max_concurrency: int = 4
     timeout_seconds: float = 90.0
@@ -67,6 +68,8 @@ class AnthropicGeneratorConfig:
             raise ValueError("model cannot be empty")
         if self.token_budget is not None and (type(self.token_budget) is not int or self.token_budget <= 0):
             raise ValueError("token_budget must be a positive integer")
+        if self.reasoning_effort not in (None, "low", "medium", "high", "max"):
+            raise ValueError("unsupported reasoning effort")
         for name in ("max_output_tokens", "max_concurrency", "max_attempts"):
             if type(getattr(self, name)) is not int or getattr(self, name) <= 0:
                 raise ValueError(f"{name} must be a positive integer")
@@ -94,6 +97,7 @@ class AnthropicProgramGenerator:
         self.client = client or anthropic.AsyncAnthropic(max_retries=0)
         self._sleep = sleep
         self.budget = budget or (ProviderTokenBudget(config.token_budget) if config.token_budget is not None else None)
+        self.literature_context = ""
         self._semaphore = asyncio.Semaphore(config.max_concurrency)
 
     async def generate(
@@ -123,16 +127,16 @@ class AnthropicProgramGenerator:
                             "the complete solve function and necessary helpers. Copy the "
                             "required signature exactly, including list[int] annotations."
                         ),
-                        messages=[{"role": "user", "content": request.prompt}],
+                        messages=[{"role": "user", "content": request.prompt + self.literature_context}],
+                        **({"thinking": {"type": "adaptive"}, "output_config": {"effort": self.config.reasoning_effort}}
+                           if self.config.reasoning_effort else {}),
                         tools=[_SUBMIT_CANDIDATE_TOOL],
-                        tool_choice={
-                            "type": "tool",
-                            "name": "submit_candidate",
-                            "disable_parallel_tool_use": True,
-                        },
+                        tool_choice=({"type": "auto", "disable_parallel_tool_use": True}
+                                     if self.config.reasoning_effort else
+                                     {"type": "tool", "name": "submit_candidate", "disable_parallel_tool_use": True}),
                     )
                 except TokenBudgetExceeded:
-                    last_error = "remaining token budget cannot cover the counted prompt and maximum output"
+                    last_error = "remaining token budget or USD budget cannot cover the counted prompt and maximum output"
                     break
                 except anthropic.APIError as exc:
                     last_error = self._provider_error(exc)

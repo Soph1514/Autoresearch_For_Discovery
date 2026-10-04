@@ -108,8 +108,9 @@ def test_compiled_contract_starts_actual_ui_evolution(compiled, client, monkeypa
         monkeypatch.setattr(production, 'run_candidate_async', container)
     monkeypatch.setattr(preparation, 'compile_fitness', lambda **kwargs: pytest.fail('run start recompiled scorer'))
     class Generator:
-        def __init__(self, config):
+        def __init__(self, config, *, budget):
             self.config = config
+            self.budget = budget
         async def generate(self, requests):
             return [GenerationResult(r.id, TokenUsage(4096, 4096), CandidateDraft(
                 'Use a feasible selection.', 'Larger weight.', 'Capacity exceeded.', ('selection',),
@@ -119,7 +120,7 @@ def test_compiled_contract_starts_actual_ui_evolution(compiled, client, monkeypa
             pass
     monkeypatch.setattr(api, 'AnthropicProgramGenerator', Generator)
     response = client.post('/api/runs', json={'mode': 'custom', 'contract_id': compiled[1]['id'],
-        'max_tokens': 8192, 'max_time_seconds': 120})
+        'max_tokens': 8192, 'max_time_seconds': 120, 'literature_review': False})
     assert response.status_code == 201, response.text
     identity = response.json()['id']
     deadline = time.monotonic() + 90

@@ -141,3 +141,26 @@ proposal. The frozen Lean scorer returned objective 7; the engine displayed the
 certificate and compiler-provenance link. No new hosted formalization or candidate
 model calls were made. The contract panel now handles structured fitness metadata,
 and the objective caption follows the run's metric and direction.
+
+## Literature-informed reasoning and cost controls
+
+Custom research defaults to Opus 5.5 at high reasoning effort and a US$50 API cap.
+The workbench exposes the cap, model, time/token limits, and opening literature
+review. Sonnet 4.6 performs up to three web searches and advisory reviews. If the
+search response is truncated, one bounded synthesis call completes the review.
+Sources and queries are saved and visible in the UI. Retrieved material is treated
+as untrusted evidence; it does not change the contract, fixed suite, evaluator,
+parent selection, novelty archive, independent restarts or validity decisions.
+
+The shared provider ledger reserves input, maximum output and search charges
+before concurrent requests. Unknown billing after an exception/cancellation keeps
+its reservation. Search calls conservatively reserve one full model context per
+possible internal turn. Standard API prices are pinned in `llm/budget.py`; unknown
+models fail closed. The cap includes literature, generation and critic calls, but
+excludes existing formalization/interface preparation, hosting, taxes and earlier
+runs. The UI reports estimated and committed costs separately; it is not an invoice.
+
+Completed/failed/stopped runs automatically select their best valid candidate,
+mark its card BEST with a gold border, and show its score and candidate ID in a
+final-result line. The label explicitly refers to this run. Legacy and registered
+fitness evidence formats both render witness plots and export exact certificates.
