@@ -1,0 +1,4 @@
+model,variant,correct,total,accuracy_percent,elapsed_seconds,time_scope,reported_cost_usd,cost_scope
+Claude,Lea generation,8,10,80,259.751,solution generation for all 10 problems; validation excluded,0.4374,generation inference
+Qwen,base,7,10,70,,,,not reported
+Qwen,fine-tuned,9,10,90,1.973,solution generation for all 10 problems; validation excluded,4.67,training and fine-tuning

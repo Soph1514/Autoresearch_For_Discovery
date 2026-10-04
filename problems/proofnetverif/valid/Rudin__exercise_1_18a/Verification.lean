@@ -4,7 +4,7 @@ open Topology Filter Real Complex TopologicalSpace Finset
 open scoped BigOperators
 
 def generated_statement : Prop :=
-  ∀ {k : ℕ} (hk : 2 ≤ k) (x : EuclideanSpace ℝ (Fin k)),
+  ∀ {k : ℕ} (hk : k ≥ 2) (x : EuclideanSpace ℝ (Fin k)),
     ∃ y : EuclideanSpace ℝ (Fin k), y ≠ 0 ∧ (inner x y : ℝ) = 0
 
 def reference_statement : Prop :=
