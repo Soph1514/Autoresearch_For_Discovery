@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import math
 import json
+import os
 import subprocess
 import uuid
 from dataclasses import dataclass
@@ -51,6 +52,9 @@ class WorkerResult:
 
 def preflight(image: str = DEFAULT_IMAGE) -> str:
     """Raise a RuntimeError with a diagnostic if the daemon or image is missing."""
+    if os.environ.get('RESEARCH_EXECUTION_BACKEND') == 'modal':
+        from .modal_runner import preflight as modal_preflight
+        return modal_preflight()
     try:
         info = subprocess.run(
             ["docker", "info", "--format", "{{.ServerVersion}}"],
@@ -141,6 +145,9 @@ async def run_candidate_async(
     image: str = DEFAULT_IMAGE,
 ) -> WorkerResult:
     """Run one isolated case; cancellation waits for named-container cleanup."""
+    if os.environ.get('RESEARCH_EXECUTION_BACKEND') == 'modal':
+        from .modal_runner import run_candidate
+        return await run_candidate(source, entry_point, args, limits)
     payload = json.dumps(
         {"source": source, "entry_point": entry_point, "args": dict(args)}, allow_nan=False,
     ).encode()
