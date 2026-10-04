@@ -8,8 +8,8 @@ from .registry import source_sha256
 
 
 def validate(values):
-    if not isinstance(values, Sequence) or isinstance(values, (str, bytes)) or not 2 <= len(values) <= 30000:
-        raise ValueError('expected 2..30000 integer cells')
+    if not isinstance(values, Sequence) or isinstance(values, (str, bytes)) or not 2 <= len(values) <= 65536:
+        raise ValueError('expected 2..65536 integer cells')
     if any(type(x) is not int or not 0 <= x <= 2**60 for x in values):
         raise ValueError('cells must be nonnegative integers at most 2**60')
     if Fraction(sum(values), 2 * len(values) * 2**40)**2 < Fraction(1, 10**8):

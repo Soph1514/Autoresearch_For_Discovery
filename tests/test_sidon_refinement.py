@@ -43,3 +43,19 @@ def test_refinement_rejects_changed_resolution_and_floats():
     assert not fitness.evaluate_case(case,[2**40]*2).valid
     assert not fitness.evaluate_case(case,[float(2**40)]*3).valid
     assert fitness.evaluate_case(case,[2**40]*3).metrics['c1'] == 2
+
+
+def test_live_leader_data_digest_and_exact_score():
+    import hashlib
+    import json
+    from decimal import Decimal
+    from pathlib import Path
+    folder = Path(__file__).parents[1]/'research/published-sidon'
+    raw = (folder/'arena-leading-witness.json').read_bytes()
+    record = json.loads((folder/'arena-verification.json').read_text())
+    assert hashlib.sha256(raw).hexdigest() == record['source_sha256']
+    values = json.loads(raw, parse_float=Decimal)['data']['values']
+    peak = max(values)
+    q = [int(x/peak*2**40+Decimal('.5')) for x in values]
+    assert len(q) == 65536
+    assert exact_score(q) == Fraction(record['exact'])

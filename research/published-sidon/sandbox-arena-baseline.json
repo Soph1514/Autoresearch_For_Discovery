@@ -1,0 +1,34 @@
+{
+  "evaluation": {
+    "candidate_id": "candidate-000000",
+    "valid": true,
+    "metrics": {
+      "c1": 1.5027435319538773
+    },
+    "behavioral_descriptor": [
+      3.0,
+      8.0
+    ],
+    "failure_stage": null,
+    "failure_reasons": [],
+    "passing_cases": 1,
+    "total_cases": 1,
+    "partial_metrics": {},
+    "repairable": false,
+    "informative": false,
+    "unsafe": false
+  },
+  "image": "sha256:9a7bac7bc85994a5f563e39d840bd1c5062c409f5960f59b86f26d41b6881ec4",
+  "fitness_function": {
+    "id": "sidon-refinement",
+    "version": "exact-packed-v1",
+    "implementation_sha256": "24cd4a0a9ccb9525cdb3e527fb5e8d6602882f1b479d7a58f60a4ce4f3cb7722"
+  },
+  "cells": 65536,
+  "c1_exact": {
+    "numerator": "1757730518180473131745912553472",
+    "denominator": "1169680974034910581603041819889"
+  },
+  "output_sha256": "f372f9f1f0211ac873db9669c2fc53b23f7959b745bc254bc423e7b6c018c38b",
+  "scope": "Identity seed output equals the quantized pinned source; duplicate arrays omitted."
+}
