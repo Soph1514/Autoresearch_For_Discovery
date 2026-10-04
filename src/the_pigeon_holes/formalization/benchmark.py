@@ -5,6 +5,7 @@ import os
 import re
 import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from .proofnet import proofnet_project
@@ -43,18 +44,28 @@ def _check(problem: Path, project: Path) -> tuple[str, str]:
     return "not_proven", "unapproved axiom or missing #print axioms"
 
 
-def run_benchmark(split: str = "valid") -> tuple[int, int, int]:
+def run_benchmark(split: str = "valid", max_workers: int = 4) -> tuple[int, int, int]:
+    if type(max_workers) is not int or max_workers <= 0:
+        raise ValueError("max_workers must be a positive integer")
     project = Path(proofnet_project().get_directory())
     equivalent = not_equivalent = not_proven = 0
     benchmark_root = ROOT / "problems" / "proofnetverif" / split
-    for problem in sorted(path for path in benchmark_root.iterdir() if path.is_dir()):
-        problem_id = problem.name.replace("__", "|", 1)
+    problems = sorted(path for path in benchmark_root.iterdir() if path.is_dir())
+
+    def check(problem: Path) -> tuple[str, str, float]:
         started = time.monotonic()
         status, reason = _check(problem, project)
+        return status, reason, time.monotonic() - started
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        checks = executor.map(check, problems)
+
+    for problem, (status, reason, elapsed) in zip(problems, checks):
+        problem_id = problem.name.replace("__", "|", 1)
         update_metrics(
             ROOT / "problems/proofnetverif/results.csv", problem_id,
             lean_verification_success=status != "not_proven",
-            lean_verification_seconds=f"{time.monotonic() - started:.3f}",
+            lean_verification_seconds=f"{elapsed:.3f}",
             lean_verification_error=reason,
             result=status,
         )
@@ -76,8 +87,10 @@ def run_benchmark(split: str = "valid") -> tuple[int, int, int]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--split", choices=("valid", "test"), default="valid")
+    parser.add_argument("--max-workers", type=int, default=4,
+                        help="parallel Lean checks (default: 4)")
     args = parser.parse_args()
-    run_benchmark(args.split)
+    run_benchmark(args.split, args.max_workers)
     return 0
 
 

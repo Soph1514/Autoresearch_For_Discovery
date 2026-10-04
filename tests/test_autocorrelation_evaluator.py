@@ -149,15 +149,49 @@ def test_stop_waits_for_container_removal(evaluator, monkeypatch):
     asyncio.run(scenario())
 
 
-def test_candidate_suite_deadline_applies_across_cases(evaluator):
+def test_candidate_suite_cases_run_concurrently(evaluator):
     from dataclasses import replace
     problem = replace(contract(),
         evaluation_suite=EvaluationSuite('two', (EvaluationCase('a', {'n': 64}), EvaluationCase('b', {'n': 64}))),
         resource_limits=ResourceLimits(.8, 1.0, 128, 1))
     source = 'def solve(n: int) -> list[int]:\n    import time\n    time.sleep(.55)\n    return [2**40] * n\n'
     (result,) = run(evaluator, [source], problem)
-    assert not result.valid
-    assert result.failure_stage == 'timeout'
+    assert result.valid
+
+
+def test_case_concurrency_is_globally_bounded_and_candidate_order_is_stable(monkeypatch):
+    from dataclasses import replace
+    from the_pigeon_holes.evaluation import production
+    from the_pigeon_holes.execution.container_runner import WorkerResult
+
+    problem = replace(
+        contract(),
+        evaluation_suite=EvaluationSuite('three', tuple(
+            EvaluationCase(f'n-{n}', {'n': n}) for n in (62, 63, 64)
+        )),
+    )
+    active = peak = 0
+
+    async def fake_run(source, entry_point, args, limits, image):
+        nonlocal active, peak
+        active += 1
+        peak = max(peak, active)
+        try:
+            await asyncio.sleep(.01)
+            return WorkerResult(True, output=[2**40] * args['n'])
+        finally:
+            active -= 1
+
+    monkeypatch.setattr(production, 'run_candidate_async', fake_run)
+    local = AutocorrelationEvaluator(
+        ContainerLimits(memory_mb=128, timeout_seconds=3),
+        max_workers=2,
+        check_daemon=False,
+    )
+    results = run(local, [SEED, SEED], problem)
+    assert [result.candidate_id for result in results] == ['c0', 'c1']
+    assert all(result.valid and result.passing_cases == 3 for result in results)
+    assert peak == 2
 
 
 def test_factory_rejects_unsupported_contract_before_docker():
