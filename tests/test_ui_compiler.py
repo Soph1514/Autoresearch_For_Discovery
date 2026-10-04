@@ -56,6 +56,50 @@ def compiled(tmp_path_factory):
     return store, result
 
 
+def test_default_seed_passes_deployed_subset_sum_cases(compiled):
+    import asyncio
+    from dataclasses import replace
+    from the_pigeon_holes.evolution.models import ProgramCandidate, EvolutionOperator
+    from the_pigeon_holes.models.problem_contract import EvaluationSuite, EvaluationCase, ResourceLimits
+
+    store, response = compiled
+    contract = contract_from_dict(store.get('contract', response['id'])['contract'])
+    assert 'return [0] * len(weights)' in contract.seed_program
+    cases = {
+        'empty': ([], 5), 'textbook': ([3, 4, 5], 7),
+        'exact-fit': ([2, 3, 4, 5], 9), 'nothing-fits': ([10, 20, 30], 5),
+        'medium': ([1, 2, 3, 4, 5, 6, 7, 8], 20),
+        'zero-weights': ([0, 0, 7], 0), 'ties': ([6, 6, 6], 13),
+    }
+    contract = replace(contract, evaluation_suite=EvaluationSuite('deployed-regression', tuple(
+        EvaluationCase(name, {'weights': weights, 'capacity': capacity})
+        for name, (weights, capacity) in cases.items())),
+        resource_limits=ResourceLimits(30, 180, 512, 100000))
+    try:
+        evaluator = preparation.make_evaluator(contract, store=store)
+    except RuntimeError as error:
+        pytest.skip(str(error))
+    def candidate(identity, source):
+        return ProgramCandidate(identity, 0, None, EvolutionOperator.RESTART, (), (),
+            'Initial seed.', 'Baseline.', 'Constraint violation.', ('seed',), source,
+            hashlib.sha256(source.encode()).hexdigest())
+    old = candidate('old', contract.solve_signature + '\n    return []\n')
+    fixed = candidate('fixed', contract.seed_program)
+    old_result, fixed_result = asyncio.run(evaluator.evaluate((old, fixed), contract))
+    assert not old_result.valid
+    assert fixed_result.valid and fixed_result.passing_cases == 7
+    assert fixed_result.metrics == {'objective': 0}
+
+
+def test_explicit_seed_is_preserved(compiled, client):
+    body = request_body()
+    body['seed_program'] = 'def solve(weights: list[int], capacity: int) -> list[int]:\n    return []\n'
+    response = client.post('/api/contracts', json=body)
+    assert response.status_code == 201, response.text
+    contract = contract_from_dict(api.store.get('contract', response.json()['id'])['contract'])
+    assert contract.seed_program == body['seed_program']
+
+
 @pytest.fixture
 def client(compiled, monkeypatch):
     store, _ = compiled
@@ -101,8 +145,8 @@ def test_compiled_contract_starts_actual_ui_evolution(compiled, client, monkeypa
         monkeypatch.setattr(production, 'preflight', lambda *args: 'test-image')
     async def container(source, entry, inputs, *args):
         # Only the Docker boundary is stubbed; all validity/objective checks run in Lean.
-        if 'return []' in source:
-            return WorkerResult(True, [])
+        if 'return [0] * len(weights)' in source:
+            return WorkerResult(True, [0] * len(inputs['weights']))
         return WorkerResult(True, [1, 1, 0] if inputs['capacity'] >= 7 else [0, 1, 0])
     if not real_worker:
         monkeypatch.setattr(production, 'run_candidate_async', container)
